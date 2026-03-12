@@ -9,12 +9,13 @@ interface Props {
   onApprove: (id: string) => void
   onReject: (id: string) => void
   onEdit: (item: PipelineItem) => void
+  onDelete?: (id: string) => void
   onOpenReview: (item: PipelineItem) => void
   selectedIds: Set<string>
   onToggleSelect: (id: string) => void
 }
 
-export function PipelineGrid({ items, onApprove, onReject, onEdit, onOpenReview, selectedIds, onToggleSelect }: Props) {
+export function PipelineGrid({ items, onApprove, onReject, onEdit, onDelete, onOpenReview, selectedIds, onToggleSelect }: Props) {
   const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE)
 
   // Reset visible count when items change (e.g. filter change)
@@ -44,6 +45,7 @@ export function PipelineGrid({ items, onApprove, onReject, onEdit, onOpenReview,
             onApprove={onApprove}
             onReject={onReject}
             onEdit={onEdit}
+            onDelete={onDelete}
             onOpenReview={onOpenReview}
             selected={selectedIds.has(item.job_id)}
             onToggleSelect={onToggleSelect}

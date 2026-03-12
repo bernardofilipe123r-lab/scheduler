@@ -11,6 +11,7 @@ Features:
   - B5: Respects created_by flag to avoid overwriting user-created content
 """
 from datetime import datetime, timedelta, timezone
+import math
 from sqlalchemy.orm import Session
 from app.models.toby import TobyState, TobyActivityLog, TobyBrandConfig
 from app.models.scheduling import ScheduledReel
@@ -240,7 +241,7 @@ def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
         "total_slots": total,
         "filled_slots": effective_filled,
         "empty_slots": empty,
-        "percent": round(effective_filled / total * 100, 1) if total > 0 else 100.0,
+        "percent": min(100.0, round(effective_filled / total * 100, 1)) if total > 0 else 100.0,
         "next_empty_slot": next_empty,
         "slots": all_slots,
         "brand_breakdown": brand_breakdown,
@@ -252,6 +253,24 @@ def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
 
 
 def get_empty_slots(db: Session, user_id: str, state: TobyState) -> list[dict]:
-    """Get all empty slots that need content."""
+    """Get empty slots that need content.
+
+    Smart burst: for buffer_days > 4, only return empty slots within a
+    generation window of ceil(buffer_days / 2) days.  This prevents Toby
+    from trying to fill a 10-day buffer all at once — instead it fills
+    the first 5 days, and as time passes the window slides forward to
+    cover the remaining days.
+    """
     status = get_buffer_status(db, user_id, state)
-    return [s for s in status["slots"] if not s["filled"]]
+    empty = [s for s in status["slots"] if not s["filled"]]
+
+    buffer_days = state.buffer_days or 2
+    if buffer_days > 4:
+        gen_window_days = math.ceil(buffer_days / 2)
+        gen_horizon = datetime.now(timezone.utc) + timedelta(days=gen_window_days)
+        empty = [
+            s for s in empty
+            if datetime.fromisoformat(s["time"]) <= gen_horizon
+        ]
+
+    return empty

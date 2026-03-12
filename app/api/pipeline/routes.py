@@ -367,6 +367,35 @@ async def edit_pipeline_item(
     return _serialize_pipeline_item(job)
 
 
+@router.delete("/{job_id}")
+async def delete_pipeline_item(
+    job_id: str,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """Delete a pipeline item and any associated scheduled posts."""
+    from app.models.scheduling import ScheduledReel
+
+    job = db.query(GenerationJob).filter(
+        GenerationJob.job_id == job_id,
+        GenerationJob.user_id == user["id"],
+    ).first()
+
+    if not job:
+        raise HTTPException(status_code=404, detail="Pipeline item not found")
+
+    # Delete any scheduled reels linked to this job
+    db.query(ScheduledReel).filter(
+        ScheduledReel.user_id == user["id"],
+        ScheduledReel.reel_id.like(f"{job_id}%"),
+    ).delete(synchronize_session="fetch")
+
+    db.delete(job)
+    db.commit()
+
+    return {"deleted": True, "job_id": job_id}
+
+
 @router.post("/regenerate")
 async def regenerate_pipeline_items(
     body: RegenerateRequest,

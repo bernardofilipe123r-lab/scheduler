@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { get, post, patch } from '@/shared/api/client'
+import { get, post, patch, del } from '@/shared/api/client'
 import toast from 'react-hot-toast'
 import { jobKeys } from '@/features/jobs/hooks/use-jobs'
 import type { PipelineFilters, PipelineResponse, PipelineStats, PipelineItem } from '../model/types'
@@ -131,6 +131,30 @@ export function useRegeneratePipeline() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: pipelineKeys.all })
       toast.success('Toby will generate more content shortly!')
+    },
+  })
+}
+
+export function useDeletePipelineItem() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (jobId: string) =>
+      del(`/api/pipeline/${jobId}`),
+    onMutate: async (jobId) => {
+      await queryClient.cancelQueries({ queryKey: pipelineKeys.all })
+      queryClient.setQueriesData<PipelineResponse>(
+        { queryKey: pipelineKeys.all },
+        (old) => old ? { ...old, items: old.items.filter(i => i.job_id !== jobId) } : old,
+      )
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: pipelineKeys.all })
+      queryClient.invalidateQueries({ queryKey: jobKeys.all })
+      toast.success('Content deleted')
+    },
+    onError: () => {
+      queryClient.invalidateQueries({ queryKey: pipelineKeys.all })
+      toast.error('Failed to delete — please try again')
     },
   })
 }

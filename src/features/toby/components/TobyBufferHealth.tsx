@@ -29,7 +29,7 @@ export function TobyBufferHealth() {
               className={`h-full rounded-full transition-all duration-700 ${
                 healthy ? 'bg-emerald-500' : low ? 'bg-amber-400' : 'bg-red-400'
               }`}
-              style={{ width: `${Math.max(buffer.fill_percent, 2)}%` }}
+              style={{ width: `${Math.min(Math.max(buffer.fill_percent, 2), 100)}%` }}
             />
           </div>
           <p className="text-xs text-gray-400 mt-2">

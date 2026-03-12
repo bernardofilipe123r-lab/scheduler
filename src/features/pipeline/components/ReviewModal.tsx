@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { CheckCircle2, X, Pencil, ChevronLeft, ChevronRight, Star, Volume2, VolumeX } from 'lucide-react'
+import { CheckCircle2, X, Pencil, ChevronLeft, ChevronRight, Star, Volume2, VolumeX, Trash2 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { PipelineItem } from '../model/types'
@@ -12,6 +12,7 @@ interface Props {
   onApprove: (id: string) => void
   onReject: (id: string) => void
   onEdit: (item: PipelineItem) => void
+  onDelete?: (id: string) => void
   onClose: () => void
 }
 
@@ -254,7 +255,7 @@ function PostContent({ item }: { item: PipelineItem }) {
    REVIEW MODAL — Portaled to body to escape space-y-5
    ═══════════════════════════════════════════════════════ */
 
-export function ReviewModal({ items: externalItems, initialIndex, onApprove, onReject, onEdit, onClose }: Props) {
+export function ReviewModal({ items: externalItems, initialIndex, onApprove, onReject, onEdit, onDelete, onClose }: Props) {
   const [queue, setQueue] = useState<PipelineItem[]>(() => externalItems.slice(initialIndex))
   const [currentIdx, setCurrentIdx] = useState(0)
   const totalOriginal = externalItems.length
@@ -268,6 +269,7 @@ export function ReviewModal({ items: externalItems, initialIndex, onApprove, onR
 
   const item = queue[currentIdx]
   const contentMode = item ? getContentMode(item) : 'unknown'
+  const isPending = item?.lifecycle === 'pending_review'
 
   // Preload next 2 items' videos + thumbnails in background
   useEffect(() => {
@@ -318,9 +320,10 @@ export function ReviewModal({ items: externalItems, initialIndex, onApprove, onR
     const handler = (e: KeyboardEvent) => {
       if (isAnimating) return
       if (e.key === 'Escape') onClose()
-      else if (e.key === 'ArrowRight') handleAccept()
-      else if (e.key === 'ArrowLeft') handleDecline()
-      else if (e.key === 'e' || e.key === 'E') handleEdit()
+      else if (e.key === 'ArrowRight' && isPending) handleAccept()
+      else if (e.key === 'ArrowLeft' && isPending) handleDecline()
+      else if ((e.key === 'e' || e.key === 'E') && isPending) handleEdit()
+      else if ((e.key === 'd' || e.key === 'D') && !isPending) handleDeleteItem()
       else if (e.key === 'm' || e.key === 'M') setMuted(m => !m)
     }
     window.addEventListener('keydown', handler)
@@ -370,6 +373,18 @@ export function ReviewModal({ items: externalItems, initialIndex, onApprove, onR
     onClose()
   }, [item, onEdit, onClose])
 
+  const handleDeleteItem = useCallback(() => {
+    if (!item || isAnimating || !onDelete) return
+    setIsAnimating(true)
+    setDirection('left')
+    onDelete(item.job_id)
+    setTimeout(() => {
+      setDirection(null)
+      setIsAnimating(false)
+      removeCurrentFromQueue()
+    }, 250)
+  }, [item, isAnimating, onDelete, removeCurrentFromQueue])
+
   if (!item) return null
 
   const remaining = queue.length - currentIdx
@@ -400,7 +415,7 @@ export function ReviewModal({ items: externalItems, initialIndex, onApprove, onR
             {processedCount + currentIdx + 1} of {totalOriginal}
           </span>
           <span className="text-white/50 text-xs">
-            {remaining} left to review
+            {isPending ? `${remaining} left to review` : `viewing ${remaining} items`}
           </span>
         </div>
 
@@ -467,30 +482,43 @@ export function ReviewModal({ items: externalItems, initialIndex, onApprove, onR
 
         {/* Actions */}
         <div className="mt-3 flex items-center gap-4">
-          <button onClick={handleDecline} disabled={isAnimating} className="group flex flex-col items-center gap-1">
-            <div className="w-14 h-14 rounded-full border-2 border-red-400/60 flex items-center justify-center text-red-400 hover:bg-red-500 hover:text-white hover:border-red-500 transition-all duration-200 hover:scale-110">
-              <X className="w-7 h-7" />
-            </div>
-            <span className="text-[10px] text-white/50 group-hover:text-white/70 transition-colors">Decline</span>
-          </button>
+          {isPending ? (
+            <>
+              <button onClick={handleDecline} disabled={isAnimating} className="group flex flex-col items-center gap-1">
+                <div className="w-14 h-14 rounded-full border-2 border-red-400/60 flex items-center justify-center text-red-400 hover:bg-red-500 hover:text-white hover:border-red-500 transition-all duration-200 hover:scale-110">
+                  <X className="w-7 h-7" />
+                </div>
+                <span className="text-[10px] text-white/50 group-hover:text-white/70 transition-colors">Decline</span>
+              </button>
 
-          <button onClick={handleEdit} className="group flex flex-col items-center gap-1">
-            <div className="w-11 h-11 rounded-full border-2 border-white/30 flex items-center justify-center text-white/50 hover:bg-white/10 hover:text-white hover:border-white/60 transition-all duration-200 hover:scale-110">
-              <Pencil className="w-5 h-5" />
-            </div>
-            <span className="text-[10px] text-white/50 group-hover:text-white/70 transition-colors">Edit</span>
-          </button>
+              <button onClick={handleEdit} className="group flex flex-col items-center gap-1">
+                <div className="w-11 h-11 rounded-full border-2 border-white/30 flex items-center justify-center text-white/50 hover:bg-white/10 hover:text-white hover:border-white/60 transition-all duration-200 hover:scale-110">
+                  <Pencil className="w-5 h-5" />
+                </div>
+                <span className="text-[10px] text-white/50 group-hover:text-white/70 transition-colors">Edit</span>
+              </button>
 
-          <button onClick={handleAccept} disabled={isAnimating} className="group flex flex-col items-center gap-1">
-            <div className="w-14 h-14 rounded-full border-2 border-emerald-400/60 flex items-center justify-center text-emerald-400 hover:bg-emerald-500 hover:text-white hover:border-emerald-500 transition-all duration-200 hover:scale-110">
-              <CheckCircle2 className="w-7 h-7" />
-            </div>
-            <span className="text-[10px] text-white/50 group-hover:text-white/70 transition-colors">Accept</span>
-          </button>
+              <button onClick={handleAccept} disabled={isAnimating} className="group flex flex-col items-center gap-1">
+                <div className="w-14 h-14 rounded-full border-2 border-emerald-400/60 flex items-center justify-center text-emerald-400 hover:bg-emerald-500 hover:text-white hover:border-emerald-500 transition-all duration-200 hover:scale-110">
+                  <CheckCircle2 className="w-7 h-7" />
+                </div>
+                <span className="text-[10px] text-white/50 group-hover:text-white/70 transition-colors">Accept</span>
+              </button>
+            </>
+          ) : (
+            <button onClick={handleDeleteItem} disabled={isAnimating || !onDelete} className="group flex flex-col items-center gap-1">
+              <div className="w-14 h-14 rounded-full border-2 border-red-400/60 flex items-center justify-center text-red-400 hover:bg-red-500 hover:text-white hover:border-red-500 transition-all duration-200 hover:scale-110">
+                <Trash2 className="w-7 h-7" />
+              </div>
+              <span className="text-[10px] text-white/50 group-hover:text-white/70 transition-colors">Delete</span>
+            </button>
+          )}
         </div>
 
         <p className="mt-2 text-[10px] text-white/25">
-          ← Decline &nbsp;·&nbsp; → Accept &nbsp;·&nbsp; E Edit &nbsp;·&nbsp; M Mute &nbsp;·&nbsp; Esc Close
+          {isPending
+            ? '← Decline · → Accept · E Edit · M Mute · Esc Close'
+            : 'D Delete · M Mute · Esc Close'}
         </p>
       </motion.div>
     </div>

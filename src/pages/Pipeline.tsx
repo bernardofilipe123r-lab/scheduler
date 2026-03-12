@@ -16,6 +16,7 @@ import {
   useRejectPipelineItem,
   useBulkApprovePipeline,
   useBulkRejectPipeline,
+  useDeletePipelineItem,
   usePipelineFilters,
 } from '@/features/pipeline'
 import type { PipelineItem } from '@/features/pipeline'
@@ -30,6 +31,7 @@ export function PipelinePage() {
   const reject = useRejectPipelineItem()
   const bulkApprove = useBulkApprovePipeline()
   const bulkReject = useBulkRejectPipeline()
+  const deletePipeline = useDeletePipelineItem()
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [reviewModalIndex, setReviewModalIndex] = useState<number | null>(null)
@@ -92,6 +94,10 @@ export function PipelinePage() {
     navigate(`/job/${item.job_id}`)
   }, [navigate])
 
+  const handleDelete = useCallback((id: string) => {
+    deletePipeline.mutate(id)
+  }, [deletePipeline])
+
   const handleOpenReview = useCallback((item: PipelineItem) => {
     const idx = items.findIndex(i => i.job_id === item.job_id)
     if (idx >= 0) setReviewModalIndex(idx)
@@ -137,6 +143,7 @@ export function PipelinePage() {
           onApprove={handleApprove}
           onReject={handleReject}
           onEdit={handleEdit}
+          onDelete={handleDelete}
           onOpenReview={handleOpenReview}
           selectedIds={selectedIds}
           onToggleSelect={toggleSelect}
@@ -167,6 +174,7 @@ export function PipelinePage() {
             onApprove={(id) => handleApprove(id)}
             onReject={handleReject}
             onEdit={handleEdit}
+            onDelete={handleDelete}
             onClose={() => setReviewModalIndex(null)}
           />
         )}

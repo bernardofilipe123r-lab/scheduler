@@ -91,7 +91,7 @@ export function TobyBufferStatus() {
             <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all duration-700 ${cfg.barColor}`}
-                style={{ width: `${Math.max(buffer.fill_percent, 2)}%` }}
+                style={{ width: `${Math.min(Math.max(buffer.fill_percent, 2), 100)}%` }}
               />
             </div>
           </div>

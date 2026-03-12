@@ -282,7 +282,7 @@ export function TobySettings() {
                 desc="How many days ahead to keep the content buffer filled"
                 value={getVal('buffer_days', config.buffer_days) as number}
                 onChange={(v) => setGlobalField('buffer_days', v)}
-                min={1} max={7} step={1}
+                min={1} max={10} step={1}
               />
               <ConfigSlider
                 label="Explore Ratio"

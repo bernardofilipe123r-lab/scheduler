@@ -1,4 +1,4 @@
-import { CheckCircle2, X, Pencil, Star, Loader2 } from 'lucide-react'
+import { CheckCircle2, X, Pencil, Star, Loader2, Trash2 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { format } from 'date-fns'
 import { ContentPreview } from './ContentPreview'
@@ -9,6 +9,7 @@ interface Props {
   onApprove: (id: string) => void
   onReject: (id: string) => void
   onEdit: (item: PipelineItem) => void
+  onDelete?: (id: string) => void
   onOpenReview: (item: PipelineItem) => void
   selected: boolean
   onToggleSelect: (id: string) => void
@@ -41,7 +42,7 @@ function variantLabel(item: PipelineItem): string {
   return item.variant
 }
 
-export function PipelineCard({ item, onApprove, onReject, onEdit, onOpenReview, selected, onToggleSelect }: Props) {
+export function PipelineCard({ item, onApprove, onReject, onEdit, onDelete, onOpenReview, selected, onToggleSelect }: Props) {
   const lifecycle = item.lifecycle
   const isPending = lifecycle === 'pending_review'
   const isGenerating = lifecycle === 'generating'
@@ -150,13 +151,27 @@ export function PipelineCard({ item, onApprove, onReject, onEdit, onOpenReview, 
         )}
 
         {!isPending && (
-          <button
-            onClick={() => onEdit(item)}
-            className="flex-1 flex items-center justify-center gap-1 py-2 text-xs font-medium text-gray-500 hover:bg-gray-50 transition-colors rounded-b-xl"
-          >
-            <Pencil className="w-3.5 h-3.5" />
-            View Details
-          </button>
+          <>
+            <button
+              onClick={() => onOpenReview(item)}
+              className="flex-1 flex items-center justify-center gap-1 py-2 text-xs font-medium text-gray-500 hover:bg-gray-50 transition-colors rounded-bl-xl"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+              View
+            </button>
+            {onDelete && (
+              <>
+                <div className="w-px bg-gray-100" />
+                <button
+                  onClick={() => onDelete(item.job_id)}
+                  className="flex-1 flex items-center justify-center gap-1 py-2 text-xs font-medium text-red-500 hover:bg-red-50 transition-colors rounded-br-xl"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Delete
+                </button>
+              </>
+            )}
+          </>
         )}
       </div>
     </div>

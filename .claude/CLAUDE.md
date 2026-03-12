@@ -74,6 +74,34 @@ railway redeploy           # Redeploy service
 - **NEVER** hardcode brand names, IDs, color arrays, or platform lists for brands
 - Static constants OK for: platform identity colors, UI layout, system defaults (quality threshold 80, tick interval 5min)
 
+## Toby Agent Architecture
+
+Toby runs a 5-min tick loop (`orchestrator.py`) with sequential phases:
+1. **Quality Guard** — Self-checks scheduled output, cancels duplicates/fallbacks
+2. **Buffer Check** — Identifies empty calendar slots, generates content to fill them
+3. **Metrics Check** — Fetches post performance from platforms (6h interval)
+4. **Analysis Check** — Updates strategy scores via Thompson Sampling (6h interval)
+5. **Deliberation** — Daily pattern analysis via DeepSeek R1
+6. **Meta-Cognitive** — Weekly self-tuning of explore ratios
+7. **Discovery** — TrendScout scans for trending topics
+8. **Phase Check** — Transitions between bootstrap→learning→optimizing
+
+### Pipeline Approval Workflow
+Toby generates content → goes to Pipeline (`pending_review`) → user reviews in Tinder-style swipe modal → Accept schedules it, Decline rejects it, Delete removes it. Content is **never auto-published** — user approval in the Pipeline is always required.
+
+Pipeline card actions are lifecycle-aware:
+- `pending_review`: Accept / Decline / Edit
+- `scheduled` / `rejected` / `failed` / `published`: Delete only (no re-approve/re-reject)
+
+### Buffer Configuration
+- **Buffer Days**: 1-10 days (user configurable in Toby Settings → General tab)
+- **Smart Burst**: For buffer_days > 4, Toby uses a rolling generation window of `ceil(buffer_days/2)` days — e.g. 10-day buffer generates first 5 days, then as time passes the window slides forward to cover remaining days
+- **Buffer %**: Capped at 100% for display (pipeline pending items count as virtually filling slots)
+- **Content Types**: Reels, Carousels (posts), Threads — each independently toggleable globally and per-brand
+- **Adaptive Content Types**: When user enables a new content type mid-buffer, Toby detects empty slots on next 5-min tick and generates content to fill them — no manual intervention needed
+- **Rate Limits**: Normal mode: 2/brand/hr, 6/user/hr, 15-min cooldown. Bootstrap: 6/brand/hr, 20/user/hr, 2-min cooldown
+- **Sequential Execution**: Content generation is always sequential (never parallel) to prevent duplicate content from race conditions
+
 ## Critical Rules
 
 ### React Hooks (CRASH RISK)
@@ -99,6 +127,8 @@ When adding/removing a social platform, update all three pages:
 - Toby agent: `app/services/toby/orchestrator.py` (5-min tick loop)
 - Toby agents: `app/services/toby/agents/` (analyst, creator, critic, scout, strategist, publisher)
 - Toby memory: `app/services/toby/memory/` (episodic, semantic, procedural, world_model)
+- Buffer manager: `app/services/toby/buffer_manager.py` (slot calculation, generation window)
+- Content planner: `app/services/toby/content_planner.py` (strategy selection, diversity)
 - Content DNA: `app/core/prompt_context.py`, `app/models/niche_config.py`
 - Brand config: `app/core/config.py` (`BrandConfig` dataclass)
 - Viral patterns: `app/core/viral_patterns.py` (59 archetypes)
@@ -111,6 +141,8 @@ When adding/removing a social platform, update all three pages:
 - Layout: `src/app/layout/AppLayout.tsx`
 - Auth: `src/features/auth/AuthContext.tsx`
 - Brands: `src/features/brands/hooks/use-dynamic-brands.ts`
+- Pipeline: `src/features/pipeline/` (api/, components/, model/)
+- Toby dashboard: `src/features/toby/` (components/, hooks/, types/)
 
 ### Scripts
 - `scripts/validate_api.py` — Import + route validation

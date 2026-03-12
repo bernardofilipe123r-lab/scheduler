@@ -22,7 +22,7 @@
 
 ## What is ViralToby
 
-**ViralToby** (`viraltoby.com`) is a multi-tenant SaaS platform for social media content scheduling and publishing across Instagram, Facebook, YouTube, Threads, and TikTok. Its core feature is **Toby** — an autonomous AI agent that generates, scores, and publishes content based on each brand's Content DNA.
+**ViralToby** (`viraltoby.com`) is a multi-tenant SaaS platform for social media content scheduling and publishing across Instagram, Facebook, YouTube, Threads, TikTok, and Bluesky. Its core feature is **Toby** — an autonomous AI agent that generates, scores, and publishes content based on each brand's Content DNA.
 
 **Tech Stack:** Python 3.11+ / FastAPI / SQLAlchemy / PostgreSQL / React 18 / TypeScript / Vite / Tailwind / TanStack React Query / Supabase (auth) / DeepSeek (AI) / Pillow + FFmpeg (media) / Railway (infra)
 
@@ -62,6 +62,27 @@ When adding/removing a social platform, update: `src/pages/Terms.tsx`, `src/page
 | React pages | `src/pages/` |
 | Feature modules | `src/features/{domain}/` |
 | Dynamic brands | `src/features/brands/hooks/use-dynamic-brands.ts` |
+
+## Toby Agent Architecture
+
+Toby runs a 5-min tick loop (`orchestrator.py`) with these phases:
+1. **Quality Guard** — Self-checks scheduled output, cancels duplicates/fallbacks
+2. **Buffer Check** — Identifies empty calendar slots, generates content to fill them
+3. **Metrics Check** — Fetches post performance from platforms (6h interval)
+4. **Analysis Check** — Updates strategy scores via Thompson Sampling (6h interval)
+5. **Discovery** — TrendScout scans for trending topics
+6. **Phase Check** — Transitions between bootstrap→learning→optimizing
+
+### Pipeline Approval Workflow
+Toby generates content → goes to Pipeline (pending_review) → user reviews in Tinder-style modal → Accept schedules it, Decline rejects it, Delete removes it. Content is **never auto-published** — user approval is always required.
+
+### Buffer Configuration
+- **Buffer Days**: 1-10 days (user configurable in Toby Settings → General tab)
+- **Smart Burst**: For buffer_days > 4, Toby uses a rolling generation window of `ceil(buffer_days/2)` days — e.g. 10-day buffer generates first 5 days, then as time passes the window slides forward
+- **Buffer %**: Capped at 100% for display (pipeline pending items count as virtually filling slots)
+- **Content Types**: Reels, Carousels (posts), Threads — each independently toggleable globally and per-brand
+- **Adaptive**: When user enables a new content type mid-buffer, Toby detects empty slots on next tick and generates content to fill them
+- **Rate Limits**: Normal mode: 2/brand/hr, 6/user/hr. Bootstrap: 6/brand/hr, 20/user/hr
 
 ## Commands
 
