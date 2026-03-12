@@ -58,7 +58,7 @@ export function TobySettings() {
   const updateBrandMut = useUpdateTobyBrandConfig()
   const resetMut = useTobyReset()
   const [showResetConfirm, setShowResetConfirm] = useState(false)
-  const [tab, setTab] = useState<'brands' | 'general'>('brands')
+  const [tab, setTab] = useState<'brands' | 'general'>('general')
   const [selectedBrand, setSelectedBrand] = useState<string | null>(null)
   const [form, setForm] = useState<Record<string, number | boolean | string>>({})
   const [brandForms, setBrandForms] = useState<Record<string, Record<string, number | boolean | string>>>({})

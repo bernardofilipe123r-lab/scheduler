@@ -5,17 +5,14 @@ import {
   TobyHero,
   TobyGuide,
   TobyOverviewTab,
-  TobyBrainTab,
-  TobyScoutTab,
-  TobyOperationsTab,
   TobySettings,
 } from '@/features/toby'
 
 type Tab = 'view' | 'settings'
 
 const TABS: Array<{ id: Tab; label: string; icon: typeof LayoutDashboard }> = [
-  { id: 'view',     label: 'View',     icon: LayoutDashboard },
-  { id: 'settings', label: 'Settings', icon: Settings        },
+  { id: 'view',     label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'settings', label: 'Settings',  icon: Settings        },
 ]
 
 export function TobyPage() {
@@ -58,14 +55,7 @@ export function TobyPage() {
           </div>
 
           {/* Tab Content */}
-          {activeTab === 'view' && (
-            <div className="space-y-5">
-              <TobyOverviewTab />
-              <TobyBrainTab />
-              <TobyScoutTab />
-              <TobyOperationsTab />
-            </div>
-          )}
+          {activeTab === 'view' && <TobyOverviewTab />}
           {activeTab === 'settings' && <TobySettings />}
         </>
       )}
