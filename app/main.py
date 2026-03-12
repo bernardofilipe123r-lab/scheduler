@@ -1292,9 +1292,9 @@ async def startup_event():
     from app.services.billing_enforcer import billing_enforcement_tick
     scheduler.add_job(billing_enforcement_tick, 'interval', hours=1, id='billing_enforcement')
 
-    # TikTok trending music — fetch once per week (conserve Soundcharts quota)
+    # TikTok trending music — fetch once per week
     def fetch_trending_music_job():
-        """Fetch trending music from TikTok via RapidAPI / Soundcharts."""
+        """Fetch trending music from TikTok via RapidAPI / TokInsight."""
         try:
             from app.db_connection import get_db_session
             from app.services.media.trending_music_fetcher import fetch_trending_music, cleanup_old_batches
@@ -1311,8 +1311,25 @@ async def startup_event():
         except Exception as e:
             print(f"❌ Trending music fetch failed: {e}")
 
+    def fetch_trending_music_if_stale():
+        """Fetch trending music only if there's no recent batch (< 7 days old)."""
+        try:
+            from app.db_connection import get_db_session
+            from app.models.trending_music import TrendingMusicFetch
+            with get_db_session() as db:
+                cutoff = datetime.utcnow() - timedelta(days=7)
+                recent = db.query(TrendingMusicFetch).filter(
+                    TrendingMusicFetch.fetched_at >= cutoff
+                ).first()
+                if recent:
+                    print(f"🎵 Trending music is fresh (last fetch: {recent.fetched_at}), skipping startup fetch")
+                    return
+            fetch_trending_music_job()
+        except Exception as e:
+            print(f"❌ Trending music startup check failed: {e}")
+
     scheduler.add_job(fetch_trending_music_job, 'interval', hours=168, id='trending_music_fetch')
-    scheduler.add_job(fetch_trending_music_job, 'date', run_date=datetime.now() + timedelta(seconds=30), id='trending_music_startup')
+    scheduler.add_job(fetch_trending_music_if_stale, 'date', run_date=datetime.now() + timedelta(seconds=30), id='trending_music_startup')
 
     # ── Stuck job auto-recovery (every 5 minutes) ────────────────────────
     def recover_stuck_jobs():

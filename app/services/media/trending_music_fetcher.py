@@ -189,10 +189,11 @@ def fetch_trending_music(db: Session) -> Dict[str, Any]:
     """
     Fetch trending music from TikTok via RapidAPI.
 
-    Strategy (3 layers):
-    1. /t trending endpoint (primary, limited to BASIC plan quota)
-    2. TokInsight artist music lists (secondary)
-    3. Curated seed library of known popular TikTok tracks (always available)
+    Strategy (4 layers, ordered by audio URL availability):
+    1. /t trending endpoint (primary — has play_urls)
+    2. TokInsight artist music lists (has play_urls)
+    3. Curated seed library (no play_urls — relies on TokInsight refresh at use-time)
+    4. Soundcharts is NOT used as a source — it provides metadata only, no audio URLs
 
     Returns dict with 'success', 'tracks_stored', 'batch_id', and optionally 'error'.
     """
@@ -203,23 +204,17 @@ def fetch_trending_music(db: Session) -> Dict[str, Any]:
     if not can_fetch(db):
         return {"success": False, "error": f"Daily limit reached ({MAX_FETCHES_PER_DAY} fetches/day)"}
 
-    # Try primary source: /t trending endpoint
+    # Try primary source: /t trending endpoint (has audio URLs)
     tracks = _fetch_from_trending_api(api_key)
     source = "tiktok_trending_api"
 
-    # Fallback 1: Soundcharts TikTok chart (real trending data, 1000 req/month)
+    # Fallback 1: TokInsight popular artist music (has audio URLs)
     if not tracks:
-        logger.info("Trending API failed, trying Soundcharts TikTok chart")
-        tracks = _fetch_from_soundcharts()
-        source = "soundcharts"
-
-    # Fallback 2: TokInsight popular artist music
-    if not tracks:
-        logger.info("Soundcharts failed, falling back to TokInsight artist music")
+        logger.info("Trending API failed, trying TokInsight artist music")
         tracks = _fetch_from_tokinsight_artists(api_key)
         source = "tokinsight_artists"
 
-    # Fallback 3: curated seed library (always available, no API calls)
+    # Fallback 2: curated seed library (always available, no API calls)
     if not tracks:
         logger.info("TokInsight also failed, falling back to curated seed library")
         tracks = _get_curated_seed_tracks()
