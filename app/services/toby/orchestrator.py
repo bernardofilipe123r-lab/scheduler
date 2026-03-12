@@ -723,12 +723,15 @@ def _execute_threads_plan(db: Session, plan):
     """Execute a threads-only content plan: generate text + schedule. No media pipeline."""
     import uuid as _uuid
     from app.services.content.threads_generator import ThreadsGenerator
-    from app.services.content.niche_config_service import NicheConfigService
+    from app.services.content.content_dna_service import get_content_dna_service
     from app.services.toby.content_planner import record_content_tag
     from app.models.scheduling import ScheduledReel
 
-    niche_svc = NicheConfigService()
-    ctx = niche_svc.get_context(user_id=plan.user_id, brand_id=plan.brand_id)
+    dna_svc = get_content_dna_service()
+    if plan.content_dna_id:
+        ctx = dna_svc.get_context(user_id=plan.user_id, content_dna_id=plan.content_dna_id, db=db)
+    else:
+        ctx = dna_svc.get_context_for_brand(user_id=plan.user_id, brand_id=plan.brand_id, db=db)
     if not ctx:
         from app.core.prompt_context import PromptContext
         ctx = PromptContext()

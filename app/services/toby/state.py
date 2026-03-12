@@ -73,9 +73,11 @@ def enable_toby(db: Session, user_id: str) -> TobyState:
     Performs pre-flight validation (J1):
     - At least one active brand exists
     - At least one brand has instagram_business_account_id
-    - NicheConfig has at least 1 topic category
+    - At least one Content DNA profile has topic categories
+    - All active brands have a content_dna_id assigned
     """
     from app.models.brands import Brand
+    from app.models.content_dna import ContentDNAProfile
     from app.models.niche_config import NicheConfig
 
     # Pre-flight validation
@@ -90,11 +92,23 @@ def enable_toby(db: Session, user_id: str) -> TobyState:
     if brands and not any(b.instagram_business_account_id for b in brands):
         preflight_failures.append("no_instagram_credentials")
 
-    configs = db.query(NicheConfig).filter(NicheConfig.user_id == user_id).all()
-    if not configs or not any(
-        c.topic_categories and len(c.topic_categories) > 0 for c in configs
-    ):
-        preflight_failures.append("niche_config_empty")
+    # Check Content DNA profiles (new system)
+    dna_profiles = db.query(ContentDNAProfile).filter(ContentDNAProfile.user_id == user_id).all()
+    if dna_profiles:
+        # New system: check DNA profiles have topics
+        if not any(d.topic_categories and len(d.topic_categories) > 0 for d in dna_profiles):
+            preflight_failures.append("content_dna_no_topics")
+        # Check all active brands have DNA assigned
+        unassigned = [b for b in brands if not b.content_dna_id]
+        if unassigned:
+            preflight_failures.append("brands_missing_dna")
+    else:
+        # Fallback: legacy NicheConfig check (pre-migration)
+        configs = db.query(NicheConfig).filter(NicheConfig.user_id == user_id).all()
+        if not configs or not any(
+            c.topic_categories and len(c.topic_categories) > 0 for c in configs
+        ):
+            preflight_failures.append("niche_config_empty")
 
     if preflight_failures:
         raise ValueError(f"preflight:{','.join(preflight_failures)}")

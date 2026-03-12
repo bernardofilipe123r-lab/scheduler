@@ -48,6 +48,7 @@ export interface Brand {
   active: boolean
   has_instagram: boolean
   has_facebook: boolean
+  content_dna_id?: string | null
   created_at?: string
   updated_at?: string
 }

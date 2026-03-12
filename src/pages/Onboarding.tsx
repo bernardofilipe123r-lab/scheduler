@@ -49,6 +49,7 @@ import {
 } from '@/features/brands/constants'
 import { NicheConfigForm, type NicheConfigFormHandle } from '@/features/brands/components/NicheConfigForm'
 import { useImportFromInstagram } from '@/features/brands/api/use-niche-config'
+import { useCreateContentDNA, useAssignBrandToDNA } from '@/features/content-dna'
 import { supabase } from '@/shared/api/supabase'
 import { connectYouTube, connectInstagram, connectFacebook, connectThreads, connectTikTok, fetchFacebookPages, selectFacebookPage, fetchBrandConnections, type FacebookPage } from '@/features/brands/api/connections-api'
 import vaLogo from '@/assets/icons/va-logo.svg'
@@ -231,6 +232,8 @@ export function OnboardingPage() {
   const [dnaImported, setDnaImported] = useState(false)
   const importIgMutation = useImportFromInstagram()
   const [nicheNameFilled, setNicheNameFilled] = useState(false)
+  const createDNAMutation = useCreateContentDNA()
+  const assignBrandMutation = useAssignBrandToDNA()
 
   // Check connection status when entering step 3 or returning from OAuth
   useEffect(() => {
@@ -1586,7 +1589,46 @@ export function OnboardingPage() {
               return (
                 <button
                   onClick={async () => {
+                    // Save NicheConfig first (existing behavior)
                     await nicheFormRef.current?.saveNow()
+
+                    // Create a Content DNA profile from the saved NicheConfig
+                    // and assign the current brand to it
+                    try {
+                      const config = await apiClient.get<Record<string, unknown>>('/api/v2/brands/niche-config')
+                      const dnaName = (config.niche_name as string) || displayName || 'My Content DNA'
+                      const result = await createDNAMutation.mutateAsync({
+                        name: dnaName,
+                        niche_name: config.niche_name as string,
+                        niche_description: config.niche_description as string,
+                        content_brief: config.content_brief as string,
+                        target_audience: config.target_audience as string,
+                        audience_description: config.audience_description as string,
+                        content_tone: config.content_tone as string[],
+                        tone_avoid: config.tone_avoid as string[],
+                        topic_categories: config.topic_categories as string[],
+                        topic_keywords: config.topic_keywords as string[],
+                        topic_avoid: config.topic_avoid as string[],
+                        content_philosophy: config.content_philosophy as string,
+                        hook_themes: config.hook_themes as string[],
+                        image_style_description: config.image_style_description as string,
+                        image_palette_keywords: config.image_palette_keywords as string[],
+                        brand_personality: config.brand_personality as string,
+                        brand_focus_areas: config.brand_focus_areas as string[],
+                        parent_brand_name: config.parent_brand_name as string,
+                        hashtags: config.hashtags as string[],
+                      })
+                      if (result.profile?.id && brandId) {
+                        await assignBrandMutation.mutateAsync({
+                          dnaId: result.profile.id,
+                          brandId,
+                        })
+                      }
+                    } catch {
+                      // Non-blocking — DNA profile can be created later
+                      console.warn('Could not auto-create Content DNA profile during onboarding')
+                    }
+
                     setStep(5)
                   }}
                   disabled={aiGenerating || !nicheNameFilled}

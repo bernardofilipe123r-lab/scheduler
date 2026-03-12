@@ -47,6 +47,7 @@ class ContentPlan:
     hook_strategy: str
     title_format: str
     visual_style: str
+    content_dna_id: Optional[str] = None  # DNA that owns the learning for this plan
     story_category: Optional[str] = None  # format_b only, drives StoryDiscoverer
     experiment_id: Optional[str] = None
     is_experiment: bool = False
@@ -98,11 +99,16 @@ def create_plans_for_empty_slots(
                     break
         brand_iters = next_round
 
-    # All topics for this user (raw, from NicheConfig)
-    all_topics = _get_all_topics(db, user_id)
+    # Resolve DNA for each brand — topics come from DNA, not user-level config
+    from app.services.content.content_dna_service import get_content_dna_service
+    from app.models.brands import Brand
+    dna_service = get_content_dna_service()
+    brand_dna_map: dict[str, Optional[str]] = {}
 
-    # ── Per-brand state, lazy-initialised on first slot for that brand ───────
-    # Fix 2: cooldown-filtered topic list per brand
+    # ── Per-DNA state (learning is DNA-scoped, not brand-scoped) ─────────────
+    # Topics per DNA (from ContentDNAProfile)
+    dna_all_topics: dict[str, list[str]] = {}
+    # Fix 2: cooldown-filtered topic list per brand (diversity is still per-brand)
     brand_available_topics: dict[str, list[str]] = {}
     # Fix 1: topics already picked in this batch, per brand
     topics_picked_this_batch: dict[str, list[str]] = {}
@@ -112,6 +118,16 @@ def create_plans_for_empty_slots(
     plans = []
     for slot in interleaved:
         brand_id = slot["brand_id"]
+
+        # Resolve DNA for this brand (cached in map)
+        if brand_id not in brand_dna_map:
+            brand_dna_map[brand_id] = dna_service.get_dna_id_for_brand(brand_id, db)
+        content_dna_id = brand_dna_map[brand_id]
+
+        # Get topics from DNA profile (cached per DNA)
+        if content_dna_id and content_dna_id not in dna_all_topics:
+            dna_all_topics[content_dna_id] = _get_all_topics(db, user_id, content_dna_id=content_dna_id)
+        all_topics = dna_all_topics.get(content_dna_id, ["general"]) if content_dna_id else _get_all_topics(db, user_id)
 
         # Lazy-init per-brand state
         if brand_id not in brand_available_topics:
@@ -143,6 +159,7 @@ def create_plans_for_empty_slots(
             topics_for_slot=topics_for_slot,
             all_topics=available,
             similarity_ctx=similarity_ctx,
+            content_dna_id=content_dna_id,
         )
 
         personality_prompt = get_personality_prompt(slot["content_type"], strategy.personality)
@@ -158,6 +175,7 @@ def create_plans_for_empty_slots(
             hook_strategy=strategy.hook_strategy,
             title_format=strategy.title_format,
             visual_style=strategy.visual_style,
+            content_dna_id=content_dna_id,
             story_category=strategy.story_category,
             experiment_id=strategy.experiment_id,
             is_experiment=strategy.is_experiment,
@@ -324,6 +342,7 @@ def _pick_diverse_strategy(
     topics_for_slot: list[str],
     all_topics: list[str],
     similarity_ctx: list[dict],
+    content_dna_id: str = None,
 ) -> StrategyChoice:
     """
     Fix 3: Attempt up to MAX_DIVERSITY_RETRIES to find a strategy that is
@@ -344,6 +363,7 @@ def _pick_diverse_strategy(
         candidate = _select_strategy_with_combos(
             db, user_id, brand_id, slot["content_type"],
             explore_ratio, remaining_topics,
+            content_dna_id=content_dna_id,
         )
 
         sim = _max_similarity(candidate, similarity_ctx)
@@ -373,6 +393,7 @@ def _select_strategy_with_combos(
     content_type: str,
     explore_ratio: float,
     available_topics: list[str],
+    content_dna_id: str = None,
 ) -> StrategyChoice:
     """Phase 3: Try combo-based selection, fall back to per-dimension.
 
@@ -388,14 +409,20 @@ def _select_strategy_with_combos(
         MIN_COMBOS = 5
         MIN_COMBO_SAMPLES = 3
 
+        # Combo query scoped to DNA (all brands sharing DNA pool combos)
+        combo_filters = [
+            TobyStrategyCombos.user_id == user_id,
+            TobyStrategyCombos.content_type == content_type,
+            TobyStrategyCombos.sample_count >= MIN_COMBO_SAMPLES,
+        ]
+        if content_dna_id:
+            combo_filters.append(TobyStrategyCombos.content_dna_id == content_dna_id)
+        else:
+            combo_filters.append(TobyStrategyCombos.brand_id == brand_id)
+
         top_combos = (
             db.query(TobyStrategyCombos)
-            .filter(
-                TobyStrategyCombos.user_id == user_id,
-                TobyStrategyCombos.brand_id == brand_id,
-                TobyStrategyCombos.content_type == content_type,
-                TobyStrategyCombos.sample_count >= MIN_COMBO_SAMPLES,
-            )
+            .filter(*combo_filters)
             .order_by(TobyStrategyCombos.avg_toby_score.desc())
             .limit(20)
             .all()
@@ -447,6 +474,7 @@ def _select_strategy_with_combos(
         content_type=content_type,
         explore_ratio=explore_ratio,
         available_topics=available_topics,
+        content_dna_id=content_dna_id,
     )
 
 
@@ -461,6 +489,7 @@ def record_content_tag(
         id=str(uuid.uuid4()),
         user_id=user_id,
         brand_id=plan.brand_id,
+        content_dna_id=plan.content_dna_id,
         schedule_id=schedule_id,
         content_type=plan.content_type,
         personality=plan.personality_id,
@@ -477,10 +506,23 @@ def record_content_tag(
     db.add(tag)
 
 
-def _get_all_topics(db: Session, user_id: str) -> list[str]:
-    """Get raw topic categories from NicheConfig for this user (no filtering)."""
-    from app.models.niche_config import NicheConfig
+def _get_all_topics(db: Session, user_id: str, content_dna_id: str = None) -> list[str]:
+    """Get raw topic categories from ContentDNAProfile (preferred) or NicheConfig fallback."""
+    if content_dna_id:
+        from app.models.content_dna import ContentDNAProfile
+        dna = (
+            db.query(ContentDNAProfile)
+            .filter(
+                ContentDNAProfile.id == content_dna_id,
+                ContentDNAProfile.user_id == user_id,
+            )
+            .first()
+        )
+        if dna and dna.topic_categories:
+            return dna.topic_categories
 
+    # Fallback to legacy NicheConfig
+    from app.models.niche_config import NicheConfig
     config = (
         db.query(NicheConfig)
         .filter(NicheConfig.user_id == user_id)

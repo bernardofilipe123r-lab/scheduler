@@ -27,6 +27,7 @@ from app.api.auth.routes import router as auth_router
 from app.api.content.prompts_routes import router as prompts_router
 from app.api.system.health_routes import router as health_router
 from app.api.niche_config_routes import router as niche_config_router
+from app.api.content_dna_routes import router as content_dna_router
 from app.api.toby.routes import router as toby_router
 from app.api.system.legal_routes import router as legal_router
 from app.api.auth.ig_oauth_routes import router as ig_oauth_router
@@ -122,6 +123,7 @@ app.include_router(reels_router)
 app.include_router(jobs_router)
 app.include_router(youtube_router, prefix="/api")
 app.include_router(niche_config_router, prefix="/api/v2/brands")  # Niche config (Content DNA) — MUST be before brands_router to avoid /{brand_id} shadowing
+app.include_router(content_dna_router, prefix="/api")  # Content DNA profiles (multi-DNA architecture)
 app.include_router(brands_router, prefix="/api")  # Backward-compatible mount
 app.include_router(brands_router, prefix="/api/v2")  # V2 mount
 app.include_router(connection_test_router, prefix="/api/v2")  # Connection test endpoints

@@ -106,16 +106,23 @@ def choose_strategy(
     explore_ratio: float = 0.30,
     available_topics: list[str] = None,
     use_thompson: bool = True,
+    content_dna_id: str = None,
 ) -> StrategyChoice:
     """
     Choose a strategy for the next content piece.
 
     Supports Thompson Sampling (default) or epsilon-greedy selection.
-    Implements per-brand explore ratio (H5) and cross-brand cold-start (Phase C).
+    Learning is DNA-scoped: keyed by (user_id, content_dna_id, content_type).
+    Brands are publishing vehicles — brands in the same DNA pool learning.
     """
-    # H5: Per-brand dynamic explore ratio based on brand's data maturity
+    # Resolve DNA from brand if not provided
+    if not content_dna_id and brand_id:
+        from app.services.content.content_dna_service import get_content_dna_service
+        content_dna_id = get_content_dna_service().get_dna_id_for_brand(brand_id, db)
+
+    # H5: Per-DNA dynamic explore ratio based on DNA's data maturity
     effective_explore = _get_effective_explore_ratio(
-        db, user_id, brand_id, content_type, explore_ratio
+        db, user_id, content_dna_id, content_type, explore_ratio
     )
     is_explore = random.random() < effective_explore
 
@@ -137,29 +144,29 @@ def choose_strategy(
         visuals = VISUAL_STYLES
 
     personality = _pick_dimension(
-        db, user_id, brand_id, content_type, "personality",
+        db, user_id, content_dna_id, content_type, "personality",
         personality_pool,
         is_explore, use_thompson,
     )
 
     topics = available_topics or ["general"]
     topic = _pick_dimension(
-        db, user_id, brand_id, content_type, "topic",
+        db, user_id, content_dna_id, content_type, "topic",
         topics, is_explore, use_thompson,
     )
 
     hook = _pick_dimension(
-        db, user_id, brand_id, content_type, "hook",
+        db, user_id, content_dna_id, content_type, "hook",
         hooks, is_explore, use_thompson,
     )
 
     title_fmt = _pick_dimension(
-        db, user_id, brand_id, content_type, "title_format",
+        db, user_id, content_dna_id, content_type, "title_format",
         titles, is_explore, use_thompson,
     )
 
     visual = _pick_dimension(
-        db, user_id, brand_id, content_type, "visual_style",
+        db, user_id, content_dna_id, content_type, "visual_style",
         visuals, is_explore, use_thompson,
     )
 
@@ -167,7 +174,7 @@ def choose_strategy(
     story_category = None
     if content_type == "format_b_reel":
         story_category = _pick_dimension(
-            db, user_id, brand_id, content_type, "story_category",
+            db, user_id, content_dna_id, content_type, "story_category",
             FORMAT_B_STORY_CATEGORIES, is_explore, use_thompson,
         )
 
@@ -200,27 +207,40 @@ def choose_strategy(
 def _get_effective_explore_ratio(
     db: Session,
     user_id: str,
-    brand_id: str,
+    content_dna_id: str,
     content_type: str,
     base_ratio: float,
 ) -> float:
-    """H5: Compute effective explore ratio based on brand's data maturity."""
-    from app.models.analytics import PostPerformance
+    """H5: Compute effective explore ratio based on DNA's data maturity.
 
-    if not brand_id:
+    Counts scored posts across ALL brands sharing the same DNA,
+    since learning is pooled at the DNA level.
+    """
+    from app.models.analytics import PostPerformance
+    from app.models.brands import Brand
+
+    if not content_dna_id:
         return base_ratio
+
+    # Get all brand IDs that share this DNA
+    brand_ids = [
+        b.id for b in
+        db.query(Brand.id).filter(Brand.content_dna_id == content_dna_id).all()
+    ]
+    if not brand_ids:
+        return 1.0
 
     count = (
         db.query(PostPerformance)
         .filter(
-            PostPerformance.brand == brand_id,
+            PostPerformance.brand.in_(brand_ids),
             PostPerformance.performance_score.isnot(None),
         )
         .count()
     )
 
     if count == 0:
-        return 1.0  # Pure exploration for brand-new brands
+        return 1.0  # Pure exploration for brand-new DNAs
     elif count < 5:
         return 0.80
     elif count < COLD_START_THRESHOLD:
@@ -238,18 +258,25 @@ def update_strategy_score(
     option_value: str,
     score: float,
     weight: float = 1.0,
+    content_dna_id: str = None,
 ):
     """Update running aggregates for a strategy option after scoring.
 
     Phase 2: Supports weighted Bayesian updates.
+    Learning is DNA-scoped: keyed by (user_id, content_dna_id, content_type).
     weight=0.6 for 48h preliminary scores (less reliable)
     weight=1.0 for 7d final scores (full confidence)
     """
+    # Resolve DNA from brand if not provided
+    if not content_dna_id and brand_id:
+        from app.services.content.content_dna_service import get_content_dna_service
+        content_dna_id = get_content_dna_service().get_dna_id_for_brand(brand_id, db)
+
     existing = (
         db.query(TobyStrategyScore)
         .filter(
             TobyStrategyScore.user_id == user_id,
-            TobyStrategyScore.brand_id == brand_id,
+            TobyStrategyScore.content_dna_id == content_dna_id,
             TobyStrategyScore.content_type == content_type,
             TobyStrategyScore.dimension == dimension,
             TobyStrategyScore.option_value == option_value,
@@ -264,6 +291,7 @@ def update_strategy_score(
                 id=str(uuid.uuid4()),
                 user_id=user_id,
                 brand_id=brand_id,
+                content_dna_id=content_dna_id,
                 content_type=content_type,
                 dimension=dimension,
                 option_value=option_value,
@@ -288,7 +316,7 @@ def update_strategy_score(
                 db.query(TobyStrategyScore)
                 .filter(
                     TobyStrategyScore.user_id == user_id,
-                    TobyStrategyScore.brand_id == brand_id,
+                    TobyStrategyScore.content_dna_id == content_dna_id,
                     TobyStrategyScore.content_type == content_type,
                     TobyStrategyScore.dimension == dimension,
                     TobyStrategyScore.option_value == option_value,
@@ -354,13 +382,23 @@ def correct_preliminary_score(
     content_type: str,
     tag,
     final_score: float,
+    content_dna_id: str = None,
 ):
     """Phase 2: Correct strategy scores when 7d final score replaces 48h preliminary.
 
     Subtracts the preliminary weight (0.6) and adds the final weight (1.0).
+    Learning is DNA-scoped.
     """
     if not tag.preliminary_score:
         return  # No preliminary to correct
+
+    # Resolve DNA from brand if not provided
+    if not content_dna_id and brand_id:
+        from app.services.content.content_dna_service import get_content_dna_service
+        content_dna_id = get_content_dna_service().get_dna_id_for_brand(brand_id, db)
+
+    # Prefer tag's own content_dna_id (recorded at creation time)
+    tag_dna_id = getattr(tag, 'content_dna_id', None) or content_dna_id
 
     preliminary = tag.preliminary_score
     PRELIMINARY_WEIGHT = 0.6
@@ -380,7 +418,7 @@ def correct_preliminary_score(
             db.query(TobyStrategyScore)
             .filter(
                 TobyStrategyScore.user_id == user_id,
-                TobyStrategyScore.brand_id == brand_id,
+                TobyStrategyScore.content_dna_id == tag_dna_id,
                 TobyStrategyScore.content_type == content_type,
                 TobyStrategyScore.dimension == dim,
                 TobyStrategyScore.option_value == val,
@@ -641,14 +679,17 @@ def _thompson_sample(avg_score: float, sample_count: int, alpha: float = None, b
 def _pick_dimension(
     db: Session,
     user_id: str,
-    brand_id: str,
+    content_dna_id: str,
     content_type: str,
     dimension: str,
     options: list[str],
     is_explore: bool,
     use_thompson: bool = True,
 ) -> str:
-    """Pick an option for a dimension using Thompson Sampling or epsilon-greedy."""
+    """Pick an option for a dimension using Thompson Sampling or epsilon-greedy.
+
+    Scoped by content_dna_id — all brands sharing a DNA pool their learning.
+    """
     if not options:
         return "general"
 
@@ -656,17 +697,17 @@ def _pick_dimension(
         # Pure epsilon-greedy explore: random choice
         return random.choice(options)
 
-    # Get all scores for this dimension
-    all_scores = (
-        db.query(TobyStrategyScore)
-        .filter(
-            TobyStrategyScore.user_id == user_id,
-            TobyStrategyScore.content_type == content_type,
-            TobyStrategyScore.dimension == dimension,
-            TobyStrategyScore.sample_count > 0,
-        )
-        .all()
-    )
+    # Get all scores for this dimension, scoped to this DNA
+    filters = [
+        TobyStrategyScore.user_id == user_id,
+        TobyStrategyScore.content_type == content_type,
+        TobyStrategyScore.dimension == dimension,
+        TobyStrategyScore.sample_count > 0,
+    ]
+    if content_dna_id:
+        filters.append(TobyStrategyScore.content_dna_id == content_dna_id)
+
+    all_scores = db.query(TobyStrategyScore).filter(*filters).all()
 
     # Build map of option -> score record (only valid current options)
     score_map = {}
@@ -675,20 +716,20 @@ def _pick_dimension(
             score_map[s.option_value] = s
 
     if not score_map:
-        # Phase C: Cross-brand cold-start fallback
-        if brand_id:
-            cross_brand = (
+        # Phase C: Cross-DNA cold-start fallback — check user-level scores with no DNA
+        if content_dna_id:
+            cross_dna = (
                 db.query(TobyStrategyScore)
                 .filter(
                     TobyStrategyScore.user_id == user_id,
-                    TobyStrategyScore.brand_id.is_(None),
+                    TobyStrategyScore.content_dna_id.is_(None),
                     TobyStrategyScore.content_type == content_type,
                     TobyStrategyScore.dimension == dimension,
                     TobyStrategyScore.sample_count > 0,
                 )
                 .all()
             )
-            for s in cross_brand:
+            for s in cross_dna:
                 if s.option_value in options:
                     score_map[s.option_value] = s
 

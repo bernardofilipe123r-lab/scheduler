@@ -3,16 +3,24 @@ import { useBrands } from '@/features/brands/api/use-brands'
 import { useNicheConfig } from '@/features/brands/api/use-niche-config'
 import { getConfigStrength } from '@/features/brands/types/niche-config'
 import { useBrandConnections } from '@/features/brands/hooks/use-connections'
+import { useContentDNAProfiles } from '@/features/content-dna'
 
 export function useOnboardingStatus() {
   const { isAuthenticated, user } = useAuth()
   const { data: brands, isLoading: brandsLoading } = useBrands()
   const { data: config, isLoading: configLoading } = useNicheConfig()
+  const { data: dnaData, isLoading: dnaLoading } = useContentDNAProfiles()
   const { data: connections, isLoading: connectionsLoading } = useBrandConnections()
 
   const hasBrand = (brands?.length ?? 0) > 0
+
+  // Check DNA profiles (new system) or legacy NicheConfig
+  const dnaProfiles = dnaData?.profiles ?? []
+  const hasDNAProfiles = dnaProfiles.length > 0
   const strength = config ? getConfigStrength(config) : 'basic'
-  const hasDNA = strength === 'good' || strength === 'excellent'
+  const hasLegacyDNA = strength === 'good' || strength === 'excellent'
+  const hasDNA = hasDNAProfiles || hasLegacyDNA
+
   const onboardingCompleted = Boolean(user?.onboardingCompleted)
 
   // Check if at least one platform is connected across all brands
@@ -41,6 +49,6 @@ export function useOnboardingStatus() {
     hasDNA,
     hasConnection,
     onboardingCompleted,
-    isLoading: brandsLoading || configLoading || connectionsLoading,
+    isLoading: brandsLoading || configLoading || connectionsLoading || dnaLoading,
   }
 }

@@ -99,6 +99,7 @@ class TobyExperiment(Base):
     id = Column(String(36), primary_key=True)
     user_id = Column(String(100), nullable=False, index=True)
 
+    content_dna_id = Column(String(36), nullable=True)  # DNA-scoped experiments
     content_type = Column(String(10), nullable=False)  # reel | post
     dimension = Column(String(30), nullable=False)      # personality, topic, hook, etc.
     options = Column(JSON, nullable=False)               # ["educational", "provocative", ...]
@@ -149,6 +150,7 @@ class TobyStrategyScore(Base):
     id = Column(String(36), primary_key=True)
     user_id = Column(String(100), nullable=False)
     brand_id = Column(String(50), nullable=True)  # NULL = cross-brand
+    content_dna_id = Column(String(36), nullable=True)  # DNA-scoped learning
     content_type = Column(String(10), nullable=False)
 
     dimension = Column(String(30), nullable=False)
@@ -173,6 +175,7 @@ class TobyStrategyScore(Base):
 
     __table_args__ = (
         Index("ix_toby_strategy_user_dim", "user_id", "content_type", "dimension"),
+        Index("ix_strategy_dna_dim", "user_id", "content_dna_id", "content_type", "dimension"),
         {"extend_existing": True},
     )
 
@@ -230,6 +233,7 @@ class TobyContentTag(Base):
     id = Column(String(36), primary_key=True)
     user_id = Column(String(100), nullable=False, index=True)
     brand_id = Column(String(50), nullable=True, index=True)
+    content_dna_id = Column(String(36), nullable=True, index=True)
     schedule_id = Column(String(36), nullable=False, index=True)
 
     content_type = Column(String(10), nullable=False)

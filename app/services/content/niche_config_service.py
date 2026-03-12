@@ -1,7 +1,11 @@
 """
-NicheConfigService — loads and caches niche configuration per user.
+NicheConfigService — legacy compatibility wrapper.
 
-Content DNA is user-level, not per-brand.
+New code should use ContentDNAService directly. This service is kept for
+backward compatibility with callers that still pass brand_id or user_id.
+
+If a brand has a content_dna_id, this delegates to ContentDNAService.
+Otherwise falls back to the user-level NicheConfig table.
 """
 
 import logging
@@ -18,8 +22,20 @@ class NicheConfigService:
     _cache_ttl = timedelta(minutes=5)
     _cache_timestamps: dict = {}
 
-    def get_context(self, user_id: Optional[str] = None, db=None, **kwargs) -> PromptContext:
-        # Accept and ignore brand_id for backward compat with callers
+    def get_context(self, user_id: Optional[str] = None, brand_id: Optional[str] = None, db=None, **kwargs) -> PromptContext:
+        """Load PromptContext. Delegates to ContentDNAService if brand has DNA."""
+        # Try DNA-aware path first
+        if user_id and brand_id:
+            try:
+                from app.services.content.content_dna_service import get_content_dna_service
+                dna_svc = get_content_dna_service()
+                dna_id = dna_svc.get_dna_id_for_brand(brand_id, db)
+                if dna_id:
+                    return dna_svc.get_context(user_id, dna_id, db=db)
+            except Exception as e:
+                logger.debug("DNA delegation failed, falling back to NicheConfig: %s", e)
+
+        # Fallback: user-level NicheConfig
         cache_key = f"{user_id}"
 
         if cache_key in self._cache:

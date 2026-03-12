@@ -26,6 +26,7 @@ class TobyEpisodicMemory(Base):
     id = Column(String(36), primary_key=True)
     user_id = Column(String(100), nullable=False, index=True)
     brand_id = Column(String(50), nullable=True)
+    content_dna_id = Column(String(36), nullable=True, index=True)
     content_type = Column(String(10), nullable=True)
 
     schedule_id = Column(String(36), nullable=True)
@@ -117,6 +118,7 @@ class TobyProceduralMemory(Base):
     id = Column(String(36), primary_key=True)
     user_id = Column(String(100), nullable=False, index=True)
     brand_id = Column(String(50), nullable=True)
+    content_dna_id = Column(String(36), nullable=True, index=True)
     content_type = Column(String(10), nullable=True)
 
     rule_text = Column(Text, nullable=False)
@@ -199,6 +201,7 @@ class TobyStrategyCombos(Base):
     id = Column(String(36), primary_key=True)
     user_id = Column(String(100), nullable=False)
     brand_id = Column(String(50), nullable=True)
+    content_dna_id = Column(String(36), nullable=True, index=True)
     content_type = Column(String(10), nullable=True)
 
     combo_key = Column(String(500), nullable=False)

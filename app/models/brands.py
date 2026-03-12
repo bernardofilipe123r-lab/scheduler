@@ -96,6 +96,9 @@ class Brand(Base):
     # Per-brand logo for the header of video reel content frames
     reel_content_logo_path = Column(String(255), nullable=True)
 
+    # Content DNA assignment (1 DNA → N brands)
+    content_dna_id = Column(String(50), nullable=True, index=True)
+
     # Status
     active = Column(Boolean, default=True, nullable=False)
 
@@ -121,6 +124,7 @@ class Brand(Base):
             "reel_divider_logo_path": self.reel_divider_logo_path,
             "reel_divider_logo_text": self.reel_divider_logo_text,
             "reel_content_logo_path": self.reel_content_logo_path,
+            "content_dna_id": self.content_dna_id,
             "active": self.active,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
