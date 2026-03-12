@@ -21,6 +21,7 @@ import {
 } from '@/features/pipeline'
 import type { PipelineItem } from '@/features/pipeline'
 import { useDeleteJob } from '@/features/jobs/hooks/use-jobs'
+import { PipelineSkeleton } from '@/shared/components/Skeleton'
 
 export function PipelinePage() {
   const navigate = useNavigate()
@@ -140,13 +141,7 @@ export function PipelinePage() {
       />
 
       {/* Loading skeleton */}
-      {itemsLoading && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {[0, 1, 2, 3, 4, 5].map(i => (
-            <div key={i} className="h-64 rounded-xl bg-gray-100 animate-pulse" />
-          ))}
-        </div>
-      )}
+      {itemsLoading && <PipelineSkeleton />}
 
       {/* Content grid */}
       {!itemsLoading && items.length > 0 && (
