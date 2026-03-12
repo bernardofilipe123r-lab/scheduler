@@ -867,7 +867,15 @@ class JobProcessor:
                             music_path = Path(tmp_music.name)
                             print(f"   🎵 Music downloaded for format-b reel", flush=True)
                 except Exception as e:
-                    print(f"   ⚠️ Music resolution failed (continuing without): {e}", flush=True)
+                    print(f"   ⚠️ Music resolution failed: {e}", flush=True)
+
+                # Fallback to local bundled music if trending resolution failed
+                if music_path is None:
+                    from app.services.media.music_picker import get_random_local_music_path
+                    local_music = get_random_local_music_path()
+                    if local_music:
+                        music_path = local_music
+                        print(f"   🎵 Using local fallback music: {local_music.name}", flush=True)
 
             result_path = slideshow.compose_reel(
                 image_paths=image_paths,

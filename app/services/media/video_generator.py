@@ -63,10 +63,14 @@ class VideoGenerator:
         
         if music_path is None:
             # Fallback to local assets
-            if music_id is None:
-                music_id = random.choice(["music_1", "music_2", "music_3"])
+            from app.services.media.music_picker import get_random_local_music_path
+            music_path = get_random_local_music_path()
+            if music_path:
+                print(f"🎵 Using local fallback music: {music_path.name}")
+            elif music_id is None:
+                music_id = random.choice(["music_1", "music_2"])
                 print(f"🎵 Randomly selected music: {music_id}")
-            music_path = self._get_music_path(music_id)
+                music_path = self._get_music_path(music_id)
         
         print(f"\n{'='*80}")
         print(f"🎬 VIDEO GENERATION STARTED")

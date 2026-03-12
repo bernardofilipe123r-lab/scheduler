@@ -522,23 +522,33 @@ def get_trending_tracks(db: Session, limit: int = 50) -> List[TrendingMusic]:
 def get_random_trending_url(db: Session) -> Optional[str]:
     """Pick a random play_url from the top 50 trending tracks.
 
-    Shuffles all tracks and tries each one until a working URL is found.
-    Tries to refresh the URL via TokInsight to avoid expired CDN links.
-    For curated-seed tracks (empty play_url), only TokInsight can provide a URL.
+    First tries tracks that already have a play_url. Then tries refreshing
+    up to 3 tracks via TokInsight (to avoid hammering a broken API).
     """
     tracks = get_trending_tracks(db, limit=50)
     if not tracks:
         return None
     random.shuffle(tracks)
+
+    # First pass: try tracks that already have a valid play_url
     for chosen in tracks:
-        if chosen.tiktok_id:
-            fresh = get_fresh_play_url(chosen.tiktok_id)
-            if fresh:
-                logger.info("Random trending pick: '%s' by %s", chosen.title, chosen.author)
-                return fresh
         if chosen.play_url:
             logger.info("Random trending pick: '%s' by %s", chosen.title, chosen.author)
             return chosen.play_url
+
+    # Second pass: try TokInsight refresh for up to 3 tracks (fail-fast)
+    MAX_REFRESH_ATTEMPTS = 3
+    attempts = 0
+    for chosen in tracks:
+        if attempts >= MAX_REFRESH_ATTEMPTS:
+            break
+        if chosen.tiktok_id:
+            attempts += 1
+            fresh = get_fresh_play_url(chosen.tiktok_id)
+            if fresh:
+                logger.info("Random trending pick (refreshed): '%s' by %s", chosen.title, chosen.author)
+                return fresh
+
     return None
 
 

@@ -4,9 +4,11 @@ Helper to pick music for video generation.
 Supports:
 - Trending TikTok music (random from top 50 or specific track)
 - User-uploaded tracks (legacy, weighted-random)
+- Local bundled music files (fallback when APIs fail)
 """
 import random
 import logging
+from pathlib import Path
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -14,6 +16,23 @@ from sqlalchemy.orm import Session
 from app.models.user_music import UserMusic
 
 logger = logging.getLogger(__name__)
+
+# Local bundled music files — always-available fallback
+_ASSETS_MUSIC_DIR = Path(__file__).resolve().parent.parent.parent / "assets" / "music"
+
+
+def get_random_local_music_path() -> Optional[Path]:
+    """Return a random local .mp3 file from assets/music/ as fallback."""
+    if not _ASSETS_MUSIC_DIR.is_dir():
+        logger.warning("Local music directory not found: %s", _ASSETS_MUSIC_DIR)
+        return None
+    mp3_files = list(_ASSETS_MUSIC_DIR.glob("*.mp3"))
+    if not mp3_files:
+        logger.warning("No local .mp3 files in %s", _ASSETS_MUSIC_DIR)
+        return None
+    chosen = random.choice(mp3_files)
+    logger.info("Using local fallback music: %s", chosen.name)
+    return chosen
 
 
 def get_random_user_music_url(db: Session, user_id: str) -> Optional[str]:
