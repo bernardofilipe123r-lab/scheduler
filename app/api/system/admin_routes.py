@@ -1293,3 +1293,27 @@ async def delete_music_file(
     if do_delete(filename):
         return {"deleted": True, "filename": filename}
     raise HTTPException(status_code=404, detail=f"File '{filename}' not found")
+
+
+@router.get("/api/admin/music/{filename}/stream", summary="Stream a music file (super admin only)")
+async def stream_music_file(
+    filename: str,
+    user: dict = Depends(get_current_user),
+):
+    """Stream an MP3 file from the music library for playback."""
+    _require_super_admin(user)
+
+    from pathlib import Path as _Path
+    from fastapi.responses import FileResponse
+    from app.services.media.music_downloader import get_music_dir
+
+    safe = _Path(filename).name
+    file_path = get_music_dir() / safe
+    if not file_path.exists() or file_path.suffix != ".mp3":
+        raise HTTPException(status_code=404, detail=f"File '{filename}' not found")
+
+    return FileResponse(
+        path=str(file_path),
+        media_type="audio/mpeg",
+        filename=safe,
+    )

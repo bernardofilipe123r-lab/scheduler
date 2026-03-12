@@ -7,6 +7,9 @@ Admin pastes a list of song names, backend downloads each as MP3.
 import logging
 import re
 import os
+import shutil
+import tempfile
+import uuid
 from pathlib import Path
 from typing import List, Dict, Any
 
@@ -22,9 +25,17 @@ def _sanitize_filename(name: str) -> str:
     return name[:100] if name else "track"
 
 
+def get_music_dir() -> Path:
+    """Return the music library directory path."""
+    return _ASSETS_MUSIC_DIR
+
+
 def download_songs(songs_text: str) -> Dict[str, Any]:
     """
     Download songs from YouTube as MP3 into assets/music/.
+
+    Uses a temp directory with UUID filenames to avoid yt-dlp
+    FFmpeg post-processor failures with special characters.
 
     Args:
         songs_text: Newline-separated list of song names/queries.
@@ -54,26 +65,33 @@ def download_songs(songs_text: str) -> Dict[str, Any]:
             skipped.append({"song": song, "filename": f"{safe_name}.mp3"})
             continue
 
-        ydl_opts = {
-            'format': 'bestaudio/best',
-            'outtmpl': str(_ASSETS_MUSIC_DIR / f"{safe_name}.%(ext)s"),
-            'noplaylist': True,
-            'quiet': True,
-            'no_warnings': True,
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '192',
-            }],
-        }
-
+        # Download to temp dir with UUID name to avoid special char issues
+        # in yt-dlp's FFmpeg post-processor rename step
+        tmpdir = tempfile.mkdtemp()
         try:
+            tmp_name = uuid.uuid4().hex[:12]
+            ydl_opts = {
+                'format': 'bestaudio/best',
+                'outtmpl': os.path.join(tmpdir, f"{tmp_name}.%(ext)s"),
+                'noplaylist': True,
+                'quiet': True,
+                'no_warnings': True,
+                'postprocessors': [{
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'mp3',
+                    'preferredquality': '192',
+                }],
+            }
+
             search_query = f"ytsearch1:{song}"
             logger.info("Downloading: %s", song)
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([search_query])
 
-            if output_path.exists():
+            # Find the resulting mp3 in temp dir
+            mp3_files = list(Path(tmpdir).glob("*.mp3"))
+            if mp3_files:
+                shutil.move(str(mp3_files[0]), str(output_path))
                 size_mb = output_path.stat().st_size / (1024 * 1024)
                 downloaded.append({
                     "song": song,
@@ -82,11 +100,13 @@ def download_songs(songs_text: str) -> Dict[str, Any]:
                 })
                 logger.info("✅ Downloaded: %s (%.2f MB)", safe_name, size_mb)
             else:
-                failed.append({"song": song, "error": "File not created after download"})
-                logger.warning("❌ Download completed but file not found: %s", safe_name)
+                failed.append({"song": song, "error": "No mp3 file produced after download"})
+                logger.warning("❌ Download completed but no mp3 found: %s", safe_name)
         except Exception as e:
             failed.append({"song": song, "error": str(e)[:200]})
             logger.error("❌ Failed to download '%s': %s", song, e)
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
 
     return {
         "downloaded": downloaded,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -8,7 +8,7 @@ import {
   Bot, Power, Play, Loader2, Zap, Sparkles, Activity,
   Instagram, Facebook, Youtube, ChevronDown, ChevronUp, Check, Link, Calendar, Settings, Brain,
   Cpu, Image, Database, HardDrive, Wifi, Server, Globe, BarChart3,
-  AlertTriangle, Copy, ChevronRight, Music, Download,
+  AlertTriangle, Copy, ChevronRight, Music, Download, Square,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { apiClient } from '@/shared/api/client'
@@ -1924,6 +1924,8 @@ function MusicLibraryPanel() {
   const queryClient = useQueryClient()
   const [songsText, setSongsText] = useState('')
   const [lastResult, setLastResult] = useState<DownloadResult | null>(null)
+  const [playingFile, setPlayingFile] = useState<string | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
 
   const musicQuery = useQuery<{ files: MusicFile[]; count: number }>({
     queryKey: ['admin-music'],
@@ -2035,26 +2037,61 @@ function MusicLibraryPanel() {
         </div>
       ) : musicQuery.data?.files && musicQuery.data.files.length > 0 ? (
         <div className="space-y-1">
-          {musicQuery.data.files.map(file => (
-            <div
-              key={file.filename}
-              className="flex items-center justify-between px-3 py-2 rounded-lg bg-gray-50 border border-gray-100 group"
-            >
-              <div className="flex items-center gap-2 min-w-0">
-                <Music className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-                <span className="text-xs text-gray-700 truncate">{file.filename}</span>
-                <span className="text-[10px] text-gray-400">{file.size_mb} MB</span>
-              </div>
-              <button
-                onClick={() => deleteMutation.mutate(file.filename)}
-                disabled={deleteMutation.isPending}
-                className="p-1 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
-                title="Delete"
+          {musicQuery.data.files.map(file => {
+            const isPlaying = playingFile === file.filename
+            return (
+              <div
+                key={file.filename}
+                className="flex items-center justify-between px-3 py-2 rounded-lg bg-gray-50 border border-gray-100 group"
               >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          ))}
+                <div className="flex items-center gap-2 min-w-0">
+                  <button
+                    onClick={() => {
+                      if (isPlaying) {
+                        audioRef.current?.pause()
+                        setPlayingFile(null)
+                      } else {
+                        if (audioRef.current) {
+                          audioRef.current.pause()
+                        }
+                        const audio = new Audio(`/api/admin/music/${encodeURIComponent(file.filename)}/stream`)
+                        audio.onended = () => setPlayingFile(null)
+                        audio.onerror = () => setPlayingFile(null)
+                        audio.play()
+                        audioRef.current = audio
+                        setPlayingFile(file.filename)
+                      }
+                    }}
+                    className={clsx(
+                      'p-1 rounded-full shrink-0 transition-colors',
+                      isPlaying
+                        ? 'text-purple-600 bg-purple-100 hover:bg-purple-200'
+                        : 'text-gray-400 hover:text-purple-500 hover:bg-purple-50'
+                    )}
+                    title={isPlaying ? 'Stop' : 'Play'}
+                  >
+                    {isPlaying ? <Square className="w-3 h-3" /> : <Play className="w-3 h-3" />}
+                  </button>
+                  <span className="text-xs text-gray-700 truncate">{file.filename}</span>
+                  <span className="text-[10px] text-gray-400">{file.size_mb} MB</span>
+                </div>
+                <button
+                  onClick={() => {
+                    if (isPlaying) {
+                      audioRef.current?.pause()
+                      setPlayingFile(null)
+                    }
+                    deleteMutation.mutate(file.filename)
+                  }}
+                  disabled={deleteMutation.isPending}
+                  className="p-1 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                  title="Delete"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )
+          })}
         </div>
       ) : (
         <p className="text-xs text-gray-400">No music files yet. Download some songs above.</p>
