@@ -20,6 +20,7 @@ import {
   usePipelineFilters,
 } from '@/features/pipeline'
 import type { PipelineItem } from '@/features/pipeline'
+import { useTobyConfig } from '@/features/toby'
 import { PipelineSkeleton } from '@/shared/components/Skeleton'
 
 export function PipelinePage() {
@@ -27,6 +28,8 @@ export function PipelinePage() {
   const { filters, setStatus, setBrand, setContentType, resetFilters } = usePipelineFilters()
   const { data: statsData, isLoading: statsLoading } = usePipelineStats()
   const { data: pipelineData, isLoading: itemsLoading, isError: itemsError } = usePipelineItems(filters)
+  const { data: tobyConfig } = useTobyConfig()
+  const autoSchedule = tobyConfig?.auto_schedule ?? true
   const approve = useApprovePipelineItem()
   const reject = useRejectPipelineItem()
   const bulkApprove = useBulkApprovePipeline()
@@ -147,6 +150,7 @@ export function PipelinePage() {
           onOpenReview={handleOpenReview}
           selectedIds={selectedIds}
           onToggleSelect={toggleSelect}
+          autoSchedule={autoSchedule}
         />
       )}
 
@@ -176,6 +180,7 @@ export function PipelinePage() {
             onEdit={handleEdit}
             onDelete={handleDelete}
             onClose={() => setReviewModalIndex(null)}
+            autoSchedule={autoSchedule}
           />
         )}
       </AnimatePresence>

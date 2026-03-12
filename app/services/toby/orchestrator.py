@@ -158,6 +158,12 @@ def _process_user(db: Session, state: TobyState):
             db.rollback()
             print(f"[TOBY] Buffer check failed for {user_id}: {e}", flush=True)
 
+    # 1b. BUFFER REMINDER EMAIL — check if buffer is about to expire
+    try:
+        _check_buffer_reminder(db, user_id, state)
+    except Exception as e:
+        print(f"[TOBY] Buffer reminder check failed for {user_id}: {e}", flush=True)
+
     # 2. METRICS CHECK — isolated commit
     if _should_check(state.last_metrics_check_at, METRICS_CHECK_INTERVAL):
         try:
@@ -1364,3 +1370,46 @@ def _record_strategy_combo(db: Session, user_id: str, tag):
             last_used_at=datetime.now(timezone.utc),
         )
         db.add(combo)
+
+
+def _check_buffer_reminder(db: Session, user_id: str, state: TobyState):
+    """Send buffer reminder email if buffer is about to expire (≤1 day left).
+
+    Guards:
+    - buffer_reminder_enabled must be True
+    - last_buffer_reminder_sent_at must be >24h ago (anti-spam)
+    """
+    if not getattr(state, 'buffer_reminder_enabled', True):
+        return
+    if state.last_buffer_reminder_sent_at:
+        last = state.last_buffer_reminder_sent_at
+        if last.tzinfo is None:
+            last = last.replace(tzinfo=timezone.utc)
+        if (datetime.now(timezone.utc) - last).total_seconds() < 86400:
+            return  # Already sent within 24h
+
+    # Calculate days of content remaining
+    from app.services.toby.buffer_manager import get_buffer_status
+    buf = get_buffer_status(db, user_id, state)
+    fill_pct = buf.get("fill_percent", 100)
+    buffer_days = state.buffer_days or 2
+    days_remaining = (fill_pct / 100) * buffer_days
+
+    if days_remaining > 1:
+        return  # More than 1 day left — no reminder needed
+
+    # Get user email
+    from app.models.auth import UserProfile
+    profile = db.query(UserProfile).filter_by(user_id=user_id).first()
+    if not profile or not getattr(profile, 'email', None):
+        return
+
+    from app.services.email.email_service import send_buffer_reminder
+    sent = send_buffer_reminder(
+        to_email=profile.email,
+        days_remaining=days_remaining,
+    )
+    if sent:
+        state.last_buffer_reminder_sent_at = datetime.now(timezone.utc)
+        state.updated_at = datetime.now(timezone.utc)
+        db.commit()

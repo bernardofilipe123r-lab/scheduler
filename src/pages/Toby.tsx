@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { LayoutDashboard, Brain, Compass, Activity, Settings } from 'lucide-react'
+import { LayoutDashboard, Settings } from 'lucide-react'
 import { useTobyStatus } from '@/features/toby'
 import {
   TobyHero,
@@ -11,19 +11,16 @@ import {
   TobySettings,
 } from '@/features/toby'
 
-type Tab = 'overview' | 'brain' | 'scout' | 'operations' | 'settings'
+type Tab = 'view' | 'settings'
 
 const TABS: Array<{ id: Tab; label: string; icon: typeof LayoutDashboard }> = [
-  { id: 'overview',    label: 'Overview',    icon: LayoutDashboard },
-  { id: 'brain',       label: 'Brain',       icon: Brain           },
-  { id: 'scout',       label: 'Scout',       icon: Compass         },
-  { id: 'operations',  label: 'Operations',  icon: Activity        },
-  { id: 'settings',    label: 'Settings',    icon: Settings        },
+  { id: 'view',     label: 'View',     icon: LayoutDashboard },
+  { id: 'settings', label: 'Settings', icon: Settings        },
 ]
 
 export function TobyPage() {
   const { data: status } = useTobyStatus()
-  const [activeTab, setActiveTab] = useState<Tab>('overview')
+  const [activeTab, setActiveTab] = useState<Tab>('view')
   const [guideOpen, setGuideOpen] = useState(false)
 
   return (
@@ -61,11 +58,15 @@ export function TobyPage() {
           </div>
 
           {/* Tab Content */}
-          {activeTab === 'overview'   && <TobyOverviewTab />}
-          {activeTab === 'brain'      && <TobyBrainTab />}
-          {activeTab === 'scout'      && <TobyScoutTab />}
-          {activeTab === 'operations' && <TobyOperationsTab />}
-          {activeTab === 'settings'   && <TobySettings />}
+          {activeTab === 'view' && (
+            <div className="space-y-5">
+              <TobyOverviewTab />
+              <TobyBrainTab />
+              <TobyScoutTab />
+              <TobyOperationsTab />
+            </div>
+          )}
+          {activeTab === 'settings' && <TobySettings />}
         </>
       )}
     </div>

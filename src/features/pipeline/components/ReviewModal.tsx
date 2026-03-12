@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { CheckCircle2, X, Pencil, ChevronLeft, ChevronRight, Star, Volume2, VolumeX, Trash2 } from 'lucide-react'
+import { CheckCircle2, X, Pencil, ChevronLeft, ChevronRight, Star, Volume2, VolumeX, Trash2, Download } from 'lucide-react'
 import { clsx } from 'clsx'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { PipelineItem } from '../model/types'
@@ -14,6 +14,7 @@ interface Props {
   onEdit: (item: PipelineItem) => void
   onDelete?: (id: string) => void
   onClose: () => void
+  autoSchedule?: boolean
 }
 
 function getVideoUrl(item: PipelineItem): string | null {
@@ -255,7 +256,7 @@ function PostContent({ item }: { item: PipelineItem }) {
    REVIEW MODAL — Portaled to body to escape space-y-5
    ═══════════════════════════════════════════════════════ */
 
-export function ReviewModal({ items: externalItems, initialIndex, onApprove, onReject, onEdit, onDelete, onClose }: Props) {
+export function ReviewModal({ items: externalItems, initialIndex, onApprove, onReject, onEdit, onDelete, onClose, autoSchedule = true }: Props) {
   const [queue, setQueue] = useState<PipelineItem[]>(() => externalItems.slice(initialIndex))
   const [currentIdx, setCurrentIdx] = useState(0)
   const totalOriginal = externalItems.length
@@ -320,7 +321,7 @@ export function ReviewModal({ items: externalItems, initialIndex, onApprove, onR
     const handler = (e: KeyboardEvent) => {
       if (isAnimating) return
       if (e.key === 'Escape') onClose()
-      else if (e.key === 'ArrowRight' && isPending) handleAccept()
+      else if (e.key === 'ArrowRight' && isPending) { autoSchedule ? handleAccept() : handleDownload() }
       else if (e.key === 'ArrowLeft' && isPending) handleDecline()
       else if ((e.key === 'e' || e.key === 'E') && isPending) handleEdit()
       else if ((e.key === 'd' || e.key === 'D') && !isPending) handleDeleteItem()
@@ -354,6 +355,17 @@ export function ReviewModal({ items: externalItems, initialIndex, onApprove, onR
       removeCurrentFromQueue()
     }, 250)
   }, [item, isAnimating, onApprove, removeCurrentFromQueue])
+
+  const handleDownload = useCallback(() => {
+    if (!item) return
+    const output = getFirstBrandOutput(item)
+    const url = output?.video_path ?? output?.carousel_paths?.[0] ?? output?.thumbnail_path
+    if (!url) return
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${item.title || item.job_id}.${url.includes('.mp4') ? 'mp4' : 'jpg'}`
+    a.click()
+  }, [item])
 
   const handleDecline = useCallback(() => {
     if (!item || isAnimating) return
@@ -498,11 +510,16 @@ export function ReviewModal({ items: externalItems, initialIndex, onApprove, onR
                 <span className="text-[10px] text-white/50 group-hover:text-white/70 transition-colors">Edit</span>
               </button>
 
-              <button onClick={handleAccept} disabled={isAnimating} className="group flex flex-col items-center gap-1">
-                <div className="w-14 h-14 rounded-full border-2 border-emerald-400/60 flex items-center justify-center text-emerald-400 hover:bg-emerald-500 hover:text-white hover:border-emerald-500 transition-all duration-200 hover:scale-110">
-                  <CheckCircle2 className="w-7 h-7" />
+              <button onClick={autoSchedule ? handleAccept : handleDownload} disabled={isAnimating} className="group flex flex-col items-center gap-1">
+                <div className={clsx(
+                  'w-14 h-14 rounded-full border-2 flex items-center justify-center transition-all duration-200 hover:scale-110',
+                  autoSchedule
+                    ? 'border-emerald-400/60 text-emerald-400 hover:bg-emerald-500 hover:text-white hover:border-emerald-500'
+                    : 'border-blue-400/60 text-blue-400 hover:bg-blue-500 hover:text-white hover:border-blue-500'
+                )}>
+                  {autoSchedule ? <CheckCircle2 className="w-7 h-7" /> : <Download className="w-7 h-7" />}
                 </div>
-                <span className="text-[10px] text-white/50 group-hover:text-white/70 transition-colors">Accept</span>
+                <span className="text-[10px] text-white/50 group-hover:text-white/70 transition-colors">{autoSchedule ? 'Accept' : 'Download'}</span>
               </button>
             </>
           ) : (
@@ -517,7 +534,9 @@ export function ReviewModal({ items: externalItems, initialIndex, onApprove, onR
 
         <p className="mt-2 text-[10px] text-white/25">
           {isPending
-            ? '← Decline · → Accept · E Edit · M Mute · Esc Close'
+            ? autoSchedule
+              ? '← Decline · → Accept · E Edit · M Mute · Esc Close'
+              : '← Decline · → Download · E Edit · M Mute · Esc Close'
             : 'D Delete · M Mute · Esc Close'}
         </p>
       </motion.div>

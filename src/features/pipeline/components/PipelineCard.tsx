@@ -1,8 +1,9 @@
-import { CheckCircle2, X, Pencil, Star, Loader2, Trash2 } from 'lucide-react'
+import { CheckCircle2, X, Pencil, Star, Loader2, Trash2, Download } from 'lucide-react'
 import { clsx } from 'clsx'
 import { format } from 'date-fns'
 import { ContentPreview } from './ContentPreview'
 import type { PipelineItem, LifecycleStage } from '../model/types'
+import { getFirstBrandOutput } from '../model/types'
 
 interface Props {
   item: PipelineItem
@@ -13,6 +14,7 @@ interface Props {
   onOpenReview: (item: PipelineItem) => void
   selected: boolean
   onToggleSelect: (id: string) => void
+  autoSchedule?: boolean
 }
 
 const LIFECYCLE_STYLES: Record<LifecycleStage, string> = {
@@ -42,11 +44,21 @@ function variantLabel(item: PipelineItem): string {
   return item.variant
 }
 
-export function PipelineCard({ item, onApprove, onReject, onEdit, onDelete, onOpenReview, selected, onToggleSelect }: Props) {
+export function PipelineCard({ item, onApprove, onReject, onEdit, onDelete, onOpenReview, selected, onToggleSelect, autoSchedule = true }: Props) {
   const lifecycle = item.lifecycle
   const isPending = lifecycle === 'pending_review'
   const isGenerating = lifecycle === 'generating'
   const badge = LIFECYCLE_BADGES[lifecycle]
+
+  const handleDownload = () => {
+    const output = getFirstBrandOutput(item)
+    const url = output?.video_path ?? output?.carousel_paths?.[0] ?? output?.thumbnail_path
+    if (!url) return
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${item.title || item.job_id}.${url.includes('.mp4') ? 'mp4' : 'jpg'}`
+    a.click()
+  }
 
   return (
     <div
@@ -125,11 +137,16 @@ export function PipelineCard({ item, onApprove, onReject, onEdit, onDelete, onOp
         {isPending && (
           <>
             <button
-              onClick={() => onApprove(item.job_id)}
-              className="flex-1 flex items-center justify-center gap-1 py-2 text-xs font-medium text-emerald-600 hover:bg-emerald-50 transition-colors rounded-bl-xl"
+              onClick={() => autoSchedule ? onApprove(item.job_id) : handleDownload()}
+              className={clsx(
+                'flex-1 flex items-center justify-center gap-1 py-2 text-xs font-medium transition-colors rounded-bl-xl',
+                autoSchedule
+                  ? 'text-emerald-600 hover:bg-emerald-50'
+                  : 'text-blue-600 hover:bg-blue-50'
+              )}
             >
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              Accept
+              {autoSchedule ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Download className="w-3.5 h-3.5" />}
+              {autoSchedule ? 'Accept' : 'Download'}
             </button>
             <div className="w-px bg-gray-100" />
             <button
