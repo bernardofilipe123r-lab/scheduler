@@ -4,17 +4,6 @@ import { Link, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { supabase } from '@/shared/api/supabase'
 
-function hasRecoveryParams() {
-  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''))
-  const searchParams = new URLSearchParams(window.location.search)
-
-  return (
-    hashParams.get('type') === 'recovery' ||
-    searchParams.get('type') === 'recovery' ||
-    searchParams.has('code')
-  )
-}
-
 export function ResetPasswordPage() {
   const navigate = useNavigate()
   const [password, setPassword] = useState('')
@@ -28,30 +17,8 @@ export function ResetPasswordPage() {
   useEffect(() => {
     let active = true
 
-    const checkRecoveryState = async () => {
-      // PKCE flow: exchange the code for a session first
-      const searchParams = new URLSearchParams(window.location.search)
-      const code = searchParams.get('code')
-      if (code) {
-        const { error } = await supabase.auth.exchangeCodeForSession(code)
-        if (!active) return
-        if (!error) {
-          setCanReset(true)
-          setIsReady(true)
-          return
-        }
-      }
-
-      // Implicit flow: check hash params + existing session
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!active) return
-
-      setCanReset(Boolean(session) && hasRecoveryParams())
-      setIsReady(true)
-    }
-
-    checkRecoveryState()
-
+    // Set up auth listener FIRST — before any async calls
+    // This catches PASSWORD_RECOVERY events from hash fragment processing
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (!active) return
 
@@ -60,6 +27,43 @@ export function ResetPasswordPage() {
         setIsReady(true)
       }
     })
+
+    const checkRecoveryState = async () => {
+      const searchParams = new URLSearchParams(window.location.search)
+      const code = searchParams.get('code')
+
+      // PKCE flow: exchange the code for a session
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code)
+        if (!active) return
+        if (!error) {
+          setCanReset(true)
+          setIsReady(true)
+          return
+        }
+        console.warn('[ResetPassword] Code exchange failed:', error.message)
+      }
+
+      // Implicit flow: the Supabase client auto-processes hash fragments.
+      // Give it a moment to fire the PASSWORD_RECOVERY event.
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      if (!active) return
+
+      // Check if the listener already handled it
+      // If not, do a final session check
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!active) return
+
+      if (session) {
+        setCanReset(true)
+        setIsReady(true)
+      } else if (!canReset) {
+        // Only show error if the listener hasn't already set canReset
+        setIsReady(true)
+      }
+    }
+
+    checkRecoveryState()
 
     return () => {
       active = false
