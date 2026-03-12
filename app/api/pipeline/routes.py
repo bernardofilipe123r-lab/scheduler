@@ -28,19 +28,20 @@ def _compute_lifecycle(job: GenerationJob) -> str:
 
     Returns one of: pending_review, generating, scheduled, published, rejected, failed
     """
-    # Explicit pipeline statuses take precedence
-    if job.pipeline_status == "pending":
-        return "pending_review"
-    if job.pipeline_status == "rejected":
-        return "rejected"
-
-    # Job-level status
-    if job.status in ("generating", "pending"):
+    # If job is still actively processing, show as generating
+    # (regardless of pipeline_status which is set to "pending" at creation)
+    if job.status in ("pending", "generating"):
         return "generating"
     if job.status == "failed":
         return "failed"
     if job.status == "cancelled":
         return "failed"
+
+    # Job finished processing — now check pipeline approval gate
+    if job.pipeline_status == "pending":
+        return "pending_review"
+    if job.pipeline_status == "rejected":
+        return "rejected"
 
     # Check brand outputs for published/scheduled state
     outputs = job.brand_outputs or {}
@@ -97,7 +98,7 @@ def _serialize_pipeline_item(job: GenerationJob) -> dict:
 @router.get("")
 async def list_pipeline_items(
     status: Optional[str] = Query(
-        "pending_review",
+        "generating",
         pattern="^(pending_review|generating|scheduled|published|rejected|failed|all)$",
     ),
     brand: Optional[str] = None,

@@ -4,8 +4,8 @@ import { useTobyBuffer } from '@/features/toby'
 import type { PipelineStats as Stats } from '../model/types'
 
 const CARDS = [
-  { key: 'pending_review', label: 'Pending Review', icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
   { key: 'generating', label: 'Generating', icon: Loader2, color: 'text-blue-600', bg: 'bg-blue-50' },
+  { key: 'pending_review', label: 'Pending Review', icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
   { key: 'scheduled', label: 'Scheduled', icon: CalendarCheck, color: 'text-indigo-600', bg: 'bg-indigo-50' },
   { key: 'published', label: 'Published', icon: Globe, color: 'text-emerald-600', bg: 'bg-emerald-50' },
   { key: 'rejected', label: 'Rejected', icon: XCircle, color: 'text-red-500', bg: 'bg-red-50' },

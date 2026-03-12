@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { GitPullRequestDraft } from 'lucide-react'
 import { AnimatePresence } from 'framer-motion'
@@ -39,6 +39,16 @@ export function PipelinePage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [reviewModalIndex, setReviewModalIndex] = useState<number | null>(null)
   const [bulkAction, setBulkAction] = useState<{ action: 'approve' | 'reject'; count: number } | null>(null)
+  const hasAutoSwitched = useRef(false)
+
+  // Auto-switch to pending_review if generating tab is empty on first load
+  useEffect(() => {
+    if (hasAutoSwitched.current || !statsData) return
+    if (filters.status === 'generating' && statsData.generating === 0 && statsData.pending_review > 0) {
+      setStatus('pending_review')
+    }
+    hasAutoSwitched.current = true
+  }, [statsData, filters.status, setStatus])
 
   const items = pipelineData?.items ?? []
   const pendingItems = useMemo(() => items.filter(i => i.lifecycle === 'pending_review'), [items])

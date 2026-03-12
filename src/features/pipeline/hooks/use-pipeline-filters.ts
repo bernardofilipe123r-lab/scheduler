@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react'
 import type { PipelineFilters } from '../model/types'
 
 const DEFAULT_FILTERS: PipelineFilters = {
-  status: 'pending_review',
+  status: 'generating',
   brand: null,
   content_type: 'all',
   batch_id: null,

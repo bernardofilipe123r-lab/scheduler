@@ -8,7 +8,7 @@ import {
   Bot, Power, Play, Loader2, Zap, Sparkles, Activity,
   Instagram, Facebook, Youtube, ChevronDown, ChevronUp, Check, Link, Calendar, Settings, Brain,
   Cpu, Image, Database, HardDrive, Wifi, Server, Globe, BarChart3,
-  AlertTriangle, Copy, ChevronRight,
+  AlertTriangle, Copy, ChevronRight, Music, Download,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { apiClient } from '@/shared/api/client'
@@ -1906,6 +1906,163 @@ function FormatIntegritySection() {
   )
 }
 
+// ─── Music Library Panel ───────────────────────────────────────────────────
+
+interface MusicFile {
+  filename: string
+  size_mb: number
+}
+
+interface DownloadResult {
+  downloaded: { song: string; filename: string; size_mb: number }[]
+  failed: { song: string; error: string }[]
+  skipped: { song: string; filename: string }[]
+  total: number
+}
+
+function MusicLibraryPanel() {
+  const queryClient = useQueryClient()
+  const [songsText, setSongsText] = useState('')
+  const [lastResult, setLastResult] = useState<DownloadResult | null>(null)
+
+  const musicQuery = useQuery<{ files: MusicFile[]; count: number }>({
+    queryKey: ['admin-music'],
+    queryFn: () => apiClient.get('/api/admin/music'),
+    staleTime: 30_000,
+  })
+
+  const downloadMutation = useMutation({
+    mutationFn: (songs_text: string) =>
+      apiClient.post('/api/admin/music/download', { songs_text }) as Promise<DownloadResult>,
+    onSuccess: (data) => {
+      setLastResult(data)
+      setSongsText('')
+      queryClient.invalidateQueries({ queryKey: ['admin-music'] })
+    },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (filename: string) =>
+      apiClient.delete(`/api/admin/music/${encodeURIComponent(filename)}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-music'] })
+    },
+  })
+
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+          <Music className="w-4 h-4 text-purple-500" />
+          Music Library
+          {musicQuery.data && (
+            <span className="text-xs font-normal text-gray-400">
+              ({musicQuery.data.count} tracks)
+            </span>
+          )}
+        </h2>
+        <button
+          onClick={() => musicQuery.refetch()}
+          disabled={musicQuery.isFetching}
+          className="p-1.5 text-gray-400 hover:text-gray-600 rounded border border-gray-200 bg-white disabled:opacity-50"
+          title="Refresh"
+        >
+          <RefreshCw className={clsx('w-3.5 h-3.5', musicQuery.isFetching && 'animate-spin')} />
+        </button>
+      </div>
+
+      {/* Download new songs */}
+      <div className="mb-4">
+        <label className="block text-xs font-medium text-gray-600 mb-1">
+          Paste song names (one per line) — downloads from YouTube as MP3
+        </label>
+        <textarea
+          value={songsText}
+          onChange={e => setSongsText(e.target.value)}
+          rows={5}
+          placeholder={"Hero - Meego\nMontagem Coma - ANDROMEDA\nWho's That Calling - Olga Myko"}
+          className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 bg-gray-50 focus:outline-none focus:ring-1 focus:ring-purple-400 font-mono"
+        />
+        <button
+          onClick={() => downloadMutation.mutate(songsText)}
+          disabled={!songsText.trim() || downloadMutation.isPending}
+          className="mt-2 flex items-center gap-2 px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          {downloadMutation.isPending ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" /> Downloading…
+            </>
+          ) : (
+            <>
+              <Download className="w-4 h-4" /> Download Songs
+            </>
+          )}
+        </button>
+      </div>
+
+      {/* Download result */}
+      {lastResult && (
+        <div className="mb-4 p-3 rounded-lg bg-gray-50 border border-gray-100 text-xs space-y-1">
+          {lastResult.downloaded.length > 0 && (
+            <p className="text-emerald-700">
+              ✅ Downloaded: {lastResult.downloaded.map(d => d.filename).join(', ')}
+            </p>
+          )}
+          {lastResult.skipped.length > 0 && (
+            <p className="text-amber-700">
+              ⏭ Skipped (already exist): {lastResult.skipped.map(s => s.filename).join(', ')}
+            </p>
+          )}
+          {lastResult.failed.length > 0 && (
+            <p className="text-red-700">
+              ❌ Failed: {lastResult.failed.map(f => `${f.song} (${f.error})`).join(', ')}
+            </p>
+          )}
+        </div>
+      )}
+
+      {downloadMutation.isError && (
+        <div className="mb-4 flex items-center gap-2 text-xs text-red-500 p-2 bg-red-50 rounded-lg">
+          <AlertCircle className="w-3.5 h-3.5" />
+          Download failed: {(downloadMutation.error as Error).message}
+        </div>
+      )}
+
+      {/* Current music files */}
+      {musicQuery.isLoading ? (
+        <div className="flex items-center gap-2 text-xs text-gray-400 py-1">
+          <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading music library…
+        </div>
+      ) : musicQuery.data?.files && musicQuery.data.files.length > 0 ? (
+        <div className="space-y-1">
+          {musicQuery.data.files.map(file => (
+            <div
+              key={file.filename}
+              className="flex items-center justify-between px-3 py-2 rounded-lg bg-gray-50 border border-gray-100 group"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <Music className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                <span className="text-xs text-gray-700 truncate">{file.filename}</span>
+                <span className="text-[10px] text-gray-400">{file.size_mb} MB</span>
+              </div>
+              <button
+                onClick={() => deleteMutation.mutate(file.filename)}
+                disabled={deleteMutation.isPending}
+                className="p-1 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                title="Delete"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-gray-400">No music files yet. Download some songs above.</p>
+      )}
+    </div>
+  )
+}
+
 // ─── Supabase Infrastructure Panel ─────────────────────────────────────────
 
 function SupabaseUsagePanel() {
@@ -2961,6 +3118,9 @@ export function AdminPage() {
 
       {/* Supabase Infrastructure */}
       <SupabaseUsagePanel />
+
+      {/* Music Library */}
+      <MusicLibraryPanel />
 
       {/* Search */}
       <div className="relative max-w-sm">

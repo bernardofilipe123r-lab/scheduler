@@ -18,11 +18,13 @@ export function usePipelineItems(filters: PipelineFilters) {
   if (filters.batch_id) params.batch_id = filters.batch_id
 
   const qs = new URLSearchParams(params).toString()
+  const isGenerating = filters.status === 'generating'
 
   return useQuery({
     queryKey: pipelineKeys.list(filters),
     queryFn: () => get<PipelineResponse>(`/api/pipeline?${qs}`),
-    staleTime: 30_000,
+    staleTime: isGenerating ? 3_000 : 30_000,
+    refetchInterval: isGenerating ? 5_000 : false,
   })
 }
 
@@ -30,8 +32,8 @@ export function usePipelineStats() {
   return useQuery({
     queryKey: pipelineKeys.stats(),
     queryFn: () => get<PipelineStats>('/api/pipeline/stats'),
-    staleTime: 60_000,
-    refetchInterval: 60_000,
+    staleTime: 15_000,
+    refetchInterval: 15_000,
   })
 }
 

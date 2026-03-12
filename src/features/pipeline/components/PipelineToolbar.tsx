@@ -17,8 +17,8 @@ interface Props {
 }
 
 const STATUS_TABS = [
-  { value: 'pending_review' as const, label: 'Pending Review' },
   { value: 'generating' as const, label: 'Generating' },
+  { value: 'pending_review' as const, label: 'Pending Review' },
   { value: 'scheduled' as const, label: 'Scheduled' },
   { value: 'published' as const, label: 'Published' },
   { value: 'rejected' as const, label: 'Rejected' },
