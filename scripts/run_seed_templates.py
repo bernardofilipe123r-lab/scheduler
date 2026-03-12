@@ -65,9 +65,11 @@ def load_template_data(filepath):
 
 def build_row(data):
     """Convert TEMPLATE_DATA → dict of DB column→value."""
+    name = data.get("name", data.get("template_name", "Untitled"))
+    # Deterministic ID from template name so re-seeding keeps the same UUIDs
     row = {
-        "id": str(uuid.uuid4()),
-        "template_name": data.get("name", data.get("template_name", "Untitled")),
+        "id": str(uuid.uuid5(uuid.NAMESPACE_DNS, f"viraltoby.template.{name}")),
+        "template_name": name,
         "template_category": CATEGORY_MAP.get(data.get("niche_name", ""), "niche"),
         "is_active": True,
         "popularity_order": data.get("popularity_order", 0),
