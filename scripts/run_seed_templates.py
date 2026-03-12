@@ -52,6 +52,7 @@ JSON_COLUMNS = [
     "competitor_accounts", "discovery_hashtags",
     "citation_source_types",
     "carousel_cta_options",
+    "yt_title_examples", "yt_title_bad_examples",
 ]
 
 

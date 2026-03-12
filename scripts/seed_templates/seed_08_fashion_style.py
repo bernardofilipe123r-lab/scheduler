@@ -157,4 +157,20 @@ TEMPLATE_DATA = {
     "follow_section_text": "Follow @{account} for daily style tips and wardrobe inspiration",
     "save_section_text": "Save this — reference it when building your next outfit",
     "disclaimer_text": "Style advice is subjective. Use these principles as a starting point and adapt them to your personal taste and lifestyle.",
+    "yt_title_examples": [
+        "The 5 Style Rules That Make Any Outfit Look Expensive",
+        "I Built a 30-Piece Capsule Wardrobe — Here's What I Learned",
+        "Why Your Outfits Look Cheap (It's Not the Price Tag)",
+        "The Color Psychology Trick That Transforms How People See You",
+        "Fashion Experts Reveal: The #1 Mistake That Ages Your Style",
+        "How to Spot Quality Clothing in 10 Seconds (Fabric Test)",
+        "The $200 Wardrobe That Looks Like $2,000 (Exact Pieces)"
+    ],
+    "yt_title_bad_examples": [
+        "Fashion Trends 2025",
+        "Outfit Ideas",
+        "How to Dress Better",
+        "My Favorite Outfits",
+        "Style Tips"
+    ]
 }

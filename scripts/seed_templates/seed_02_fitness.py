@@ -9,7 +9,7 @@ TEMPLATE_DATA = {
     "description": "Science-backed fitness, nutrition, and body recomposition content for people who want real results without bro-science.",
     "niche_name": "Fitness & Body Transformation",
     "niche_description": "Evidence-based fitness education covering progressive overload, nutrition science, recovery, and sustainable body transformation strategies.",
-    "content_brief": "Create content that cuts through fitness myths with real science. Cover progressive overload, protein timing, sleep optimization, fat loss vs weight loss, and training programming. Every claim backed by exercise science research. Make complex physiology simple and actionable.",
+    "content_brief": "Science-backed fitness and body transformation content for adults aged 18–40 in English-speaking countries (US, UK, Canada, Australia), focusing on evidence-based training, nutrition science, and sustainable body recomposition. Topics include: progressive overload principles and how to actually apply them in the gym, protein timing and optimal daily intake per body weight (the 1.6-2.2g/kg research), sleep optimization and its outsized impact on muscle growth and fat loss, the fat loss vs weight loss distinction (why the scale lies), training programming for hypertrophy vs strength vs endurance, the science of muscle protein synthesis windows, common form mistakes that cause injury (with biomechanical explanations), supplement science (what works vs what's marketing: creatine, caffeine, protein, the rest), caloric deficit math and why crash diets fail metabolically, mind-muscle connection research, and recovery science (deloads, active recovery, stretching myths). Tone is like a knowledgeable gym buddy with a sports science degree — direct, motivational, and myth-busting without being preachy. Uses specific rep ranges, sets, percentages, and study citations rather than vague advice. The style is empowering and accessible — making exercise physiology understandable for anyone willing to learn. Content philosophy: fitness is a science, not a guessing game. Every recommendation should be backed by peer-reviewed research and immediately applicable in the gym tomorrow.",
     "target_audience": "18-40 year-olds interested in fitness, US/UK/Canada/Australia",
     "audience_description": "Gym-goers and fitness beginners tired of conflicting advice. They want science-backed answers, not bro-science. Active on Instagram and TikTok, respond to transformation content and myth-busting.",
     "content_tone": ["scientific", "motivational", "direct", "myth-busting", "encouraging"],
@@ -67,5 +67,21 @@ TEMPLATE_DATA = {
     ],
     "follow_section_text": "Follow @{account} for science-backed fitness content",
     "save_section_text": "Save this — bring it to the gym",
-    "disclaimer_text": "This is educational content based on exercise science research. Consult a qualified professional before starting any exercise program."
+    "disclaimer_text": "This is educational content based on exercise science research. Consult a qualified professional before starting any exercise program.",
+    "yt_title_examples": [
+        "I Did the Science-Optimal Workout for 90 Days — My Results",
+        "The #1 Reason You're Not Building Muscle (It's Not What You Think)",
+        "Why 90% of Gym-Goers Never See Results — Exercise Scientists Explain",
+        "I Tested Every Protein Timing Strategy — Here's What Actually Works",
+        "Stop Stretching Before Workouts. Do THIS Instead (New Research)",
+        "The Fat Loss Mistake That's Killing Your Metabolism",
+        "How I Got Stronger by Training LESS (Science Explains Why)"
+    ],
+    "yt_title_bad_examples": [
+        "Workout Tips for Beginners",
+        "How to Build Muscle",
+        "My Gym Routine 2025",
+        "Fitness Advice",
+        "Best Exercises for Abs"
+    ]
 }

@@ -9,7 +9,7 @@ TEMPLATE_DATA = {
     "description": "Build wealth through smart budgeting, investing, and financial literacy. Research-backed money tips for 25-45 year-olds in the US, UK, Canada, and Australia.",
     "niche_name": "Personal Finance & Investing",
     "niche_description": "Educating audiences on budgeting, saving, investing, debt elimination, and building generational wealth through evidence-based strategies.",
-    "content_brief": "Create short-form content that breaks down complex financial concepts into actionable, digestible tips. Focus on compound interest, index fund investing, credit score optimization, debt payoff strategies, and tax-advantaged accounts. Every post should leave the viewer feeling empowered to take one concrete step toward financial freedom.",
+    "content_brief": "Research-backed personal finance content for adults aged 25–45 in English-speaking countries (US, UK, Canada, Australia), focusing on wealth building, debt elimination, and financial literacy through evidence-based strategies. Topics include: compound interest and the true cost of waiting to invest, index fund investing vs active management, credit score optimization (utilization under 10%, payment history tactics), debt payoff strategies (avalanche vs snowball with behavioral science backing), tax-advantaged accounts (401K matching, Roth IRA, HSA triple tax advantage), budgeting systems that actually stick (pay-yourself-first automation, 3-account method), the psychology of overspending and subscription creep, emergency fund building through micro-automation, high-yield savings vs inflation math, and building a first investment portfolio with a 3-fund strategy. Tone is your financially savvy friend who explains complex money concepts over coffee — no jargon, no judgment, just actionable advice backed by real data from Federal Reserve reports, Vanguard research, and peer-reviewed journals. Uses specific dollar amounts, percentages, and timelines rather than vague promises. The style is empowering and myth-busting — separating real wealth-building strategies from get-rich-quick noise. Content philosophy: money is a tool, not a mystery. Every piece of content should demystify one financial concept and give the viewer a clear next step they can take today.",
     "target_audience": "25-45 year-olds in US, UK, Canada, Australia",
     "audience_description": "Millennials and early Gen-Z professionals earning $40K-$150K who want to grow wealth but feel overwhelmed by financial jargon. They scroll Instagram/TikTok daily, prefer visual explainers over long articles, and trust creators who cite real data.",
     "content_tone": ["educational", "empowering", "no-nonsense", "data-driven", "conversational"],
@@ -67,5 +67,21 @@ TEMPLATE_DATA = {
     ],
     "follow_section_text": "Follow @{account} for daily money tips backed by real data",
     "save_section_text": "Save this post — you'll want to revisit these numbers",
-    "disclaimer_text": "This is educational content, not financial advice. Always consult a qualified financial advisor for personalized guidance."
+    "disclaimer_text": "This is educational content, not financial advice. Always consult a qualified financial advisor for personalized guidance.",
+    "yt_title_examples": [
+        "I Invested $500/Month for 10 Years — Here's What Happened",
+        "The Credit Score Hack Banks Don't Want You to Know",
+        "Why 90% of People Will Never Build Wealth (And How to Fix It)",
+        "I Analyzed 1,000 Millionaires — They All Did This ONE Thing",
+        "Stop Budgeting. Do THIS Instead (Backed by Science)",
+        "The Index Fund Strategy That Beats 90% of Wall Street",
+        "How I Saved $50,000 in 2 Years on a Normal Salary"
+    ],
+    "yt_title_bad_examples": [
+        "Finance Tips",
+        "How to Save Money in 2025",
+        "My Thoughts on Investing",
+        "Money Advice for Beginners",
+        "Some Budgeting Ideas"
+    ]
 }

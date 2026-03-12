@@ -9,7 +9,7 @@ TEMPLATE_DATA = {
     "description": "Evidence-based personal development, habit science, and cognitive psychology for ambitious people who want to level up their lives.",
     "niche_name": "Self-Improvement & Mindset",
     "niche_description": "Personal development rooted in behavioral science, cognitive psychology, and habit research. Moving beyond motivation quotes into actionable systems.",
-    "content_brief": "Create content that bridges the gap between pop psychology and real behavioral science. Cover habit formation, cognitive biases, dopamine management, overthinking patterns, and decision-making frameworks. Every claim linked to real research. Make people think, not just feel inspired.",
+    "content_brief": "Evidence-based self-improvement and mindset content for adults aged 20–40 in English-speaking countries (US, UK, Canada, Australia), bridging the gap between pop psychology and real behavioral science. Topics include: habit formation through the lens of neural pathway science (not just '21 days' myths), cognitive biases that sabotage decision-making (sunk cost, confirmation bias, Dunning-Kruger), dopamine management and why social media hijacks your motivation system, overthinking patterns and the rumination-anxiety loop, decision-making frameworks used by top performers (second-order thinking, inversion, pre-mortem analysis), the science of willpower depletion and how to design environments instead, emotional intelligence as a learnable skill with specific exercises, flow state triggers and how to engineer deep work sessions, the psychology of procrastination (it's emotional regulation, not laziness), stoic philosophy meets modern neuroscience, journaling protocols backed by expressive writing research, and morning routine science (what actually matters vs what's performative). Tone is a thoughtful mentor who reads research papers and explains them over coffee — intellectual but never pretentious, challenging but never condescending. Uses specific studies, frameworks, and actionable exercises rather than motivational platitudes. The style is myth-busting and deeply practical — content that changes how people think, not just how they feel. Content philosophy: real self-improvement is cognitive renovation, not motivational decoration. Every piece of content should give the viewer one mental model or technique they can apply today.",
     "target_audience": "20-40 year-olds ambitious professionals, US/UK/Canada/Australia",
     "audience_description": "Ambitious millennials and Gen-Z who've outgrown basic motivation content. They want frameworks, systems, and science — not just quotes. They read books like Atomic Habits and want deeper, actionable insights.",
     "content_tone": ["thought-provoking", "analytical", "empowering", "research-backed", "practical"],
@@ -67,5 +67,21 @@ TEMPLATE_DATA = {
     ],
     "follow_section_text": "Follow @{account} for science-backed personal development",
     "save_section_text": "Save this — read it again when you need perspective",
-    "disclaimer_text": "This content is for educational purposes. For mental health concerns, please consult a licensed professional."
+    "disclaimer_text": "This content is for educational purposes. For mental health concerns, please consult a licensed professional.",
+    "yt_title_examples": [
+        "The Overthinking Cure That Neuroscientists Actually Recommend",
+        "Why Discipline Is a Myth (And What to Build Instead)",
+        "I Tried Every Morning Routine for 30 Days — Only ONE Worked",
+        "The Cognitive Bias That's Secretly Ruining Your Decisions",
+        "Why Smart People Stay Stuck (The Dunning-Kruger Trap Explained)",
+        "How I Broke My Phone Addiction Using Dopamine Science",
+        "The 2-Minute Journaling Method Backed by 200+ Studies"
+    ],
+    "yt_title_bad_examples": [
+        "Self-Improvement Tips",
+        "How to Be More Productive",
+        "My Morning Routine",
+        "Mindset Advice",
+        "How to Stop Overthinking"
+    ]
 }

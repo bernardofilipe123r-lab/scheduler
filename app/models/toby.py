@@ -36,6 +36,11 @@ class TobyState(Base):
     posts_enabled = Column(Boolean, nullable=False, default=True)
     threads_enabled = Column(Boolean, nullable=False, default=True)
     threads_posts_per_day = Column(Integer, default=6)
+    auto_schedule = Column(Boolean, nullable=False, default=True)
+
+    # Buffer reminder
+    buffer_reminder_enabled = Column(Boolean, nullable=False, default=True)
+    last_buffer_reminder_sent_at = Column(DateTime(timezone=True), nullable=True)
 
     # Scheduling state
     last_buffer_check_at = Column(DateTime(timezone=True), nullable=True)

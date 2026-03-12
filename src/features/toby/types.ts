@@ -9,6 +9,9 @@ export interface TobyConfig {
   post_slots_per_day: number
   reels_enabled: boolean
   posts_enabled: boolean
+  threads_enabled: boolean
+  auto_schedule: boolean
+  buffer_reminder_enabled: boolean
   daily_budget_cents?: number
 }
 

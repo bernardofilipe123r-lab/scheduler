@@ -9,7 +9,7 @@ TEMPLATE_DATA = {
     "description": "Technology tools, AI workflows, and productivity systems that help you work smarter and live better in the digital age.",
     "niche_name": "Tech & Productivity",
     "niche_description": "Technology and productivity education covering AI tools, digital workflows, app recommendations, and systems thinking for getting more done with less effort.",
-    "content_brief": "Create content that helps people leverage technology and systems for maximum productivity. Cover AI tools, second brain methodology, time blocking, app workflows, and digital minimalism. Focus on practical implementations, not just tool reviews. Every recommendation should save time or reduce friction.",
+    "content_brief": "Practical technology and productivity systems content for professionals and knowledge workers aged 22–40 in English-speaking countries (US, UK, Canada, Australia), focusing on leveraging technology and systems thinking for maximum output with minimum friction. Topics include: AI tools that actually save time vs AI hype (with specific before/after workflow comparisons), second brain methodology (Zettelkasten, PARA, building a personal knowledge management system), time blocking science and why it outperforms todo lists (Cal Newport's deep work research), app workflows that automate repetitive tasks (Zapier/Make chains, Shortcuts, Alfred workflows), digital minimalism and the attention economy (how to reclaim focus in a notification-driven world), the note-taking stack that replaced 5 apps (specific tool recommendations with migration guides), keyboard shortcuts that save 30+ hours per year (calculated), email management systems (Inbox Zero vs batch processing, the research behind each), meeting optimization (async-first culture, when meetings are actually worth it), the Pomodoro technique evolution (what modern research says about work-rest ratios), setting up a development environment or creative workspace for flow, browser extension stacks for research and writing, file organization systems that scale, and automation scripts for common tasks. Tone is like a tech-savvy colleague who actually tests every tool before recommending it — enthusiastic about what works, critical about what's overhyped, and focused on real productivity gains. Uses specific time savings, step-by-step setups, and before/after comparisons rather than vague 'work smarter' advice. The style is systems-oriented and practical — every post should be implementable in under 30 minutes. Content philosophy: productivity is about designing systems, not exercising willpower. The right tools and workflows should make the right behavior the easy behavior.",
     "target_audience": "22-40 knowledge workers and tech enthusiasts, US/UK/Canada/Australia",
     "audience_description": "Knowledge workers, freelancers, and tech-curious professionals who want to leverage technology for productivity. They try new apps, follow tech trends, and want systems — not just tools.",
     "content_tone": ["practical", "forward-thinking", "analytical", "tool-focused", "efficient"],
@@ -67,5 +67,21 @@ TEMPLATE_DATA = {
     ],
     "follow_section_text": "Follow @{account} for tech tools and productivity systems that work",
     "save_section_text": "Save this — set it up this weekend",
-    "disclaimer_text": "Tool recommendations are based on personal testing and research. Pricing and features may change. Always evaluate tools for your specific needs."
+    "disclaimer_text": "Tool recommendations are based on personal testing and research. Pricing and features may change. Always evaluate tools for your specific needs.",
+    "yt_title_examples": [
+        "The AI Tool That Replaced 5 Apps in My Workflow (Not ChatGPT)",
+        "I Tested Every Productivity System for 30 Days — Clear Winner",
+        "Why Your To-Do List Is Making You LESS Productive (Research Proves It)",
+        "The 7 Keyboard Shortcuts That Save Me 2 Hours Every Day",
+        "I Built a Second Brain — Here's What Changed After 6 Months",
+        "Stop Using Email Wrong: The System That Cleared My Inbox Forever",
+        "The $0 Automation Stack That Runs My Entire Business"
+    ],
+    "yt_title_bad_examples": [
+        "Best Productivity Apps 2025",
+        "How to Be More Productive",
+        "Tech Tips and Tricks",
+        "My Favorite Tools",
+        "Productivity Advice"
+    ]
 }

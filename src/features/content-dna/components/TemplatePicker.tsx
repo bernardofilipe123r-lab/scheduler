@@ -50,7 +50,7 @@ export function TemplatePicker({
         </button>
       )}
       <p className="text-xs text-gray-500 mb-3">Choose a niche template — all content examples, CTAs, and style will be pre-filled.</p>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-[340px] overflow-y-auto pr-1">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 max-h-[340px] overflow-y-auto pr-1">
         {templates.map((t) => {
           const style = getCategoryStyle(t.template_category)
           return (
@@ -58,13 +58,10 @@ export function TemplatePicker({
               key={t.id}
               onClick={() => onSelect(t.id)}
               disabled={isPending}
-              className={`flex flex-col items-start p-3.5 rounded-xl border-2 transition-all text-left disabled:opacity-50 ${style.bg} ${style.border} ${style.hover}`}
+              className={`flex flex-col items-start p-2.5 rounded-lg border-2 transition-all text-left disabled:opacity-50 ${style.bg} ${style.border} ${style.hover}`}
             >
-              <span className="text-xl mb-1.5">{style.emoji}</span>
-              <span className="text-sm font-semibold text-gray-800 leading-tight">{t.template_name}</span>
-              {t.niche_name && (
-                <span className="text-[10px] text-gray-400 mt-1 line-clamp-1">{t.niche_name}</span>
-              )}
+              <span className="text-lg mb-1">{style.emoji}</span>
+              <span className="text-xs font-semibold text-gray-800 leading-tight">{t.template_name}</span>
             </button>
           )
         })}

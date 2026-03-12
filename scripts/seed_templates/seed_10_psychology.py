@@ -157,4 +157,20 @@ TEMPLATE_DATA = {
     "follow_section_text": "Follow @{account} for weekly psychology insights",
     "save_section_text": "Save this — read it again when you need perspective",
     "disclaimer_text": "This content is for educational purposes based on published psychological research. It is not a substitute for professional mental health treatment. If you are struggling, please reach out to a licensed therapist or mental health professional.",
+    "yt_title_examples": [
+        "The Attachment Style Test That Explains Your Relationships",
+        "Why You Can't Stop People-Pleasing (A Psychologist Explains)",
+        "The Anxiety Trick Your Brain Plays on You (Neuroscience Breakdown)",
+        "How Narcissists Manipulate You — 7 Tactics Backed by Research",
+        "The Boundary-Setting Script Therapists Actually Recommend",
+        "Why Smart People Struggle With Self-Esteem (The Imposter Cycle)",
+        "I Tried Every Therapy Method for 1 Year — Here's What Worked"
+    ],
+    "yt_title_bad_examples": [
+        "Mental Health Tips",
+        "How to Be Happier",
+        "Understanding Anxiety",
+        "Psychology Facts",
+        "Self-Care Advice"
+    ]
 }

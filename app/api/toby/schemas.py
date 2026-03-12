@@ -13,6 +13,9 @@ class TobyConfigUpdate(BaseModel):
     post_slots_per_day: Optional[int] = Field(None, ge=0, le=24)
     reels_enabled: Optional[bool] = None
     posts_enabled: Optional[bool] = None
+    threads_enabled: Optional[bool] = None
+    auto_schedule: Optional[bool] = None
+    buffer_reminder_enabled: Optional[bool] = None
 
 
 # Re-export for backwards compat — canonical source is app.core.platforms

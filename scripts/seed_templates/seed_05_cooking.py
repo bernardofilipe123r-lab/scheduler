@@ -9,7 +9,7 @@ TEMPLATE_DATA = {
     "description": "Food science meets home cooking. Quick recipes, technique tips, and the science behind why recipes work.",
     "niche_name": "Cooking & Quick Recipes",
     "niche_description": "Home cooking education combining quick recipes with food science explanations. Understanding WHY techniques work makes you a better cook than following recipes blindly.",
-    "content_brief": "Create content that teaches both the recipe AND the science behind it. Cover cooking techniques, ingredient science, common mistakes, time-saving methods, and restaurant secrets for home cooks. Make food science accessible and immediately applicable.",
+    "content_brief": "Food science meets practical cooking content for home cooks aged 22–45 in English-speaking countries (US, UK, Canada, Australia), focusing on the 'why' behind cooking techniques, not just the 'how.' Topics include: the Maillard reaction and why proper searing transforms flavor, salt science and when to season at each cooking stage, knife skills that save 30 minutes per meal prep, the food science behind why restaurant food tastes better (butter, acid, umami layering), mise en place as a system (not just a fancy term), temperature control mastery (why low-and-slow vs high-heat produce completely different results), emulsion science for perfect sauces and dressings, the 5 mother sauces simplified for home cooks, meal prep strategies that don't result in sad repetitive lunches, substitution science (what you can swap and why it works chemically), common cooking mistakes ranked by impact (overcrowding the pan, not preheating, under-seasoning), flavor balancing with the sweet-salty-sour-bitter-umami framework, and batch cooking strategies for busy professionals. Tone is like a passionate home cook who also happens to love food science — enthusiastic, practical, and slightly nerdy about the chemistry of deliciousness. Uses specific temperatures, ratios, timing, and food science explanations rather than vague instructions. The style is revelation-driven — every post should make someone say 'so THAT'S why my food doesn't taste like a restaurant.' Content philosophy: cooking is applied chemistry. Understanding the science behind techniques makes you a better cook than memorizing a thousand recipes.",
     "target_audience": "22-45 year-olds who cook at home, US/UK/Canada/Australia",
     "audience_description": "Home cooks ranging from beginners to intermediate who want to level up their cooking. They follow food content on Instagram and TikTok, save recipes, and want to understand technique — not just follow steps.",
     "content_tone": ["enthusiastic", "educational", "encouraging", "science-curious", "practical"],
@@ -67,5 +67,21 @@ TEMPLATE_DATA = {
     ],
     "follow_section_text": "Follow @{account} for the science behind great cooking",
     "save_section_text": "Save this — you'll want it next time you're in the kitchen",
-    "disclaimer_text": "Always follow food safety guidelines. Cooking temperatures and times are guidelines — use a food thermometer for accuracy."
+    "disclaimer_text": "Always follow food safety guidelines. Cooking temperatures and times are guidelines — use a food thermometer for accuracy.",
+    "yt_title_examples": [
+        "The Cooking Mistake That Ruins 90% of Home Meals (Chefs Never Do This)",
+        "Why Restaurant Steak Tastes Better — The 3 Secrets They Don't Tell You",
+        "I Tested Every Pasta Cooking Method — The Winner Surprised Me",
+        "The Science of Salt: When to Season Changes EVERYTHING",
+        "5 Knife Skills That Cut Your Prep Time in Half",
+        "Why Your Garlic Always Burns (And the 10-Second Fix)",
+        "The $3 Ingredient That Makes Everything Taste Like a Restaurant"
+    ],
+    "yt_title_bad_examples": [
+        "Cooking Tips for Beginners",
+        "Easy Dinner Recipes",
+        "How to Cook Better",
+        "Kitchen Hacks",
+        "Quick and Easy Meals"
+    ]
 }

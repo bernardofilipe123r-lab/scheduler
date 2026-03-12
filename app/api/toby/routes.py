@@ -536,6 +536,9 @@ def get_config(
         "post_slots_per_day": state.post_slots_per_day,
         "reels_enabled": state.reels_enabled if state.reels_enabled is not None else True,
         "posts_enabled": state.posts_enabled if state.posts_enabled is not None else True,
+        "threads_enabled": state.threads_enabled if state.threads_enabled is not None else True,
+        "auto_schedule": state.auto_schedule if state.auto_schedule is not None else True,
+        "buffer_reminder_enabled": state.buffer_reminder_enabled if state.buffer_reminder_enabled is not None else True,
         "daily_budget_cents": state.daily_budget_cents,
     }
 
@@ -565,6 +568,12 @@ def update_config(
         state.reels_enabled = body.reels_enabled
     if body.posts_enabled is not None:
         state.posts_enabled = body.posts_enabled
+    if body.threads_enabled is not None:
+        state.threads_enabled = body.threads_enabled
+    if body.auto_schedule is not None:
+        state.auto_schedule = body.auto_schedule
+    if body.buffer_reminder_enabled is not None:
+        state.buffer_reminder_enabled = body.buffer_reminder_enabled
 
     state.updated_at = datetime.now(timezone.utc)
     db.commit()
@@ -576,6 +585,9 @@ def update_config(
         "post_slots_per_day": state.post_slots_per_day,
         "reels_enabled": state.reels_enabled if state.reels_enabled is not None else True,
         "posts_enabled": state.posts_enabled if state.posts_enabled is not None else True,
+        "threads_enabled": state.threads_enabled if state.threads_enabled is not None else True,
+        "auto_schedule": state.auto_schedule if state.auto_schedule is not None else True,
+        "buffer_reminder_enabled": state.buffer_reminder_enabled if state.buffer_reminder_enabled is not None else True,
     }}
 
 

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Save, Loader2, AlertTriangle, Film, LayoutGrid, ChevronRight, ArrowLeft, Globe, Plus } from 'lucide-react'
+import { Save, Loader2, AlertTriangle, Film, LayoutGrid, MessageCircle, ChevronRight, ArrowLeft, Globe, Plus, Download, Bell } from 'lucide-react'
 import { PlatformIcon } from '@/shared/components'
 import { apiClient } from '@/shared/api/client'
 import { useTobyConfig, useUpdateTobyConfig, useTobyReset, useTobyBrandConfigs, useUpdateTobyBrandConfig } from '../hooks'
@@ -121,6 +121,9 @@ export function TobySettings() {
 
   const reelsEnabled = getVal('reels_enabled', config.reels_enabled) as boolean
   const postsEnabled = getVal('posts_enabled', config.posts_enabled) as boolean
+  const threadsEnabled = getVal('threads_enabled', config.threads_enabled) as boolean
+  const autoSchedule = getVal('auto_schedule', config.auto_schedule) as boolean
+  const bufferReminderEnabled = getVal('buffer_reminder_enabled', config.buffer_reminder_enabled) as boolean
 
   const handleSaveGlobal = () => {
     const updates: Record<string, number | boolean | string> = {}
@@ -189,7 +192,7 @@ export function TobySettings() {
     }
   }
 
-  const toggleGlobal = (key: 'reels_enabled' | 'posts_enabled') => {
+  const toggleGlobal = (key: 'reels_enabled' | 'posts_enabled' | 'threads_enabled' | 'auto_schedule' | 'buffer_reminder_enabled') => {
     const current = getVal(key, config[key]) as boolean
     setGlobalField(key, !current)
   }
@@ -308,6 +311,30 @@ export function TobySettings() {
                   icon={<LayoutGrid className="w-4 h-4" />}
                   enabled={postsEnabled}
                   onChange={() => toggleGlobal('posts_enabled')}
+                />
+                <ToggleRow
+                  label="Threads" desc="Text-based thread posts"
+                  icon={<MessageCircle className="w-4 h-4" />}
+                  enabled={threadsEnabled}
+                  onChange={() => toggleGlobal('threads_enabled')}
+                />
+              </div>
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">Pipeline</p>
+              <div className="space-y-3">
+                <ToggleRow
+                  label="Auto-Schedule" desc="When off, accepted content downloads instead of scheduling"
+                  icon={<Download className="w-4 h-4" />}
+                  enabled={autoSchedule}
+                  onChange={() => toggleGlobal('auto_schedule')}
+                />
+                <ToggleRow
+                  label="Buffer Reminder" desc="Email reminder 1 day before your content buffer expires"
+                  icon={<Bell className="w-4 h-4" />}
+                  enabled={bufferReminderEnabled}
+                  onChange={() => toggleGlobal('buffer_reminder_enabled')}
                 />
               </div>
             </div>

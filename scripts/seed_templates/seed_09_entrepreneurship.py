@@ -157,4 +157,20 @@ TEMPLATE_DATA = {
     "follow_section_text": "Follow @{account} for real business strategies that work",
     "save_section_text": "Save this — it's the business advice you won't find elsewhere",
     "disclaimer_text": "This is educational content based on research and case studies. Business results vary. Consult qualified legal, financial, and business advisors for your specific situation.",
+    "yt_title_examples": [
+        "How I Validated a Business Idea in 48 Hours (Spent $0)",
+        "The Pricing Mistake That Kills 80% of New Businesses",
+        "I Analyzed 500 Failed Startups — They All Made This ONE Error",
+        "Why Most Side Hustles Fail (And the 3 That Actually Scale)",
+        "The $0 Marketing Strategy That Built a 6-Figure Business",
+        "How to Read a P&L Statement in 5 Minutes (Non-Finance Founders)",
+        "The Hiring Framework That Saved My Business From Imploding"
+    ],
+    "yt_title_bad_examples": [
+        "Business Tips for Beginners",
+        "How to Start a Business",
+        "Entrepreneurship Advice",
+        "My Business Journey",
+        "Side Hustle Ideas"
+    ]
 }

@@ -9,7 +9,7 @@ TEMPLATE_DATA = {
     "description": "Smart travel strategies, hidden destinations, and money-saving tips for travelers who want to see the world without breaking the bank.",
     "niche_name": "Travel & Adventure",
     "niche_description": "Strategic travel education covering budget hacks, destination guides, credit card points optimization, packing science, and cultural intelligence for smarter, richer travel experiences.",
-    "content_brief": "Create content that helps people travel smarter, cheaper, and more authentically. Cover credit card points strategy, off-season travel, packing optimization, cultural etiquette, safety tips, and hidden destinations. Back claims with data on costs, savings, and traveler statistics.",
+    "content_brief": "Strategic, data-driven travel content for adventurous adults aged 22–40 in English-speaking countries (US, UK, Canada, Australia), focusing on traveling smarter, cheaper, and more authentically rather than just showcasing pretty destinations. Topics include: credit card points strategy and how to fly business class for free (sign-up bonus stacking, transfer partner optimization), off-season travel science (the exact months when prices drop 40-60% for popular destinations), packing optimization systems (capsule wardrobe packing, the one-bag travel methodology), cultural etiquette deep dives that prevent embarrassing mistakes, safety protocols for solo travelers (including data-backed risk assessment by region), hidden destinations that became tourist traps vs genuinely undiscovered places, flight booking psychology (when to book, hidden city ticketing, fare class hacking), accommodation strategy beyond hotels (house-sitting, volunteer exchanges, off-platform negotiation), travel insurance math and when it's actually worth it, the true cost of popular destinations vs underrated alternatives, digital nomad logistics (visa rules, time zones, co-working infrastructure), and food tourism strategy (eating like locals, market navigation, cooking class ROI). Tone is like a well-traveled friend who's been to 50+ countries and optimizes every trip with data — adventurous but strategic, inspiring but practical. Uses specific costs, savings percentages, and traveler statistics rather than vague 'wanderlust' content. The style is insider-knowledge meets optimization — every post should make someone feel like they've just unlocked a travel cheat code. Content philosophy: the best travel experiences come from strategy, not just spontaneity. Smart planning means more trips, better experiences, and less money wasted.",
     "target_audience": "22-45 year-olds who love travel, US/UK/Canada/Australia",
     "audience_description": "Travel-curious millennials and Gen-Z who want to travel more but think they can't afford it. They save travel content obsessively, dream about trips, and want practical strategies — not just pretty photos.",
     "content_tone": ["adventurous", "practical", "inspiring", "strategic", "culturally respectful"],
@@ -67,5 +67,21 @@ TEMPLATE_DATA = {
     ],
     "follow_section_text": "Follow @{account} for travel strategies that actually save money",
     "save_section_text": "Save this — you'll need it for your next trip",
-    "disclaimer_text": "Travel conditions change. Always verify visa requirements, safety advisories, and local regulations before traveling."
+    "disclaimer_text": "Travel conditions change. Always verify visa requirements, safety advisories, and local regulations before traveling.",
+    "yt_title_examples": [
+        "How I Flew Business Class to Japan for $87 (Points Strategy Revealed)",
+        "The Travel Booking Hack Airlines Don't Want You to Know",
+        "I Visited 10 'Hidden Gem' Destinations — Only 3 Were Worth It",
+        "Why You Should NEVER Book Hotels on Weekends (Data Proves It)",
+        "The Packing System That Changed How I Travel (One Bag, Any Trip)",
+        "Europe's Most Overrated vs Underrated Cities (Cost Breakdown)",
+        "How to Travel Full-Time on $1,500/Month (Exact Budget Breakdown)"
+    ],
+    "yt_title_bad_examples": [
+        "Travel Tips 2025",
+        "Best Places to Visit",
+        "How to Travel Cheap",
+        "My Trip to Italy",
+        "Travel Vlog"
+    ]
 }

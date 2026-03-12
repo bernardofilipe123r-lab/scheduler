@@ -9,7 +9,7 @@ TEMPLATE_DATA = {
     "description": "Dermatologist-backed skincare education. Ingredients, routines, and myth-busting for clear, healthy skin at every age.",
     "niche_name": "Skincare & Beauty Science",
     "niche_description": "Evidence-based skincare education covering ingredient science, routine building, product analysis, and dermatological research for healthy, glowing skin.",
-    "content_brief": "Create content that decodes skincare ingredients, debunks marketing myths, and builds effective routines using dermatological research. Cover SPF science, retinol protocols, skin barrier repair, ingredient interactions, and age-specific skincare. Every recommendation backed by clinical studies.",
+    "content_brief": "Evidence-based skincare and beauty science content for adults aged 18–45 in English-speaking countries (US, UK, Canada, Australia), focusing on ingredient science, routine building, and debunking marketing myths with dermatological research. Topics include: SPF science and why most people apply sunscreen wrong (the 2mg/cm² rule), retinol protocols from starting percentage to advanced use (with purging vs irritation distinction), skin barrier repair science (ceramides, fatty acids, cholesterol ratio), ingredient interactions that cancel each other out (niacinamide + vitamin C myths, AHA/BHA layering rules), the acid mantle and pH-dependent actives, age-specific skincare routines (20s prevention vs 30s maintenance vs 40s repair), the science behind hyperpigmentation treatments (tyrosinase inhibitors, melanin pathways), double cleansing science and when it actually matters, how to read an INCI list and spot marketing red flags, peptide science (what's proven vs what's hype), the microbiome revolution in skincare, affordable vs luxury ingredients (same molecule, different price), and seasonal skincare adjustments backed by humidity and UV research. Tone is like a dermatology-obsessed best friend who reads clinical papers for fun — approachable, myth-busting, and passionate about ingredient transparency. Uses specific percentages, molecular weights, and study citations rather than brand recommendations. The style is empowering and scientific — giving people the knowledge to build their own routine instead of following trends blindly. Content philosophy: your skin is an organ, not a canvas for marketing. Understanding the science behind ingredients is the key to a routine that actually works.",
     "target_audience": "18-45 women and men interested in skincare, US/UK/Canada/Australia",
     "audience_description": "Skincare-curious consumers overwhelmed by product marketing. They want to understand WHY ingredients work, not just which products to buy. Trust science over influencer hype.",
     "content_tone": ["scientific", "approachable", "myth-busting", "empowering", "ingredient-focused"],
@@ -67,5 +67,21 @@ TEMPLATE_DATA = {
     ],
     "follow_section_text": "Follow @{account} for dermatologist-backed skincare education",
     "save_section_text": "Save this — reference it next time you're shopping for skincare",
-    "disclaimer_text": "This is educational content, not medical advice. For persistent skin concerns, consult a board-certified dermatologist."
+    "disclaimer_text": "This is educational content, not medical advice. For persistent skin concerns, consult a board-certified dermatologist.",
+    "yt_title_examples": [
+        "Dermatologists Exposed: The Skincare Lies You've Been Sold",
+        "I Tested $10 vs $200 Retinol for 90 Days — Shocking Results",
+        "The SPF Mistake 95% of People Make (Dermatologist Explains)",
+        "Why Your Skincare Routine Isn't Working (The pH Problem Nobody Talks About)",
+        "I Repaired My Damaged Skin Barrier in 14 Days — Here's How",
+        "The Ingredient That Changed My Skin (And It Costs $8)",
+        "Stop Layering These Ingredients Together (Dermatology Research Explains Why)"
+    ],
+    "yt_title_bad_examples": [
+        "Skincare Routine 2025",
+        "Best Moisturizers for Dry Skin",
+        "My Skincare Tips",
+        "How to Get Clear Skin",
+        "Products I Love"
+    ]
 }
