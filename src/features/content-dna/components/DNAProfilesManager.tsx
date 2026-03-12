@@ -2,7 +2,7 @@
  * DNAProfilesManager — list, create, edit, delete Content DNA profiles + brand assignment.
  */
 import { useState } from 'react'
-import { Plus, Trash2, Edit3, Users, ChevronRight, FolderHeart, Loader2 } from 'lucide-react'
+import { Plus, Trash2, Edit3, Users, ChevronRight, FolderHeart, Loader2, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import {
   useContentDNAProfiles,
@@ -14,6 +14,7 @@ import {
 import type { ContentDNAProfile } from '@/features/content-dna'
 import { useBrands, type Brand } from '@/features/brands/api/use-brands'
 import { getStrengthColor, getStrengthBarColor, getStrengthPercent } from '@/features/brands/types/niche-config'
+import { NicheConfigForm } from '@/features/brands/components/NicheConfigForm'
 
 export function DNAProfilesManager() {
   const { data: dnaData, isLoading } = useContentDNAProfiles()
@@ -24,6 +25,7 @@ export function DNAProfilesManager() {
 
   const [newName, setNewName] = useState('')
   const [assigningDna, setAssigningDna] = useState<string | null>(null)
+  const [editingDnaId, setEditingDnaId] = useState<string | null>(null)
 
   const profiles = dnaData?.profiles ?? []
 
@@ -136,6 +138,8 @@ export function DNAProfilesManager() {
               onAssign={handleAssign}
               assigningDna={assigningDna}
               setAssigningDna={setAssigningDna}
+              editingDnaId={editingDnaId}
+              setEditingDnaId={setEditingDnaId}
             />
           ))}
         </div>
@@ -151,6 +155,8 @@ function DNAProfileCard({
   onAssign,
   assigningDna,
   setAssigningDna,
+  editingDnaId,
+  setEditingDnaId,
 }: {
   dna: ContentDNAProfile
   brands: Brand[]
@@ -158,6 +164,8 @@ function DNAProfileCard({
   onAssign: (dnaId: string, brandId: string) => void
   assigningDna: string | null
   setAssigningDna: (id: string | null) => void
+  editingDnaId: string | null
+  setEditingDnaId: (id: string | null) => void
 }) {
   const strength = getDNAStrength(dna)
   const strengthPct = getStrengthPercent(strength)
@@ -166,6 +174,7 @@ function DNAProfileCard({
 
   const assignedBrands = brands.filter((b) => b.content_dna_id === dna.id)
   const unassignedBrands = brands.filter((b) => !b.content_dna_id)
+  const isEditing = editingDnaId === dna.id
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-5 hover:shadow-sm transition-shadow">
@@ -188,13 +197,17 @@ function DNAProfileCard({
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0 ml-4">
-          <a
-            href={`/brands?tab=prompts`}
-            className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
-            title="Edit DNA settings"
+          <button
+            onClick={() => setEditingDnaId(isEditing ? null : dna.id)}
+            className={`p-2 rounded-lg transition-colors ${
+              isEditing
+                ? 'text-primary-600 bg-primary-50 hover:bg-primary-100'
+                : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+            }`}
+            title={isEditing ? 'Close editor' : 'Edit DNA settings'}
           >
-            <Edit3 className="w-4 h-4" />
-          </a>
+            {isEditing ? <X className="w-4 h-4" /> : <Edit3 className="w-4 h-4" />}
+          </button>
           <button
             onClick={() => onDelete(dna.id)}
             className="p-2 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors"
@@ -251,6 +264,13 @@ function DNAProfileCard({
           </div>
         )}
       </div>
+
+      {/* Inline DNA editor */}
+      {isEditing && (
+        <div className="mt-5 pt-5 border-t border-gray-200">
+          <NicheConfigForm dnaId={dna.id} />
+        </div>
+      )}
     </div>
   )
 }

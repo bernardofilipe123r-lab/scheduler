@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef, forwardRef, useImper
 import { Save, Loader2, Dna, Sparkles, Film, LayoutGrid, Plus, Trash2, RefreshCw, ChevronDown, Check, Instagram, Download } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useNicheConfig, useUpdateNicheConfig, useAiUnderstanding, useReelPreview, useSuggestYtTitles, useImportFromInstagram } from '../api/use-niche-config'
+import { useContentDNAProfile, useUpdateContentDNA } from '@/features/content-dna'
 import { useBrands } from '../api/use-brands'
 import { apiClient } from '@/shared/api/client'
 import { getConfigStrength } from '../types/niche-config'
@@ -148,6 +149,8 @@ export interface NicheConfigFormProps {
   ytConnected?: boolean
   /** Called when niche_name field changes — reports whether it has content. */
   onNicheNameChange?: (filled: boolean) => void
+  /** When set, load/save from the Content DNA profile API instead of legacy NicheConfig. */
+  dnaId?: string
 }
 
 export interface NicheConfigFormHandle {
@@ -155,10 +158,22 @@ export interface NicheConfigFormHandle {
   saveNow: () => Promise<void>
 }
 
-export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigFormProps>(function NicheConfigForm({ section, onGeneratingChange, onYtValidChange, ytConnected, onNicheNameChange } = {}, ref) {
-  const { data, isLoading } = useNicheConfig()
+export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigFormProps>(function NicheConfigForm({ section, onGeneratingChange, onYtValidChange, ytConnected, onNicheNameChange, dnaId } = {}, ref) {
+  // Legacy NicheConfig hooks (used when no dnaId)
+  const nicheQuery = useNicheConfig()
+  // Content DNA hooks (used when dnaId is provided)
+  const dnaQuery = useContentDNAProfile(dnaId)
+  const updateDnaMutation = useUpdateContentDNA()
+
+  // Pick source based on whether we're editing a DNA profile or legacy config
+  const data = dnaId ? (dnaQuery.data?.profile as unknown as typeof nicheQuery.data) : nicheQuery.data
+  const isLoading = dnaId ? dnaQuery.isLoading : nicheQuery.isLoading
+
   const { data: brandsData } = useBrands()
-  const updateMutation = useUpdateNicheConfig()
+  const legacyUpdateMutation = useUpdateNicheConfig()
+  const updateMutation = dnaId
+    ? { mutateAsync: async (payload: Record<string, unknown>) => { await updateDnaMutation.mutateAsync({ dnaId, data: payload }); return payload }, isPending: updateDnaMutation.isPending }
+    : legacyUpdateMutation
   const aiMutation = useAiUnderstanding()
   const reelPreviewMutation = useReelPreview()
   const ytSuggestMutation = useSuggestYtTitles()

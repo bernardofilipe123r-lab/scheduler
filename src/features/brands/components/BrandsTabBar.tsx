@@ -1,9 +1,8 @@
-import { Dna, Layers, FolderHeart } from 'lucide-react'
+import { Layers, FolderHeart } from 'lucide-react'
 
 const TABS = [
   { key: 'brands', label: 'My Brands', icon: Layers },
   { key: 'dna-profiles', label: 'DNA Profiles', icon: FolderHeart },
-  { key: 'prompts', label: 'Content DNA (Legacy)', icon: Dna },
 ] as const
 
 export type BrandsTab = (typeof TABS)[number]['key']

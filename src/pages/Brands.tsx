@@ -3,7 +3,6 @@ import { useSearchParams, useNavigate } from 'react-router-dom'
 import { Layers, Plus } from 'lucide-react'
 import { BrandsTabBar, type BrandsTab } from '@/features/brands/components/BrandsTabBar'
 import { MyBrandsTab } from '@/features/brands/components/MyBrandsTab'
-import { NicheConfigForm } from '@/features/brands/components/NicheConfigForm'
 import { DNAProfilesManager } from '@/features/content-dna/components/DNAProfilesManager'
 
 export function BrandsPage() {
@@ -55,7 +54,6 @@ export function BrandsPage() {
       {/* Tab content */}
       {activeTab === 'brands' && <MyBrandsTab />}
       {activeTab === 'dna-profiles' && <DNAProfilesManager />}
-      {activeTab === 'prompts' && <NicheConfigForm />}
     </div>
   )
 }
