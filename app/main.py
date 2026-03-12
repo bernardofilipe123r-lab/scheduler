@@ -37,7 +37,7 @@ from app.api.auth.threads_oauth_routes import router as threads_oauth_router
 from app.api.auth.tiktok_oauth_routes import router as tiktok_oauth_router
 from app.api.auth.bsky_auth_routes import router as bsky_auth_router
 from app.api.content.music_routes import router as music_router
-from app.api.content.trending_music_routes import router as trending_music_router
+# trending_music_routes removed — music now managed via admin panel
 from app.api.content.format_b_routes import router as format_b_router
 from app.api.content.format_b_design_routes import router as format_b_design_router
 from app.api.system.api_usage_routes import router as api_usage_router
@@ -145,7 +145,7 @@ app.include_router(threads_oauth_router)  # Threads OAuth flow
 app.include_router(tiktok_oauth_router)  # TikTok OAuth flow
 app.include_router(bsky_auth_router)  # Bluesky App Password auth
 app.include_router(music_router)  # User music upload/management
-app.include_router(trending_music_router)  # TikTok trending music
+# trending_music_router removed — music now managed via admin panel
 app.include_router(billing_router, prefix="/api/billing")  # Stripe billing
 app.include_router(format_b_router)  # Format B reel generation
 app.include_router(format_b_design_router)  # Format B design preferences
@@ -1292,44 +1292,7 @@ async def startup_event():
     from app.services.billing_enforcer import billing_enforcement_tick
     scheduler.add_job(billing_enforcement_tick, 'interval', hours=1, id='billing_enforcement')
 
-    # TikTok trending music — fetch once per week
-    def fetch_trending_music_job():
-        """Fetch trending music from TikTok via RapidAPI / TokInsight."""
-        try:
-            from app.db_connection import get_db_session
-            from app.services.media.trending_music_fetcher import fetch_trending_music, cleanup_old_batches
-
-            print(f"\n🎵 Fetching TikTok trending music at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-            with get_db_session() as db:
-                result = fetch_trending_music(db)
-                if result["success"]:
-                    print(f"   ✅ Stored {result['tracks_stored']} trending tracks from {result.get('source', 'unknown')} (batch {result['batch_id'][:8]}...)")
-                else:
-                    print(f"   ⚠️ Trending music fetch: {result.get('error', 'unknown error')}")
-                # Clean up batches older than 10 days
-                cleanup_old_batches(db, keep_days=10)
-        except Exception as e:
-            print(f"❌ Trending music fetch failed: {e}")
-
-    def fetch_trending_music_if_stale():
-        """Fetch trending music only if there's no recent batch (< 7 days old)."""
-        try:
-            from app.db_connection import get_db_session
-            from app.models.trending_music import TrendingMusicFetch
-            with get_db_session() as db:
-                cutoff = datetime.utcnow() - timedelta(days=7)
-                recent = db.query(TrendingMusicFetch).filter(
-                    TrendingMusicFetch.fetched_at >= cutoff
-                ).first()
-                if recent:
-                    print(f"🎵 Trending music is fresh (last fetch: {recent.fetched_at}), skipping startup fetch")
-                    return
-            fetch_trending_music_job()
-        except Exception as e:
-            print(f"❌ Trending music startup check failed: {e}")
-
-    scheduler.add_job(fetch_trending_music_job, 'interval', hours=168, id='trending_music_fetch')
-    scheduler.add_job(fetch_trending_music_if_stale, 'date', run_date=datetime.now() + timedelta(seconds=30), id='trending_music_startup')
+    # Trending music scheduler removed — music now managed via admin panel
 
     # ── Stuck job auto-recovery (every 5 minutes) ────────────────────────
     def recover_stuck_jobs():

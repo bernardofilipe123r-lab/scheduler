@@ -686,7 +686,6 @@ class JobProcessor:
             from app.services.discovery.story_polisher import ImagePlan
             from app.models.format_b_design import FormatBDesign
             from app.models.brands import Brand
-            from app.services.media.music_picker import resolve_music_url
             from app.db_connection import SessionLocal
 
             # Load user's design preferences + brand info
@@ -850,32 +849,12 @@ class JobProcessor:
             music_path = None
             music_enabled = getattr(design, 'reel_music_enabled', True) if design else True
             if music_enabled:
-                try:
-                    music_db = SessionLocal()
-                    try:
-                        music_url = resolve_music_url(music_db, user_id, music_source="trending_random")
-                    finally:
-                        music_db.close()
-                    if music_url:
-                        import httpx
-                        tmp_music = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3')
-                        tmp_music.close()
-                        resp = httpx.get(music_url, timeout=30, follow_redirects=True)
-                        if resp.status_code == 200:
-                            with open(tmp_music.name, 'wb') as f:
-                                f.write(resp.content)
-                            music_path = Path(tmp_music.name)
-                            print(f"   🎵 Music downloaded for format-b reel", flush=True)
-                except Exception as e:
-                    print(f"   ⚠️ Music resolution failed: {e}", flush=True)
-
-                # Fallback to local bundled music if trending resolution failed
-                if music_path is None:
-                    from app.services.media.music_picker import get_random_local_music_path
-                    local_music = get_random_local_music_path()
-                    if local_music:
-                        music_path = local_music
-                        print(f"   🎵 Using local fallback music: {local_music.name}", flush=True)
+                from app.services.media.music_picker import get_random_local_music_path
+                music_path = get_random_local_music_path()
+                if music_path:
+                    print(f"   🎵 Using music: {music_path.name}", flush=True)
+                else:
+                    print(f"   ⚠️ No music files available", flush=True)
 
             result_path = slideshow.compose_reel(
                 image_paths=image_paths,

@@ -10,6 +10,9 @@ Endpoints:
 - GET  /api/admin/supabase-usage                 Supabase usage metrics (super admin only)
 - GET  /api/admin/error-digest                   Condensed error summary (last 48h)
 - GET  /api/admin/format-violations              Proactive format pattern violation check
+- GET  /api/admin/music                          List music library files
+- POST /api/admin/music/download                 Download songs via yt-dlp
+- DELETE /api/admin/music/{filename}             Delete a music file
 """
 
 import asyncio
@@ -20,6 +23,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import cast, String, or_, func, and_
@@ -1235,3 +1239,57 @@ def get_format_violations(
         "affected_users": len(affected_users),
         "violations": violations,
     }
+
+
+# ─── Music Library Management ────────────────────────────────────────────────
+
+class MusicDownloadRequest(BaseModel):
+    songs_text: str  # Newline-separated list of song names
+
+
+@router.get("/api/admin/music", summary="List music library (super admin only)")
+async def list_music_library(user: dict = Depends(get_current_user)):
+    """List all MP3 files in the music library."""
+    _require_super_admin(user)
+
+    from app.services.media.music_downloader import list_music_files
+    files = list_music_files()
+    return {"files": files, "count": len(files)}
+
+
+@router.post("/api/admin/music/download", summary="Download songs via yt-dlp (super admin only)")
+async def download_music(
+    request: MusicDownloadRequest,
+    user: dict = Depends(get_current_user),
+):
+    """Download songs from YouTube as MP3 into the music library.
+
+    Accepts a newline-separated list of song names/queries.
+    Uses yt-dlp to search YouTube and extract audio as MP3.
+    """
+    _require_super_admin(user)
+
+    if not request.songs_text.strip():
+        raise HTTPException(status_code=400, detail="No songs provided")
+
+    songs = [s.strip() for s in request.songs_text.strip().split("\n") if s.strip()]
+    if len(songs) > 50:
+        raise HTTPException(status_code=400, detail="Maximum 50 songs per request")
+
+    from app.services.media.music_downloader import download_songs
+    result = await asyncio.to_thread(download_songs, request.songs_text)
+    return result
+
+
+@router.delete("/api/admin/music/{filename}", summary="Delete a music file (super admin only)")
+async def delete_music_file(
+    filename: str,
+    user: dict = Depends(get_current_user),
+):
+    """Delete a music file from the library."""
+    _require_super_admin(user)
+
+    from app.services.media.music_downloader import delete_music_file as do_delete
+    if do_delete(filename):
+        return {"deleted": True, "filename": filename}
+    raise HTTPException(status_code=404, detail=f"File '{filename}' not found")

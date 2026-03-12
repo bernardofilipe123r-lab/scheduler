@@ -64,7 +64,7 @@ class FormatBGenerateRequest(BaseModel):
     polished_data: Optional[dict] = None
     sourced_image_paths: Optional[List[str]] = None
     # Music
-    music_source: str = Field(default="trending_random")
+    music_source: str = Field(default="none")
 
 
 # --- Endpoints ---

@@ -634,7 +634,7 @@ def _execute_content_plan(db: Session, plan, batch_id: str = None):
         platforms=_toby_platforms,
         fixed_title=True,
         created_by="toby",
-        music_source="trending_random",
+        music_source="none",
         content_format="format_b" if plan.content_type == "format_b_reel" else "format_a",
         format_b_data=result.get("format_b_data"),
     )

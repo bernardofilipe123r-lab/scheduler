@@ -2,9 +2,8 @@
 Helper to pick music for video generation.
 
 Supports:
-- Trending TikTok music (random from top 50 or specific track)
+- Admin-managed music library (assets/music/ directory)
 - User-uploaded tracks (legacy, weighted-random)
-- Local bundled music files (fallback when APIs fail)
 """
 import random
 import logging
@@ -17,12 +16,12 @@ from app.models.user_music import UserMusic
 
 logger = logging.getLogger(__name__)
 
-# Local bundled music files — always-available fallback
+# Admin-managed music library — MP3 files uploaded via admin panel
 _ASSETS_MUSIC_DIR = Path(__file__).resolve().parent.parent.parent / "assets" / "music"
 
 
 def get_random_local_music_path() -> Optional[Path]:
-    """Return a random local .mp3 file from assets/music/ as fallback."""
+    """Return a random local .mp3 file from assets/music/."""
     if not _ASSETS_MUSIC_DIR.is_dir():
         logger.warning("Local music directory not found: %s", _ASSETS_MUSIC_DIR)
         return None
@@ -31,7 +30,7 @@ def get_random_local_music_path() -> Optional[Path]:
         logger.warning("No local .mp3 files in %s", _ASSETS_MUSIC_DIR)
         return None
     chosen = random.choice(mp3_files)
-    logger.info("Using local fallback music: %s", chosen.name)
+    logger.info("Using music: %s", chosen.name)
     return chosen
 
 
@@ -69,36 +68,16 @@ def resolve_music_url(db: Session, user_id: str, music_track_id: Optional[str] =
     Resolve the music URL based on music_source and music_track_id.
 
     music_source values:
-      - 'none' / None → no music
-      - 'trending_random'  → random from top 50 trending
-      - 'trending_pick'    → specific trending track (music_track_id = trending_music.id)
-      - (legacy) if music_source is not set but music_track_id is, treat as user-uploaded
+      - 'none' / None       → no music (unless music_track_id is set → legacy user-uploaded)
+      - 'trending_random'   → (deprecated) pick random local music
+      - 'trending_pick'     → (deprecated) pick random local music
+      - (legacy) if music_track_id is set without music_source → user-uploaded
     """
     source = (music_source or "none").strip().lower()
 
-    if source == "trending_random":
-        from app.services.media.trending_music_fetcher import get_random_trending_url
-        url = get_random_trending_url(db)
-        if url:
-            logger.info("Using random trending music for user %s", user_id)
-            return url
-        logger.warning("No trending music available, falling back to no music")
-        return None
-
-    if source == "trending_pick" and music_track_id:
-        from app.services.media.trending_music_fetcher import get_trending_track_by_id, get_fresh_play_url
-        track = get_trending_track_by_id(db, music_track_id)
-        if track:
-            # Try refreshing the URL via TokInsight in case the stored CDN URL expired
-            if track.tiktok_id:
-                fresh_url = get_fresh_play_url(track.tiktok_id)
-                if fresh_url:
-                    logger.info("Using fresh TokInsight URL for track '%s' (user %s)", track.title, user_id)
-                    return fresh_url
-            logger.info("Using stored URL for trending track '%s' (user %s)", track.title, user_id)
-            return track.play_url
-        logger.warning("Trending track %s not found, falling back to no music", music_track_id)
-        return None
+    # Deprecated trending sources → just use local music library
+    if source in ("trending_random", "trending_pick"):
+        return None  # Caller will fall back to get_random_local_music_path()
 
     if source == "none" or source == "":
         # Legacy path: if music_track_id is set without music_source, use user-uploaded
