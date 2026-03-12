@@ -22,6 +22,9 @@ CATEGORY_MAP = {
     "Cooking & Quick Recipes": "cooking",
     "Travel & Adventure": "travel",
     "Tech & Productivity": "tech",
+    "Fashion & Style": "fashion",
+    "Entrepreneurship & Business": "entrepreneurship",
+    "Psychology & Mental Health": "psychology",
 }
 
 # DB columns that accept direct values from TEMPLATE_DATA
