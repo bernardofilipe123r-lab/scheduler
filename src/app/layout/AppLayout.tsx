@@ -2,13 +2,12 @@ import { useState, useRef, useEffect, Suspense } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { PageLoader } from '@/shared/components'
 import {
-  Home, Sparkles, Briefcase, Calendar, BarChart3,
+  Home, Sparkles, Calendar, BarChart3,
   Bot, Layers, User, LogOut,
   ChevronLeft, ChevronRight, ShieldCheck, CreditCard,
   X, AlertTriangle, GitPullRequestDraft,
 } from 'lucide-react'
 import { useAuth } from '@/features/auth'
-import { useJobs } from '@/features/jobs'
 import { usePipelineStats } from '@/features/pipeline'
 import { useBillingStatus } from '@/features/billing/useBillingStatus'
 import { LockedBanner } from '@/features/billing/LockedBanner'
@@ -154,7 +153,6 @@ const NAV_ITEMS = [
   { to: '/', icon: Home, label: 'Home', end: true },
   { to: '/creation', icon: Sparkles, label: 'Creation', end: false },
   { to: '/pipeline', icon: GitPullRequestDraft, label: 'Pipeline', end: false },
-  { to: '/jobs', icon: Briefcase, label: 'Jobs', end: false },
   { to: '/calendar', icon: Calendar, label: 'Calendar', end: false },
   { to: '/analytics', icon: BarChart3, label: 'Analytics', end: false },
   { to: '/toby', icon: Bot, label: 'Toby', end: false },
@@ -165,7 +163,6 @@ const PREFETCH_MAP: Record<string, () => Promise<unknown>> = {
   '/': () => import('@/pages/Home'),
   '/creation': () => import('@/pages/Creation'),
   '/pipeline': () => import('@/pages/Pipeline'),
-  '/jobs': () => import('@/pages/History'),
   '/calendar': () => import('@/pages/Calendar'),
   '/analytics': () => import('@/pages/Analytics'),
   '/toby': () => import('@/pages/Toby'),
@@ -203,14 +200,10 @@ export function AppLayout() {
   const userMenuRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
   const { user, logout } = useAuth()
-  const { data: jobs = [] } = useJobs()
   const { data: pipelineStats } = usePipelineStats()
   const { data: billingData } = useBillingStatus()
   const isLocked = billingData?.billing_status === 'locked'
-  const pendingPipelineCount = pipelineStats?.pending ?? 0
-  const activeJobCount = (Array.isArray(jobs) ? jobs : []).filter(
-    (j: any) => j.status === 'generating' || j.status === 'pending'
-  ).length
+  const pendingPipelineCount = pipelineStats?.pending_review ?? 0
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -284,11 +277,6 @@ export function AppLayout() {
                 {to === '/pipeline' && pendingPipelineCount > 0 && (
                   <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 flex items-center justify-center rounded-full bg-amber-500 text-white text-[10px] font-bold leading-none px-1">
                     {pendingPipelineCount}
-                  </span>
-                )}
-                {to === '/jobs' && activeJobCount > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 flex items-center justify-center rounded-full bg-orange-500 text-white text-[10px] font-bold leading-none px-1">
-                    {activeJobCount}
                   </span>
                 )}
               </div>

@@ -1,11 +1,10 @@
-"""Pipeline API — human-in-the-loop approval gate for content publishing."""
+"""Pipeline API — unified content hub: approval gate + full job lifecycle."""
 import logging
 from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func
 
 from app.db_connection import get_db
 from app.api.auth.middleware import get_current_user
@@ -23,10 +22,57 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/pipeline", tags=["pipeline"])
 
 
+def _compute_lifecycle(job: GenerationJob) -> str:
+    """Compute the effective lifecycle stage of a job for the pipeline view.
+
+    Returns one of: pending_review, generating, scheduled, published, rejected, failed
+    """
+    # Explicit pipeline statuses take precedence
+    if job.pipeline_status == "pending":
+        return "pending_review"
+    if job.pipeline_status == "rejected":
+        return "rejected"
+
+    # Job-level status
+    if job.status in ("generating", "pending"):
+        return "generating"
+    if job.status == "failed":
+        return "failed"
+    if job.status == "cancelled":
+        return "failed"
+
+    # Check brand outputs for published/scheduled state
+    outputs = job.brand_outputs or {}
+    total = len(job.brands or [])
+    if total == 0:
+        return "generating"
+
+    published_count = sum(1 for o in outputs.values() if isinstance(o, dict) and o.get("status") == "published")
+    scheduled_count = sum(1 for o in outputs.values() if isinstance(o, dict) and o.get("status") == "scheduled")
+
+    if published_count == total:
+        return "published"
+    if (scheduled_count + published_count) >= total and total > 0:
+        return "scheduled"
+    if scheduled_count > 0 or published_count > 0:
+        return "scheduled"
+
+    # Approved but not yet scheduled (edge case)
+    if job.pipeline_status == "approved":
+        return "scheduled"
+
+    # Completed but no pipeline_status (manual jobs ready to schedule)
+    if job.status == "completed":
+        return "scheduled"
+
+    return "generating"
+
+
 def _serialize_pipeline_item(job: GenerationJob) -> dict:
     """Serialize a GenerationJob for the pipeline API response."""
     return {
         "job_id": job.job_id,
+        "id": job.id,
         "title": job.title,
         "caption": job.caption,
         "variant": job.variant,
@@ -41,13 +87,18 @@ def _serialize_pipeline_item(job: GenerationJob) -> dict:
         "created_by": job.created_by or "user",
         "created_at": job.created_at.isoformat() if job.created_at else None,
         "status": job.status,
+        "lifecycle": _compute_lifecycle(job),
         "brand_outputs": job.brand_outputs or {},
+        "progress_percent": getattr(job, "progress_percent", None),
     }
 
 
 @router.get("")
 async def list_pipeline_items(
-    status: Optional[str] = Query("pending", regex="^(pending|approved|rejected|all)$"),
+    status: Optional[str] = Query(
+        "pending_review",
+        regex="^(pending_review|generating|scheduled|published|rejected|failed|all)$",
+    ),
     brand: Optional[str] = None,
     content_type: Optional[str] = Query(None, regex="^(all|reels|carousels|threads)$"),
     batch_id: Optional[str] = None,
@@ -56,14 +107,10 @@ async def list_pipeline_items(
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    """List pipeline items for the current user."""
+    """List all content items for the pipeline view."""
     query = db.query(GenerationJob).filter(
         GenerationJob.user_id == user["id"],
-        GenerationJob.pipeline_status.isnot(None),
     )
-
-    if status and status != "all":
-        query = query.filter(GenerationJob.pipeline_status == status)
 
     if brand:
         from sqlalchemy import cast, Text
@@ -80,14 +127,15 @@ async def list_pipeline_items(
     if batch_id:
         query = query.filter(GenerationJob.pipeline_batch_id == batch_id)
 
-    total = query.count()
-    items = (
-        query
-        .order_by(GenerationJob.created_at.desc())
-        .offset((page - 1) * limit)
-        .limit(limit)
-        .all()
-    )
+    # Fetch all matching jobs, then apply lifecycle filter in-memory
+    # (lifecycle depends on multiple columns + brand_outputs JSON, not a single SQL column)
+    all_jobs = query.order_by(GenerationJob.created_at.desc()).all()
+
+    if status and status != "all":
+        all_jobs = [j for j in all_jobs if _compute_lifecycle(j) == status]
+
+    total = len(all_jobs)
+    items = all_jobs[(page - 1) * limit : page * limit]
 
     return {
         "items": [_serialize_pipeline_item(j) for j in items],
@@ -102,29 +150,27 @@ async def get_pipeline_stats(
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    """Get pipeline stats for the current user."""
-    rows = (
-        db.query(GenerationJob.pipeline_status, func.count())
-        .filter(
-            GenerationJob.user_id == user["id"],
-            GenerationJob.pipeline_status.isnot(None),
-        )
-        .group_by(GenerationJob.pipeline_status)
+    """Get pipeline stats grouped by lifecycle stage."""
+    all_jobs = (
+        db.query(GenerationJob)
+        .filter(GenerationJob.user_id == user["id"])
         .all()
     )
 
-    counts = {s: c for s, c in rows}
-    pending = counts.get("pending", 0)
-    approved = counts.get("approved", 0)
-    rejected = counts.get("rejected", 0)
-    reviewed = approved + rejected
+    counts = {"pending_review": 0, "generating": 0, "scheduled": 0, "published": 0, "rejected": 0, "failed": 0}
+    for job in all_jobs:
+        lifecycle = _compute_lifecycle(job)
+        if lifecycle in counts:
+            counts[lifecycle] += 1
+
+    reviewed = counts["published"] + counts["scheduled"] + counts["rejected"]
+    approved = counts["published"] + counts["scheduled"]
     rate = round((approved / reviewed * 100) if reviewed > 0 else 0)
 
     return {
-        "pending": pending,
-        "approved": approved,
-        "rejected": rejected,
+        **counts,
         "rate": rate,
+        "total": sum(counts.values()),
     }
 
 

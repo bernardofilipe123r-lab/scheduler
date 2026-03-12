@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { get, post, patch } from '@/shared/api/client'
 import toast from 'react-hot-toast'
+import { jobKeys } from '@/features/jobs/hooks/use-jobs'
 import type { PipelineFilters, PipelineResponse, PipelineStats, PipelineItem } from '../model/types'
 
 export const pipelineKeys = {
@@ -41,6 +42,7 @@ export function useApprovePipelineItem() {
       post(`/api/pipeline/${jobId}/approve`, { caption }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: pipelineKeys.all })
+      queryClient.invalidateQueries({ queryKey: jobKeys.all })
       toast.success('Content approved and scheduled!')
     },
     onError: () => {
@@ -56,6 +58,7 @@ export function useRejectPipelineItem() {
       post(`/api/pipeline/${jobId}/reject`, { reason }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: pipelineKeys.all })
+      queryClient.invalidateQueries({ queryKey: jobKeys.all })
       toast('Content rejected', { icon: '🗑️' })
     },
     onError: () => {

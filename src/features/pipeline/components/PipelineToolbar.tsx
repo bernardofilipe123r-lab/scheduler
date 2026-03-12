@@ -17,9 +17,12 @@ interface Props {
 }
 
 const STATUS_TABS = [
-  { value: 'pending' as const, label: 'Pending' },
-  { value: 'approved' as const, label: 'Approved' },
+  { value: 'pending_review' as const, label: 'Pending Review' },
+  { value: 'generating' as const, label: 'Generating' },
+  { value: 'scheduled' as const, label: 'Scheduled' },
+  { value: 'published' as const, label: 'Published' },
   { value: 'rejected' as const, label: 'Rejected' },
+  { value: 'failed' as const, label: 'Failed' },
   { value: 'all' as const, label: 'All' },
 ]
 
@@ -104,7 +107,7 @@ export function PipelineToolbar({
       </div>
 
       {/* Bulk actions bar */}
-      {filters.status === 'pending' && (
+      {filters.status === 'pending_review' && (
         <div className="flex items-center gap-3 text-xs">
           <button
             onClick={onSelectAll}

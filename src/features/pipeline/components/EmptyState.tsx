@@ -6,17 +6,29 @@ interface Props {
 
 export function EmptyState({ status }: Props) {
   const messages: Record<string, { title: string; subtitle: string }> = {
-    pending: {
+    pending_review: {
       title: 'No pending content',
       subtitle: 'Toby will generate content based on your schedule. Check back soon!',
     },
-    approved: {
-      title: 'No approved content yet',
+    generating: {
+      title: 'Nothing generating right now',
+      subtitle: 'Content being generated will appear here.',
+    },
+    scheduled: {
+      title: 'No scheduled content',
       subtitle: 'Approve pending items to schedule them for publishing.',
+    },
+    published: {
+      title: 'No published content yet',
+      subtitle: 'Published content will appear here after going live.',
     },
     rejected: {
       title: 'No rejected content',
       subtitle: 'Rejected items will appear here for reference.',
+    },
+    failed: {
+      title: 'No failed content',
+      subtitle: 'Content that failed generation will appear here.',
     },
     all: {
       title: 'No content in the pipeline',

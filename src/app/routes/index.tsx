@@ -13,7 +13,6 @@ import { OnboardingPage } from '@/pages/Onboarding'
 // ── Lazy-loaded pages (split into separate chunks) ─────────────────────────
 const HomePage = lazy(() => import('@/pages/Home').then(m => ({ default: m.HomePage })))
 const CreationPage = lazy(() => import('@/pages/Creation').then(m => ({ default: m.CreationPage })))
-const HistoryPage = lazy(() => import('@/pages/History').then(m => ({ default: m.HistoryPage })))
 const JobDetailPage = lazy(() => import('@/pages/JobDetail').then(m => ({ default: m.JobDetailPage })))
 const CalendarPage = lazy(() => import('@/pages/Calendar').then(m => ({ default: m.CalendarPage })))
 const ScheduledPage = lazy(() => import('@/pages/Scheduled').then(m => ({ default: m.ScheduledPage })))
@@ -119,8 +118,8 @@ export function AppRoutes() {
         <Route path="posts" element={<Navigate to="/creation" replace />} />
         <Route path="threads" element={<Navigate to="/creation" replace />} />
         <Route path="pipeline" element={<PipelinePage />} />
-        <Route path="jobs" element={<HistoryPage />} />
-        <Route path="history" element={<Navigate to="/jobs" replace />} />
+        <Route path="jobs" element={<Navigate to="/pipeline" replace />} />
+        <Route path="history" element={<Navigate to="/pipeline" replace />} />
         <Route path="job/:jobId" element={<JobDetailPage />} />
         <Route path="calendar" element={<CalendarPage />} />
         <Route path="scheduled" element={<ScheduledPage />} />

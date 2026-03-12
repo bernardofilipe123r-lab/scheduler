@@ -1,10 +1,12 @@
 import { useState, useCallback, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { GitPullRequestDraft } from 'lucide-react'
+import toast from 'react-hot-toast'
 import {
   PipelineStats,
   PipelineToolbar,
   PipelineGrid,
-  PipelineDetailModal,
   PostReviewBanner,
   EmptyState,
   usePipelineItems,
@@ -13,13 +15,16 @@ import {
   useRejectPipelineItem,
   useBulkApprovePipeline,
   useBulkRejectPipeline,
-  useEditPipelineItem,
   useRegeneratePipeline,
   usePipelineFilters,
+  pipelineKeys,
 } from '@/features/pipeline'
 import type { PipelineItem } from '@/features/pipeline'
+import { useDeleteJob } from '@/features/jobs/hooks/use-jobs'
 
 export function PipelinePage() {
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { filters, setStatus, setBrand, setContentType, resetFilters } = usePipelineFilters()
   const { data: statsData, isLoading: statsLoading } = usePipelineStats()
   const { data: pipelineData, isLoading: itemsLoading } = usePipelineItems(filters)
@@ -27,14 +32,13 @@ export function PipelinePage() {
   const reject = useRejectPipelineItem()
   const bulkApprove = useBulkApprovePipeline()
   const bulkReject = useBulkRejectPipeline()
-  const edit = useEditPipelineItem()
   const regenerate = useRegeneratePipeline()
+  const deleteJob = useDeleteJob()
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [detailItem, setDetailItem] = useState<PipelineItem | null>(null)
 
   const items = pipelineData?.items ?? []
-  const pendingItems = useMemo(() => items.filter(i => i.pipeline_status === 'pending'), [items])
+  const pendingItems = useMemo(() => items.filter(i => i.lifecycle === 'pending_review'), [items])
 
   const toggleSelect = useCallback((id: string) => {
     setSelectedIds(prev => {
@@ -55,13 +59,11 @@ export function PipelinePage() {
 
   const handleApprove = useCallback((id: string, caption?: string) => {
     approve.mutate({ jobId: id, caption })
-    setDetailItem(null)
     setSelectedIds(prev => { const next = new Set(prev); next.delete(id); return next })
   }, [approve])
 
   const handleReject = useCallback((id: string) => {
     reject.mutate({ jobId: id })
-    setDetailItem(null)
     setSelectedIds(prev => { const next = new Set(prev); next.delete(id); return next })
   }, [reject])
 
@@ -79,16 +81,35 @@ export function PipelinePage() {
     setSelectedIds(new Set())
   }, [selectedIds, bulkReject])
 
-  const handleEdit = useCallback((id: string, caption: string, title: string) => {
-    edit.mutate({ jobId: id, caption, title })
-  }, [edit])
+  const handleNavigate = useCallback((item: PipelineItem) => {
+    navigate(`/job/${item.job_id}`)
+  }, [navigate])
+
+  const handleDelete = useCallback((id: string) => {
+    deleteJob.mutate(id, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: pipelineKeys.all })
+        toast.success('Content deleted')
+      },
+    })
+    setSelectedIds(prev => { const next = new Set(prev); next.delete(id); return next })
+  }, [deleteJob, queryClient])
 
   const handleRegenerate = useCallback(() => {
     regenerate.mutate(3)
   }, [regenerate])
 
-  // Show "all reviewed" banner when filtering pending + 0 results + stats show some approved
-  const showAllReviewedBanner = filters.status === 'pending' && items.length === 0 && !itemsLoading && (statsData?.approved ?? 0) > 0
+  const handleRegenerateItem = useCallback((id: string) => {
+    // For single item regenerate, we delete + trigger Toby
+    deleteJob.mutate(id, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: pipelineKeys.all })
+        regenerate.mutate(1)
+      },
+    })
+  }, [deleteJob, queryClient, regenerate])
+
+  const showAllReviewedBanner = filters.status === 'pending_review' && items.length === 0 && !itemsLoading && (statsData?.scheduled ?? 0) > 0
 
   return (
     <div className="space-y-5">
@@ -97,7 +118,7 @@ export function PipelinePage() {
         <GitPullRequestDraft className="w-6 h-6 text-gray-400" />
         <div>
           <h1 className="text-xl font-bold text-gray-900">Pipeline</h1>
-          <p className="text-sm text-gray-500">Review and approve content before it goes live</p>
+          <p className="text-sm text-gray-500">All your content — review, schedule, and track</p>
         </div>
       </div>
 
@@ -133,7 +154,9 @@ export function PipelinePage() {
           items={items}
           onApprove={handleApprove}
           onReject={handleReject}
-          onOpen={setDetailItem}
+          onNavigate={handleNavigate}
+          onDelete={handleDelete}
+          onRegenerate={handleRegenerateItem}
           selectedIds={selectedIds}
           onToggleSelect={toggleSelect}
         />
@@ -146,17 +169,6 @@ export function PipelinePage() {
 
       {showAllReviewedBanner && (
         <PostReviewBanner onRegenerate={handleRegenerate} isRegenerating={regenerate.isPending} />
-      )}
-
-      {/* Detail modal */}
-      {detailItem && (
-        <PipelineDetailModal
-          item={detailItem}
-          onClose={() => setDetailItem(null)}
-          onApprove={handleApprove}
-          onReject={handleReject}
-          onEdit={handleEdit}
-        />
       )}
     </div>
   )

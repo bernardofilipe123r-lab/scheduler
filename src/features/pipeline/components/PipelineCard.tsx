@@ -1,22 +1,36 @@
-import { CheckCircle2, X, Eye, Star } from 'lucide-react'
+import { CheckCircle2, X, Trash2, RefreshCw, Star, Loader2 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { format } from 'date-fns'
 import { ContentPreview } from './ContentPreview'
-import type { PipelineItem } from '../model/types'
+import type { PipelineItem, LifecycleStage } from '../model/types'
 
 interface Props {
   item: PipelineItem
   onApprove: (id: string) => void
   onReject: (id: string) => void
-  onOpen: (item: PipelineItem) => void
+  onNavigate: (item: PipelineItem) => void
+  onDelete: (id: string) => void
+  onRegenerate: (id: string) => void
   selected: boolean
   onToggleSelect: (id: string) => void
 }
 
-const STATUS_STYLES = {
-  pending: 'border-amber-200 bg-white',
-  approved: 'border-emerald-200 bg-emerald-50/30',
+const LIFECYCLE_STYLES: Record<LifecycleStage, string> = {
+  pending_review: 'border-amber-200 bg-white',
+  generating: 'border-blue-200 bg-blue-50/30',
+  scheduled: 'border-indigo-200 bg-indigo-50/30',
+  published: 'border-emerald-200 bg-emerald-50/30',
   rejected: 'border-red-200 bg-red-50/30 opacity-60',
+  failed: 'border-red-200 bg-red-50/30 opacity-70',
+}
+
+const LIFECYCLE_BADGES: Record<LifecycleStage, { label: string; className: string }> = {
+  pending_review: { label: 'Pending', className: 'bg-amber-100 text-amber-700' },
+  generating: { label: 'Generating', className: 'bg-blue-100 text-blue-700' },
+  scheduled: { label: 'Scheduled', className: 'bg-indigo-100 text-indigo-700' },
+  published: { label: 'Published', className: 'bg-emerald-100 text-emerald-700' },
+  rejected: { label: 'Rejected', className: 'bg-red-100 text-red-600' },
+  failed: { label: 'Failed', className: 'bg-red-100 text-red-600' },
 }
 
 function variantLabel(item: PipelineItem): string {
@@ -28,18 +42,22 @@ function variantLabel(item: PipelineItem): string {
   return item.variant
 }
 
-export function PipelineCard({ item, onApprove, onReject, onOpen, selected, onToggleSelect }: Props) {
-  const isPending = item.pipeline_status === 'pending'
+export function PipelineCard({ item, onApprove, onReject, onNavigate, onDelete, onRegenerate, selected, onToggleSelect }: Props) {
+  const lifecycle = item.lifecycle
+  const isPending = lifecycle === 'pending_review'
+  const isGenerating = lifecycle === 'generating'
+  const canRegenerate = lifecycle !== 'scheduled' && lifecycle !== 'published'
+  const badge = LIFECYCLE_BADGES[lifecycle]
 
   return (
     <div
       className={clsx(
         'relative rounded-xl border transition-all hover:shadow-md group',
-        STATUS_STYLES[item.pipeline_status],
+        LIFECYCLE_STYLES[lifecycle],
         selected && 'ring-2 ring-blue-400',
       )}
     >
-      {/* Select checkbox */}
+      {/* Select checkbox (pending only) */}
       {isPending && (
         <label className="absolute top-2 left-2 z-10 cursor-pointer">
           <input
@@ -51,13 +69,27 @@ export function PipelineCard({ item, onApprove, onReject, onOpen, selected, onTo
         </label>
       )}
 
-      {/* Preview */}
-      <div className="p-2 cursor-pointer" onClick={() => onOpen(item)}>
-        <ContentPreview item={item} />
+      {/* Lifecycle badge */}
+      <div className="absolute top-2 right-2 z-10">
+        <span className={clsx('text-[10px] font-semibold px-1.5 py-0.5 rounded-full', badge.className)}>
+          {badge.label}
+        </span>
+      </div>
+
+      {/* Preview — click navigates to detail */}
+      <div className="p-2 cursor-pointer" onClick={() => onNavigate(item)}>
+        {isGenerating ? (
+          <div className="aspect-[9/16] max-h-40 rounded-lg bg-gray-100 flex flex-col items-center justify-center">
+            <Loader2 className="w-6 h-6 text-blue-400 animate-spin mb-2" />
+            <span className="text-xs text-gray-400">Generating…</span>
+          </div>
+        ) : (
+          <ContentPreview item={item} />
+        )}
       </div>
 
       {/* Meta */}
-      <div className="px-3 pb-2 space-y-1">
+      <div className="px-3 pb-2 space-y-1 cursor-pointer" onClick={() => onNavigate(item)}>
         <div className="flex items-center justify-between">
           <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
             {variantLabel(item)}
@@ -71,7 +103,7 @@ export function PipelineCard({ item, onApprove, onReject, onOpen, selected, onTo
         </div>
 
         <p className="text-sm font-medium text-gray-800 line-clamp-2 leading-snug">
-          {item.title}
+          {item.title || 'Untitled'}
         </p>
 
         {item.brands.length > 0 && (
@@ -90,33 +122,52 @@ export function PipelineCard({ item, onApprove, onReject, onOpen, selected, onTo
       </div>
 
       {/* Actions */}
-      {isPending && (
-        <div className="flex border-t border-gray-100">
-          <button
-            onClick={() => onApprove(item.job_id)}
-            className="flex-1 flex items-center justify-center gap-1 py-2 text-xs font-medium text-emerald-600 hover:bg-emerald-50 transition-colors rounded-bl-xl"
-          >
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            Approve
-          </button>
-          <div className="w-px bg-gray-100" />
-          <button
-            onClick={() => onOpen(item)}
-            className="flex-1 flex items-center justify-center gap-1 py-2 text-xs font-medium text-gray-500 hover:bg-gray-50 transition-colors"
-          >
-            <Eye className="w-3.5 h-3.5" />
-            Review
-          </button>
-          <div className="w-px bg-gray-100" />
-          <button
-            onClick={() => onReject(item.job_id)}
-            className="flex-1 flex items-center justify-center gap-1 py-2 text-xs font-medium text-red-500 hover:bg-red-50 transition-colors rounded-br-xl"
-          >
-            <X className="w-3.5 h-3.5" />
-            Reject
-          </button>
-        </div>
-      )}
+      <div className="flex border-t border-gray-100">
+        {/* Approve + Reject for pending */}
+        {isPending && (
+          <>
+            <button
+              onClick={() => onApprove(item.job_id)}
+              className="flex-1 flex items-center justify-center gap-1 py-2 text-xs font-medium text-emerald-600 hover:bg-emerald-50 transition-colors rounded-bl-xl"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Approve
+            </button>
+            <div className="w-px bg-gray-100" />
+            <button
+              onClick={() => onReject(item.job_id)}
+              className="flex-1 flex items-center justify-center gap-1 py-2 text-xs font-medium text-red-500 hover:bg-red-50 transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+              Reject
+            </button>
+            <div className="w-px bg-gray-100" />
+          </>
+        )}
+
+        {/* Regenerate for non-scheduled/published */}
+        {!isPending && canRegenerate && (
+          <>
+            <button
+              onClick={() => onRegenerate(item.job_id)}
+              className="flex-1 flex items-center justify-center gap-1 py-2 text-xs font-medium text-blue-600 hover:bg-blue-50 transition-colors rounded-bl-xl"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Regenerate
+            </button>
+            <div className="w-px bg-gray-100" />
+          </>
+        )}
+
+        {/* Delete always */}
+        <button
+          onClick={() => onDelete(item.job_id)}
+          className="flex-1 flex items-center justify-center gap-1 py-2 text-xs font-medium text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors rounded-br-xl"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+          Delete
+        </button>
+      </div>
     </div>
   )
 }

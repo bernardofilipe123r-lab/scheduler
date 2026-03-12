@@ -5,12 +5,14 @@ interface Props {
   items: PipelineItem[]
   onApprove: (id: string) => void
   onReject: (id: string) => void
-  onOpen: (item: PipelineItem) => void
+  onNavigate: (item: PipelineItem) => void
+  onDelete: (id: string) => void
+  onRegenerate: (id: string) => void
   selectedIds: Set<string>
   onToggleSelect: (id: string) => void
 }
 
-export function PipelineGrid({ items, onApprove, onReject, onOpen, selectedIds, onToggleSelect }: Props) {
+export function PipelineGrid({ items, onApprove, onReject, onNavigate, onDelete, onRegenerate, selectedIds, onToggleSelect }: Props) {
   if (items.length === 0) return null
 
   return (
@@ -21,7 +23,9 @@ export function PipelineGrid({ items, onApprove, onReject, onOpen, selectedIds, 
           item={item}
           onApprove={onApprove}
           onReject={onReject}
-          onOpen={onOpen}
+          onNavigate={onNavigate}
+          onDelete={onDelete}
+          onRegenerate={onRegenerate}
           selected={selectedIds.has(item.job_id)}
           onToggleSelect={onToggleSelect}
         />
