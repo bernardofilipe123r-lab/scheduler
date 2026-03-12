@@ -121,10 +121,16 @@ export function LoginPage() {
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
         redirectTo: buildAppUrl('/reset-password'),
       })
-      if (error) throw new Error(error.message)
+      if (error) throw error
       setResetSent(true)
-    } catch {
-      toast.error('Failed to send reset email. Please try again.')
+    } catch (err: unknown) {
+      const status = (err as { status?: number })?.status
+      const msg = err instanceof Error ? err.message : ''
+      if (status === 429 || msg.includes('rate limit') || msg.includes('429')) {
+        toast.error('Too many requests — please wait a minute before trying again.')
+      } else {
+        toast.error('Failed to send reset email. Please try again.')
+      }
     } finally {
       setIsLoading(false)
     }
