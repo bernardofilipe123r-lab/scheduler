@@ -1,6 +1,5 @@
 import { useState, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQueryClient } from '@tanstack/react-query'
 import { GitPullRequestDraft } from 'lucide-react'
 import { AnimatePresence } from 'framer-motion'
 import {
@@ -17,16 +16,13 @@ import {
   useRejectPipelineItem,
   useBulkApprovePipeline,
   useBulkRejectPipeline,
-  useRegeneratePipeline,
   usePipelineFilters,
-  pipelineKeys,
 } from '@/features/pipeline'
 import type { PipelineItem } from '@/features/pipeline'
 import { PipelineSkeleton } from '@/shared/components/Skeleton'
 
 export function PipelinePage() {
   const navigate = useNavigate()
-  const queryClient = useQueryClient()
   const { filters, setStatus, setBrand, setContentType, resetFilters } = usePipelineFilters()
   const { data: statsData, isLoading: statsLoading } = usePipelineStats()
   const { data: pipelineData, isLoading: itemsLoading, isError: itemsError } = usePipelineItems(filters)
@@ -34,7 +30,6 @@ export function PipelinePage() {
   const reject = useRejectPipelineItem()
   const bulkApprove = useBulkApprovePipeline()
   const bulkReject = useBulkRejectPipeline()
-  const regenerate = useRegeneratePipeline()
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [reviewModalIndex, setReviewModalIndex] = useState<number | null>(null)
@@ -102,15 +97,6 @@ export function PipelinePage() {
     if (idx >= 0) setReviewModalIndex(idx)
   }, [items])
 
-  const handleRegenerate = useCallback(() => {
-    regenerate.mutate(3)
-  }, [regenerate])
-
-  const handleRegenerateItem = useCallback((_id: string) => {
-    queryClient.invalidateQueries({ queryKey: pipelineKeys.all })
-    regenerate.mutate(1)
-  }, [queryClient, regenerate])
-
   const showAllReviewedBanner = filters.status === 'pending_review' && items.length === 0 && !itemsLoading && (statsData?.pending_review ?? 0) === 0 && (statsData?.scheduled ?? 0) > 0
 
   return (
@@ -152,7 +138,6 @@ export function PipelinePage() {
           onReject={handleReject}
           onEdit={handleEdit}
           onOpenReview={handleOpenReview}
-          onRegenerate={handleRegenerateItem}
           selectedIds={selectedIds}
           onToggleSelect={toggleSelect}
         />
@@ -170,7 +155,7 @@ export function PipelinePage() {
       )}
 
       {!itemsError && showAllReviewedBanner && (
-        <PostReviewBanner onRegenerate={handleRegenerate} isRegenerating={regenerate.isPending} />
+        <PostReviewBanner />
       )}
 
       {/* Review modal (Tinder-style video review) */}

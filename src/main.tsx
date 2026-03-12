@@ -16,8 +16,9 @@ function dismissPreloader() {
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <AppProviders onReady={dismissPreloader} />
-    <Toaster 
+    <Toaster
       position="top-right"
+      containerStyle={{ zIndex: 99999 }}
       toastOptions={{
         duration: 3000,
         style: {

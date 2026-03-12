@@ -264,9 +264,39 @@ export function ReviewModal({ items: externalItems, initialIndex, onApprove, onR
   const [isAnimating, setIsAnimating] = useState(false)
   const [muted, setMuted] = useState(true)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const preloadRef = useRef<HTMLVideoElement[]>([])
 
   const item = queue[currentIdx]
   const contentMode = item ? getContentMode(item) : 'unknown'
+
+  // Preload next 2 items' videos + thumbnails in background
+  useEffect(() => {
+    // Clean up old preload elements
+    preloadRef.current.forEach(v => { v.src = ''; v.load() })
+    preloadRef.current = []
+
+    const upcoming = queue.slice(currentIdx + 1, currentIdx + 3)
+    for (const next of upcoming) {
+      const videoUrl = getVideoUrl(next)
+      if (videoUrl) {
+        const v = document.createElement('video')
+        v.preload = 'auto'
+        v.muted = true
+        v.src = videoUrl
+        v.load()
+        preloadRef.current.push(v)
+      }
+      const thumb = getThumbnail(next)
+      if (thumb) {
+        const img = new Image()
+        img.src = thumb
+      }
+    }
+    return () => {
+      preloadRef.current.forEach(v => { v.src = ''; v.load() })
+      preloadRef.current = []
+    }
+  }, [currentIdx, queue])
 
   useEffect(() => {
     if (queue.length === 0) onClose()

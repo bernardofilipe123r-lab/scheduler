@@ -40,13 +40,22 @@ export function useApprovePipelineItem() {
   return useMutation({
     mutationFn: ({ jobId, caption }: { jobId: string; caption?: string }) =>
       post(`/api/pipeline/${jobId}/approve`, { caption }),
+    onMutate: async ({ jobId }) => {
+      // Optimistically remove item from all cached pipeline lists
+      await queryClient.cancelQueries({ queryKey: pipelineKeys.all })
+      queryClient.setQueriesData<PipelineResponse>(
+        { queryKey: pipelineKeys.all },
+        (old) => old ? { ...old, items: old.items.filter(i => i.job_id !== jobId) } : old,
+      )
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: pipelineKeys.all })
       queryClient.invalidateQueries({ queryKey: jobKeys.all })
       toast.success('Content approved and scheduled!')
     },
     onError: () => {
-      toast.error('Failed to approve — please try again')
+      queryClient.invalidateQueries({ queryKey: pipelineKeys.all })
+      toast.error('Failed to schedule — please try again')
     },
   })
 }
@@ -56,12 +65,20 @@ export function useRejectPipelineItem() {
   return useMutation({
     mutationFn: ({ jobId, reason }: { jobId: string; reason?: string }) =>
       post(`/api/pipeline/${jobId}/reject`, { reason }),
+    onMutate: async ({ jobId }) => {
+      await queryClient.cancelQueries({ queryKey: pipelineKeys.all })
+      queryClient.setQueriesData<PipelineResponse>(
+        { queryKey: pipelineKeys.all },
+        (old) => old ? { ...old, items: old.items.filter(i => i.job_id !== jobId) } : old,
+      )
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: pipelineKeys.all })
       queryClient.invalidateQueries({ queryKey: jobKeys.all })
       toast('Content rejected', { icon: '🗑️' })
     },
     onError: () => {
+      queryClient.invalidateQueries({ queryKey: pipelineKeys.all })
       toast.error('Failed to reject — please try again')
     },
   })

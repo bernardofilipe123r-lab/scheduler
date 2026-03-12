@@ -1,4 +1,4 @@
-import { CheckCircle2, X, Pencil, RefreshCw, Star, Loader2 } from 'lucide-react'
+import { CheckCircle2, X, Pencil, Star, Loader2 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { format } from 'date-fns'
 import { ContentPreview } from './ContentPreview'
@@ -10,7 +10,6 @@ interface Props {
   onReject: (id: string) => void
   onEdit: (item: PipelineItem) => void
   onOpenReview: (item: PipelineItem) => void
-  onRegenerate: (id: string) => void
   selected: boolean
   onToggleSelect: (id: string) => void
 }
@@ -42,11 +41,10 @@ function variantLabel(item: PipelineItem): string {
   return item.variant
 }
 
-export function PipelineCard({ item, onApprove, onReject, onEdit, onOpenReview, onRegenerate, selected, onToggleSelect }: Props) {
+export function PipelineCard({ item, onApprove, onReject, onEdit, onOpenReview, selected, onToggleSelect }: Props) {
   const lifecycle = item.lifecycle
   const isPending = lifecycle === 'pending_review'
   const isGenerating = lifecycle === 'generating'
-  const canRegenerate = lifecycle !== 'scheduled' && lifecycle !== 'published'
   const badge = LIFECYCLE_BADGES[lifecycle]
 
   return (
@@ -151,17 +149,7 @@ export function PipelineCard({ item, onApprove, onReject, onEdit, onOpenReview, 
           </>
         )}
 
-        {!isPending && canRegenerate && (
-          <button
-            onClick={() => onRegenerate(item.job_id)}
-            className="flex-1 flex items-center justify-center gap-1 py-2 text-xs font-medium text-blue-600 hover:bg-blue-50 transition-colors rounded-b-xl"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            Regenerate
-          </button>
-        )}
-
-        {!isPending && !canRegenerate && (
+        {!isPending && (
           <button
             onClick={() => onEdit(item)}
             className="flex-1 flex items-center justify-center gap-1 py-2 text-xs font-medium text-gray-500 hover:bg-gray-50 transition-colors rounded-b-xl"
