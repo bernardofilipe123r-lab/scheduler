@@ -29,6 +29,20 @@ export function ResetPasswordPage() {
     let active = true
 
     const checkRecoveryState = async () => {
+      // PKCE flow: exchange the code for a session first
+      const searchParams = new URLSearchParams(window.location.search)
+      const code = searchParams.get('code')
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code)
+        if (!active) return
+        if (!error) {
+          setCanReset(true)
+          setIsReady(true)
+          return
+        }
+      }
+
+      // Implicit flow: check hash params + existing session
       const { data: { session } } = await supabase.auth.getSession()
       if (!active) return
 
