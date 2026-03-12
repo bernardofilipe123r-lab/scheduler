@@ -57,7 +57,7 @@ class FormatBDesign(Base):
     thumbnail_overlay_opacity = Column(Integer, default=90)
     thumbnail_logo_size = Column(Integer, default=100)
 
-    # Image source mode: 'ai' (Freepik/DeAPI) or 'web' (SearchApi + fallback)
+    # Image source mode: 'ai' (Freepik/DeAPI) or 'web' (Pexels)
     image_source_mode = Column(String(10), default="ai", nullable=False, server_default="ai")
 
     created_at = Column(TIMESTAMP(timezone=True), server_default="now()")

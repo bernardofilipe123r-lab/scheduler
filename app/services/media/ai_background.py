@@ -686,8 +686,8 @@ class AIBackgroundGenerator:
                 start_time=start_time,
             )
 
-        if effective_model == "searchapi":
-            return self._generate_via_searchapi_post(
+        if effective_model in ("searchapi", "pexels"):
+            return self._generate_via_pexels_post(
                 query=content_context or prompt,
                 prompt_fallback=prompt,
                 progress_callback=progress_callback,
@@ -774,18 +774,18 @@ class AIBackgroundGenerator:
             progress_callback(f"Freepik image ready ({elapsed:.1f}s)", 100)
         return img
 
-    def _generate_via_searchapi_post(
+    def _generate_via_pexels_post(
         self,
         query: str,
         prompt_fallback: str,
         progress_callback=None,
         start_time: float = None,
     ) -> Image.Image:
-        """Fetch a web image via SearchApi Google Images, fall back to DeAPI."""
+        """Fetch a web image via Pexels, fall back to DeAPI."""
         if progress_callback:
-            progress_callback("Searching web images...", 30)
+            progress_callback("Searching Pexels photos...", 30)
 
-        print(f"🌐 SearchApi searching: {query[:80]}...", flush=True)
+        print(f"📷 Pexels searching: {query[:80]}...", flush=True)
 
         try:
             from app.services.media.web_image_sourcer import WebImageSourcer
@@ -796,12 +796,12 @@ class AIBackgroundGenerator:
                 img = img.convert("RGB")
                 img = self._cover_crop(img, POST_WIDTH, POST_HEIGHT)
                 elapsed = time.time() - (start_time or time.time())
-                print(f"✅ SearchApi web image {POST_WIDTH}x{POST_HEIGHT} in {elapsed:.1f}s", flush=True)
+                print(f"✅ Pexels web image {POST_WIDTH}x{POST_HEIGHT} in {elapsed:.1f}s", flush=True)
                 if progress_callback:
-                    progress_callback(f"Web image ready ({elapsed:.1f}s)", 100)
+                    progress_callback(f"Pexels image ready ({elapsed:.1f}s)", 100)
                 return img
         except Exception as e:
-            print(f"⚠️ SearchApi failed: {e}, falling back to DeAPI", flush=True)
+            print(f"⚠️ Pexels failed: {e}, falling back to DeAPI", flush=True)
 
         # Fallback to DeAPI with Flux1schnell
         print(f"🔄 Falling back to DeAPI (Flux1schnell)...", flush=True)
