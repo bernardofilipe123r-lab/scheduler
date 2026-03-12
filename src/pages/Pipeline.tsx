@@ -27,7 +27,7 @@ export function PipelinePage() {
   const queryClient = useQueryClient()
   const { filters, setStatus, setBrand, setContentType, resetFilters } = usePipelineFilters()
   const { data: statsData, isLoading: statsLoading } = usePipelineStats()
-  const { data: pipelineData, isLoading: itemsLoading } = usePipelineItems(filters)
+  const { data: pipelineData, isLoading: itemsLoading, isError: itemsError } = usePipelineItems(filters)
   const approve = useApprovePipelineItem()
   const reject = useRejectPipelineItem()
   const bulkApprove = useBulkApprovePipeline()
@@ -109,7 +109,7 @@ export function PipelinePage() {
     })
   }, [deleteJob, queryClient, regenerate])
 
-  const showAllReviewedBanner = filters.status === 'pending_review' && items.length === 0 && !itemsLoading && (statsData?.scheduled ?? 0) > 0
+  const showAllReviewedBanner = filters.status === 'pending_review' && items.length === 0 && !itemsLoading && (statsData?.pending_review ?? 0) === 0 && (statsData?.scheduled ?? 0) > 0
 
   return (
     <div className="space-y-5">
@@ -163,11 +163,17 @@ export function PipelinePage() {
       )}
 
       {/* Empty states */}
-      {!itemsLoading && items.length === 0 && !showAllReviewedBanner && (
+      {itemsError && !itemsLoading && (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <p className="text-sm text-red-500 font-medium mb-1">Failed to load content</p>
+          <p className="text-xs text-gray-400">Please refresh the page or try again later.</p>
+        </div>
+      )}
+      {!itemsLoading && !itemsError && items.length === 0 && !showAllReviewedBanner && (
         <EmptyState status={filters.status} />
       )}
 
-      {showAllReviewedBanner && (
+      {!itemsError && showAllReviewedBanner && (
         <PostReviewBanner onRegenerate={handleRegenerate} isRegenerating={regenerate.isPending} />
       )}
     </div>

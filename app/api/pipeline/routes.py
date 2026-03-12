@@ -97,10 +97,10 @@ def _serialize_pipeline_item(job: GenerationJob) -> dict:
 async def list_pipeline_items(
     status: Optional[str] = Query(
         "pending_review",
-        regex="^(pending_review|generating|scheduled|published|rejected|failed|all)$",
+        pattern="^(pending_review|generating|scheduled|published|rejected|failed|all)$",
     ),
     brand: Optional[str] = None,
-    content_type: Optional[str] = Query(None, regex="^(all|reels|carousels|threads)$"),
+    content_type: Optional[str] = Query(None, pattern="^(all|reels|carousels|threads)$"),
     batch_id: Optional[str] = None,
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=200),
