@@ -77,3 +77,21 @@ export function getDNAStrength(dna: ContentDNAProfile): ConfigStrength {
   // Reuse the existing strength calculator by treating DNA as NicheConfig
   return getConfigStrength(dna as unknown as NicheConfig)
 }
+
+/** Pre-built DNA template that users can copy to create a new profile. */
+export interface ContentDNATemplate {
+  id: string
+  template_name: string
+  template_category: string
+  is_active: boolean
+  popularity_order: number
+  niche_name: string
+  content_brief: string
+  reel_examples: Array<{ title: string; content_lines: string[] }>
+  post_examples: Array<{ title: string; slides: string[]; study_ref?: string }>
+  cta_options: Array<{ text: string; weight: number }>
+  carousel_cta_options: Array<{ text: string; weight: number }>
+  carousel_cta_topic: string
+  citation_style: string
+  created_at: string
+}

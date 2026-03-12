@@ -6,9 +6,10 @@ import { Mail, Lock, Eye, EyeOff, Loader2, ArrowRight, ArrowLeft, Zap, BarChart3
 import { motion, AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/features/auth'
+import { supabase, buildAppUrl } from '@/shared/api/supabase'
 import vaLogo from '@/assets/icons/va-logo.svg'
 
-type Mode = 'login' | 'register' | 'verify-email'
+type Mode = 'login' | 'register' | 'verify-email' | 'forgot-password'
 
 const FEATURES = [
   { icon: Zap, label: 'AI-Powered Generation', desc: 'Create high-converting reels, carousels & posts in seconds' },
@@ -110,6 +111,25 @@ export function LoginPage() {
     }
   }
 
+  const [resetSent, setResetSent] = useState(false)
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!email) return
+    setIsLoading(true)
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: buildAppUrl('/reset-password'),
+      })
+      if (error) throw new Error(error.message)
+      setResetSent(true)
+    } catch {
+      toast.error('Failed to send reset email. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim() || !email || !password || !confirmPassword) return
@@ -202,6 +222,54 @@ export function LoginPage() {
       )
     }
 
+    if (mode === 'forgot-password') {
+      if (resetSent) {
+        return (
+          <motion.div key="forgot-sent" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex flex-col items-center text-center py-6">
+            <div className="w-16 h-16 rounded-2xl bg-primary-500/10 flex items-center justify-center mb-6">
+              <Mail className="w-8 h-8 text-primary-500" />
+            </div>
+            <h1 className="text-[26px] sm:text-[30px] font-bold text-gray-900 tracking-tight">Check your inbox</h1>
+            <p className="mt-3 text-[14px] text-gray-400 max-w-[320px]">
+              We sent a password reset link to:
+            </p>
+            <div className="mt-3 px-5 py-2.5 bg-gray-100 rounded-xl border border-gray-200">
+              <p className="text-[14px] font-medium text-gray-700">{email}</p>
+            </div>
+            <p className="mt-5 text-[13px] text-gray-400 max-w-[300px] leading-relaxed">
+              Click the link in the email to reset your password. The link expires in 1 hour.
+            </p>
+            <button
+              onClick={() => { setResetSent(false); switchMode('login') }}
+              className="mt-8 inline-flex items-center gap-1.5 text-[13px] font-medium text-primary-500 hover:text-primary-600 transition-colors"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              Back to sign in
+            </button>
+          </motion.div>
+        )
+      }
+
+      return (
+        <motion.div key="forgot" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+          <div className="mb-8">
+            <h1 className="text-[26px] sm:text-[30px] font-bold text-gray-900 tracking-tight">Reset password</h1>
+            <p className="mt-2 text-[14px] text-gray-400">Enter your email and we'll send you a reset link.</p>
+          </div>
+          <form onSubmit={handleForgotPassword} className="space-y-5">
+            <InputField icon={Mail} label="Email" type="email" value={email} onChange={setEmail} placeholder="you@example.com" autoComplete="email" autoFocus fieldName="email" {...fieldProps} />
+            {submitButton('Send Reset Link', !email)}
+          </form>
+          <p className="mt-6 text-center text-[13px] text-gray-400">
+            Remember your password?{' '}
+            <button onClick={() => switchMode('login')} className="font-medium text-primary-500 hover:text-primary-600 transition-colors">
+              Sign in
+            </button>
+          </p>
+        </motion.div>
+      )
+    }
+
     if (mode === 'register') {
       return (
         <motion.div key="register" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
@@ -250,7 +318,12 @@ export function LoginPage() {
           />
           {submitButton('Sign In', !email || !password)}
         </form>
-        <p className="mt-6 text-center text-[13px] text-gray-400">
+        <div className="mt-4 text-center">
+          <button onClick={() => { setResetSent(false); switchMode('forgot-password') }} className="text-[13px] font-medium text-gray-400 hover:text-primary-500 transition-colors">
+            Forgot your password?
+          </button>
+        </div>
+        <p className="mt-4 text-center text-[13px] text-gray-400">
           Don't have an account?{' '}
           <button onClick={() => switchMode('register')} className="font-medium text-primary-500 hover:text-primary-600 transition-colors">
             Create one

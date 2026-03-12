@@ -8,7 +8,7 @@
  * - DNA editor opens inline without page jump
  */
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Plus, Trash2, Settings2, ChevronDown, FolderHeart, Loader2, X, UserPlus, ArrowRight } from 'lucide-react'
+import { Plus, Trash2, Settings2, ChevronDown, FolderHeart, Loader2, X, UserPlus, ArrowRight, Sparkles, FileText } from 'lucide-react'
 import toast from 'react-hot-toast'
 import {
   useContentDNAProfiles,
@@ -16,9 +16,11 @@ import {
   useDeleteContentDNA,
   useAssignBrandToDNA,
   useUnassignBrandFromDNA,
+  useContentDNATemplates,
+  useCreateDNAFromTemplate,
   getDNAStrength,
 } from '@/features/content-dna'
-import type { ContentDNAProfile } from '@/features/content-dna'
+import type { ContentDNAProfile, ContentDNATemplate } from '@/features/content-dna'
 import { useBrands, type Brand } from '@/features/brands/api/use-brands'
 import { getStrengthBarColor, getStrengthPercent } from '@/features/brands/types/niche-config'
 import { NicheConfigForm } from '@/features/brands/components/NicheConfigForm'
@@ -26,13 +28,16 @@ import { NicheConfigForm } from '@/features/brands/components/NicheConfigForm'
 export function DNAProfilesManager() {
   const { data: dnaData, isLoading } = useContentDNAProfiles()
   const { data: brands } = useBrands()
+  const { data: templatesData } = useContentDNATemplates()
   const createMutation = useCreateContentDNA()
   const deleteMutation = useDeleteContentDNA()
   const assignMutation = useAssignBrandToDNA()
   const unassignMutation = useUnassignBrandFromDNA()
+  const templateMutation = useCreateDNAFromTemplate()
 
   const [newName, setNewName] = useState('')
   const [showCreate, setShowCreate] = useState(false)
+  const [createMode, setCreateMode] = useState<'pick' | 'scratch' | null>(null)
   const [pickerDnaId, setPickerDnaId] = useState<string | null>(null)
   const [editingDnaId, setEditingDnaId] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
@@ -50,6 +55,7 @@ export function DNAProfilesManager() {
       await createMutation.mutateAsync({ name })
       setNewName('')
       setShowCreate(false)
+      setCreateMode(null)
       toast.success('DNA profile created')
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Failed to create DNA profile')
@@ -85,6 +91,24 @@ export function DNAProfilesManager() {
     }
   }
 
+  const handleCreateFromTemplate = async (templateId: string) => {
+    try {
+      const result = await templateMutation.mutateAsync(templateId)
+      setShowCreate(false)
+      setCreateMode(null)
+      setEditingDnaId(result.profile.id)
+      toast.success('DNA profile created from template')
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Failed to create from template')
+    }
+  }
+
+  const closeCreate = () => {
+    setShowCreate(false)
+    setCreateMode(null)
+    setNewName('')
+  }
+
   const unassignedBrands = allBrands.filter((b: Brand) => !b.content_dna_id)
 
   if (isLoading) {
@@ -117,7 +141,7 @@ export function DNAProfilesManager() {
       )}
 
       {/* DNA Profile Cards */}
-      {profiles.length === 0 ? (
+      {profiles.length === 0 && !showCreate ? (
         <div className="text-center py-16 bg-white border border-gray-200 rounded-2xl">
           <FolderHeart className="w-14 h-14 mx-auto text-gray-200 mb-4" />
           <p className="text-gray-600 font-medium">No Content DNA profiles yet</p>
@@ -132,7 +156,7 @@ export function DNAProfilesManager() {
             Create Your First DNA
           </button>
         </div>
-      ) : (
+      ) : profiles.length === 0 && showCreate ? null : (
         <div className="space-y-4">
           {profiles.map((dna) => {
             const isEditing = editingDnaId === dna.id
@@ -178,32 +202,151 @@ export function DNAProfilesManager() {
       )}
 
       {showCreate && (
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <div className="flex items-center justify-between mb-3">
+        <div className="bg-white border border-gray-200 rounded-xl p-5">
+          <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-gray-700">New Content DNA Profile</h3>
-            <button onClick={() => { setShowCreate(false); setNewName('') }} className="text-gray-400 hover:text-gray-600">
+            <button onClick={closeCreate} className="text-gray-400 hover:text-gray-600">
               <X className="w-4 h-4" />
             </button>
           </div>
-          <div className="flex gap-3">
-            <input
-              type="text"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder="e.g. Health & Wellness, Tech Reviews..."
-              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-500"
-              onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-              autoFocus
+
+          {/* Step 1: Pick method */}
+          {!createMode && (
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setCreateMode('pick')}
+                className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-gray-200 hover:border-primary-300 hover:bg-primary-50 transition-all text-center group"
+              >
+                <div className="w-10 h-10 rounded-xl bg-primary-100 flex items-center justify-center group-hover:bg-primary-200 transition-colors">
+                  <Sparkles className="w-5 h-5 text-primary-600" />
+                </div>
+                <span className="text-sm font-semibold text-gray-700">Use a Template</span>
+                <span className="text-xs text-gray-400">Start with a pre-built niche DNA</span>
+              </button>
+              <button
+                onClick={() => setCreateMode('scratch')}
+                className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-gray-200 hover:border-gray-400 hover:bg-gray-50 transition-all text-center group"
+              >
+                <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center group-hover:bg-gray-200 transition-colors">
+                  <FileText className="w-5 h-5 text-gray-500" />
+                </div>
+                <span className="text-sm font-semibold text-gray-700">Start from Scratch</span>
+                <span className="text-xs text-gray-400">Create a blank DNA profile</span>
+              </button>
+            </div>
+          )}
+
+          {/* Step 2a: Template picker */}
+          {createMode === 'pick' && (
+            <TemplatePicker
+              templates={templatesData?.templates ?? []}
+              onSelect={handleCreateFromTemplate}
+              isPending={templateMutation.isPending}
+              onBack={() => setCreateMode(null)}
             />
+          )}
+
+          {/* Step 2b: From scratch — name input */}
+          {createMode === 'scratch' && (
+            <div>
+              <button onClick={() => setCreateMode(null)} className="text-xs text-gray-400 hover:text-gray-600 mb-3 flex items-center gap-1">
+                ← Back
+              </button>
+              <div className="flex gap-3">
+                <input
+                  type="text"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder="e.g. Health & Wellness, Tech Reviews..."
+                  className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-500"
+                  onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+                  autoFocus
+                />
+                <button
+                  onClick={handleCreate}
+                  disabled={createMutation.isPending || !newName.trim()}
+                  className="flex items-center gap-2 px-5 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium disabled:opacity-50"
+                >
+                  {createMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                  Create
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ── Template Picker Grid ───────────────────────────────────────── */
+
+const CATEGORY_STYLES: Record<string, { emoji: string; bg: string; border: string; hover: string }> = {
+  finance:        { emoji: '💰', bg: 'bg-emerald-50',  border: 'border-emerald-200', hover: 'hover:border-emerald-400' },
+  fitness:        { emoji: '💪', bg: 'bg-orange-50',   border: 'border-orange-200',  hover: 'hover:border-orange-400' },
+  'self-improvement': { emoji: '🧠', bg: 'bg-violet-50', border: 'border-violet-200', hover: 'hover:border-violet-400' },
+  skincare:       { emoji: '✨', bg: 'bg-pink-50',     border: 'border-pink-200',    hover: 'hover:border-pink-400' },
+  cooking:        { emoji: '🍳', bg: 'bg-amber-50',    border: 'border-amber-200',   hover: 'hover:border-amber-400' },
+  travel:         { emoji: '✈️', bg: 'bg-sky-50',      border: 'border-sky-200',     hover: 'hover:border-sky-400' },
+  tech:           { emoji: '⚡', bg: 'bg-blue-50',     border: 'border-blue-200',    hover: 'hover:border-blue-400' },
+  fashion:        { emoji: '👗', bg: 'bg-rose-50',     border: 'border-rose-200',    hover: 'hover:border-rose-400' },
+  entrepreneurship: { emoji: '🚀', bg: 'bg-indigo-50', border: 'border-indigo-200',  hover: 'hover:border-indigo-400' },
+  psychology:     { emoji: '🔬', bg: 'bg-teal-50',     border: 'border-teal-200',    hover: 'hover:border-teal-400' },
+}
+
+function getCategoryStyle(category: string) {
+  return CATEGORY_STYLES[category] ?? { emoji: '📄', bg: 'bg-gray-50', border: 'border-gray-200', hover: 'hover:border-gray-400' }
+}
+
+function TemplatePicker({
+  templates,
+  onSelect,
+  isPending,
+  onBack,
+}: {
+  templates: ContentDNATemplate[]
+  onSelect: (templateId: string) => void
+  isPending: boolean
+  onBack: () => void
+}) {
+  if (templates.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <Loader2 className="w-5 h-5 mx-auto text-gray-300 animate-spin mb-2" />
+        <p className="text-sm text-gray-400">Loading templates...</p>
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <button onClick={onBack} className="text-xs text-gray-400 hover:text-gray-600 mb-3 flex items-center gap-1">
+        ← Back
+      </button>
+      <p className="text-xs text-gray-500 mb-3">Choose a niche template — all content examples, CTAs, and style will be pre-filled.</p>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-[340px] overflow-y-auto pr-1">
+        {templates.map((t) => {
+          const style = getCategoryStyle(t.template_category)
+          return (
             <button
-              onClick={handleCreate}
-              disabled={createMutation.isPending || !newName.trim()}
-              className="flex items-center gap-2 px-5 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium disabled:opacity-50"
+              key={t.id}
+              onClick={() => onSelect(t.id)}
+              disabled={isPending}
+              className={`flex flex-col items-start p-3.5 rounded-xl border-2 transition-all text-left disabled:opacity-50 ${style.bg} ${style.border} ${style.hover}`}
             >
-              {createMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-              Create
+              <span className="text-xl mb-1.5">{style.emoji}</span>
+              <span className="text-sm font-semibold text-gray-800 leading-tight">{t.template_name}</span>
+              {t.niche_name && (
+                <span className="text-[10px] text-gray-400 mt-1 line-clamp-1">{t.niche_name}</span>
+              )}
             </button>
-          </div>
+          )
+        })}
+      </div>
+      {isPending && (
+        <div className="flex items-center justify-center gap-2 mt-3 text-sm text-primary-600">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Creating profile...
         </div>
       )}
     </div>

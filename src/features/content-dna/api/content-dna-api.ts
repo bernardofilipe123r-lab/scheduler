@@ -2,7 +2,7 @@
  * Content DNA API client — CRUD + brand assignment.
  */
 import { apiClient } from '@/shared/api/client'
-import type { ContentDNAProfile, ContentDNACreate, ContentDNAUpdate } from '../types'
+import type { ContentDNAProfile, ContentDNACreate, ContentDNAUpdate, ContentDNATemplate } from '../types'
 
 // --- Fetch functions ---
 
@@ -40,4 +40,14 @@ export async function unassignBrandFromDNA(dnaId: string, brandId: string): Prom
   unassigned: boolean
 }> {
   return apiClient.post(`/api/content-dna/${dnaId}/unassign-brand`, { brand_id: brandId })
+}
+
+// --- Template functions ---
+
+export async function fetchDNATemplates(): Promise<{ templates: ContentDNATemplate[]; count: number }> {
+  return apiClient.get<{ templates: ContentDNATemplate[]; count: number }>('/api/content-dna/templates')
+}
+
+export async function createDNAFromTemplate(templateId: string): Promise<{ profile: ContentDNAProfile }> {
+  return apiClient.post<{ profile: ContentDNAProfile }>(`/api/content-dna/templates/${templateId}/use`, {})
 }

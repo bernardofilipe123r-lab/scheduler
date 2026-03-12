@@ -11,11 +11,14 @@ import {
   deleteDNAProfile,
   assignBrandToDNA,
   unassignBrandFromDNA,
+  fetchDNATemplates,
+  createDNAFromTemplate,
 } from '../api/content-dna-api'
 import type { ContentDNACreate, ContentDNAUpdate } from '../types'
 
 export const CONTENT_DNA_KEY = ['content-dna'] as const
 const BRANDS_KEY = ['brands'] as const
+const DNA_TEMPLATES_KEY = ['content-dna-templates'] as const
 
 interface BrandCacheItem {
   id: string
@@ -124,6 +127,26 @@ export function useUnassignBrandFromDNA() {
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: CONTENT_DNA_KEY })
       queryClient.invalidateQueries({ queryKey: BRANDS_KEY })
+    },
+  })
+}
+
+/** List all active DNA templates (presets). */
+export function useContentDNATemplates() {
+  return useQuery({
+    queryKey: [...DNA_TEMPLATES_KEY],
+    queryFn: fetchDNATemplates,
+    staleTime: 30 * 60 * 1000, // 30 min — templates rarely change
+  })
+}
+
+/** Create a DNA profile from a template. */
+export function useCreateDNAFromTemplate() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (templateId: string) => createDNAFromTemplate(templateId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: CONTENT_DNA_KEY })
     },
   })
 }

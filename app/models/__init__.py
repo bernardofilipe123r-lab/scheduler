@@ -43,6 +43,7 @@ from app.models.format_b_design import FormatBDesign
 from app.models.story_pool import StoryPool
 from app.models.api_usage import APIUsageLog
 from app.models.user_costs import UserCostDaily, UserCostMonthly
+from app.models.content_dna_template import ContentDNATemplate
 
 __all__ = [
     "Base",
@@ -83,4 +84,5 @@ __all__ = [
     "APIUsageLog",
     "UserCostDaily",
     "UserCostMonthly",
+    "ContentDNATemplate",
 ]
