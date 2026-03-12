@@ -26,6 +26,7 @@ import {
   ChevronDown,
   ExternalLink,
   Type,
+  Copy,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
@@ -49,7 +50,8 @@ import {
 } from '@/features/brands/constants'
 import { NicheConfigForm, type NicheConfigFormHandle } from '@/features/brands/components/NicheConfigForm'
 import { useImportFromInstagram } from '@/features/brands/api/use-niche-config'
-import { useCreateContentDNA, useAssignBrandToDNA } from '@/features/content-dna'
+import { useCreateContentDNA, useAssignBrandToDNA, useContentDNATemplates, useCreateDNAFromTemplate } from '@/features/content-dna'
+import { TemplatePicker } from '@/features/content-dna/components/TemplatePicker'
 import { supabase } from '@/shared/api/supabase'
 import { connectYouTube, connectInstagram, connectFacebook, connectThreads, connectTikTok, fetchFacebookPages, selectFacebookPage, fetchBrandConnections, type FacebookPage } from '@/features/brands/api/connections-api'
 import vaLogo from '@/assets/icons/va-logo.svg'
@@ -227,13 +229,16 @@ export function OnboardingPage() {
   const nicheFormRef = useRef<NicheConfigFormHandle>(null)
 
   // ── Step 4 state: Content DNA method choice (used by AI DNA import) ──
-  const [dnaMethod, setDnaMethod] = useState<'ai' | 'manual' | null>(null)
+  const [dnaMethod, setDnaMethod] = useState<'ai' | 'manual' | 'template' | null>(null)
   const [dnaImporting, setDnaImporting] = useState(false)
   const [dnaImported, setDnaImported] = useState(false)
   const importIgMutation = useImportFromInstagram()
   const [nicheNameFilled, setNicheNameFilled] = useState(false)
   const createDNAMutation = useCreateContentDNA()
   const assignBrandMutation = useAssignBrandToDNA()
+  const { data: templatesData } = useContentDNATemplates()
+  const templateMutation = useCreateDNAFromTemplate()
+  const [createdDnaId, setCreatedDnaId] = useState<string | null>(null)
 
   // Check connection status when entering step 3 or returning from OAuth
   useEffect(() => {
@@ -1435,6 +1440,22 @@ export function OnboardingPage() {
                         </div>
                       </div>
                     </button>
+
+                    {/* Template option */}
+                    <button
+                      onClick={() => setDnaMethod('template')}
+                      className="w-full text-left border border-purple-200 bg-purple-50/50 rounded-xl p-5 hover:border-purple-400 hover:shadow-md transition-all cursor-pointer"
+                    >
+                      <div className="flex items-start gap-4">
+                        <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center flex-shrink-0">
+                          <Copy className="w-5 h-5 text-purple-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">Use a Template</p>
+                          <p className="text-xs text-gray-500 mt-0.5">Pick a pre-built niche DNA with content examples, CTAs, and style pre-filled.</p>
+                        </div>
+                      </div>
+                    </button>
                   </div>
                 )}
 
@@ -1450,7 +1471,7 @@ export function OnboardingPage() {
                 )}
 
                 {/* Form — shown after AI finishes or manual is chosen */}
-                {dnaMethod && !dnaImporting && (
+                {(dnaMethod === 'ai' || dnaMethod === 'manual') && !dnaImporting && (
                   <>
                     {dnaMethod === 'ai' && dnaImported && (
                       <div className="max-w-lg mx-auto mb-4">
@@ -1460,8 +1481,35 @@ export function OnboardingPage() {
                         </div>
                       </div>
                     )}
-                    <NicheConfigForm ref={nicheFormRef} section="general" onNicheNameChange={(filled) => setNicheNameFilled(filled)} />
+                    <NicheConfigForm ref={nicheFormRef} section="general" dnaId={createdDnaId ?? undefined} onNicheNameChange={(filled) => setNicheNameFilled(filled)} />
                   </>
+                )}
+
+                {/* Template picker — shown when template method chosen */}
+                {dnaMethod === 'template' && (
+                  <div className="max-w-lg mx-auto">
+                    <TemplatePicker
+                      templates={templatesData?.templates ?? []}
+                      onSelect={async (templateId) => {
+                        try {
+                          const result = await templateMutation.mutateAsync(templateId)
+                          const dnaId = result.profile?.id
+                          if (dnaId) {
+                            setCreatedDnaId(dnaId)
+                            if (brandId) {
+                              await assignBrandMutation.mutateAsync({ dnaId, brandId })
+                            }
+                            toast.success('Content DNA created from template')
+                            setStep(5)
+                          }
+                        } catch (e: unknown) {
+                          toast.error(e instanceof Error ? e.message : 'Failed to create from template')
+                        }
+                      }}
+                      isPending={templateMutation.isPending}
+                      onBack={() => setDnaMethod(null)}
+                    />
+                  </div>
                 )}
               </motion.div>
             )}
@@ -1482,7 +1530,7 @@ export function OnboardingPage() {
                   <h1 className="text-[24px] font-bold text-gray-900 tracking-tight">{currentStep.label}</h1>
                   <p className="mt-1.5 text-[14px] text-gray-400">{currentStep.sub}</p>
                 </div>
-                <NicheConfigForm ref={nicheFormRef} section="reels" onGeneratingChange={setAiGenerating} onYtValidChange={setYtSectionValid} ytConnected={ytConnected} />
+                <NicheConfigForm ref={nicheFormRef} section="reels" dnaId={createdDnaId ?? undefined} onGeneratingChange={setAiGenerating} onYtValidChange={setYtSectionValid} ytConnected={ytConnected} />
               </motion.div>
             )}
 
@@ -1502,7 +1550,7 @@ export function OnboardingPage() {
                   <h1 className="text-[24px] font-bold text-gray-900 tracking-tight">{currentStep.label}</h1>
                   <p className="mt-1.5 text-[14px] text-gray-400">{currentStep.sub}</p>
                 </div>
-                <NicheConfigForm ref={nicheFormRef} section="posts" onGeneratingChange={setAiGenerating} />
+                <NicheConfigForm ref={nicheFormRef} section="posts" dnaId={createdDnaId ?? undefined} onGeneratingChange={setAiGenerating} />
               </motion.div>
             )}
           </AnimatePresence>
@@ -1517,7 +1565,7 @@ export function OnboardingPage() {
               onClick={() => {
                 setError(null)
                 // Reset DNA method choice when going back from step 4
-                if (step === 4) { setDnaMethod(null); setDnaImported(false) }
+                if (step === 4) { setDnaMethod(null); setDnaImported(false); setCreatedDnaId(null) }
                 setStep(step - 1)
               }}
               disabled={aiGenerating || dnaImporting}
@@ -1585,7 +1633,7 @@ export function OnboardingPage() {
             }
             // Step 4: Content DNA — only show continue once method is chosen and not importing
             if (step === 4) {
-              if (!dnaMethod || dnaImporting) return <div />
+              if (!dnaMethod || dnaMethod === 'template' || dnaImporting) return <div />
               return (
                 <button
                   onClick={async () => {
@@ -1619,6 +1667,7 @@ export function OnboardingPage() {
                         hashtags: config.hashtags as string[],
                       })
                       if (result.profile?.id && brandId) {
+                        setCreatedDnaId(result.profile.id)
                         await assignBrandMutation.mutateAsync({
                           dnaId: result.profile.id,
                           brandId,
