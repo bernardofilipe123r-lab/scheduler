@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { CheckCircle2, X, Pencil, ChevronLeft, ChevronRight, Star, Volume2, VolumeX } from 'lucide-react'
 import { clsx } from 'clsx'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -46,7 +47,10 @@ function getContentMode(item: PipelineItem): ContentMode {
   return 'unknown'
 }
 
-/* ───── Reel: thumbnail left + video right ───── */
+/* ───────────────────────────────────────────────────
+   REEL — Thumbnail left + Video right, 9:16 tall
+   Height-driven: we fix height, width auto from ratio
+   ─────────────────────────────────────────────────── */
 function ReelContent({
   item,
   videoRef,
@@ -62,9 +66,12 @@ function ReelContent({
   const thumbnail = getThumbnail(item)
 
   return (
-    <div className="flex gap-1 w-full">
-      {/* Thumbnail (left) */}
-      <div className="flex-1 min-w-0 aspect-[9/16] max-h-[60vh] rounded-l-2xl overflow-hidden bg-gray-900">
+    <div className="flex gap-1.5 justify-center w-full" style={{ height: '65vh' }}>
+      {/* Thumbnail panel */}
+      <div
+        className="h-full rounded-2xl overflow-hidden bg-gray-900 shadow-lg flex-shrink-0"
+        style={{ aspectRatio: '9/16' }}
+      >
         {thumbnail ? (
           <img src={thumbnail} alt={item.title} className="w-full h-full object-cover" />
         ) : (
@@ -73,8 +80,11 @@ function ReelContent({
           </div>
         )}
       </div>
-      {/* Video (right) */}
-      <div className="flex-1 min-w-0 aspect-[9/16] max-h-[60vh] rounded-r-2xl overflow-hidden bg-black relative">
+      {/* Video panel */}
+      <div
+        className="h-full rounded-2xl overflow-hidden bg-black shadow-lg flex-shrink-0 relative"
+        style={{ aspectRatio: '9/16' }}
+      >
         <video
           ref={videoRef}
           key={videoUrl}
@@ -86,6 +96,7 @@ function ReelContent({
           muted={muted}
           preload="auto"
         />
+        {/* Mute toggle */}
         <button
           onClick={() => setMuted(m => !m)}
           className={clsx(
@@ -97,65 +108,76 @@ function ReelContent({
         >
           {muted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-4 h-4" />}
         </button>
+        {/* "Video" label */}
+        <div className="absolute bottom-3 left-3 bg-black/50 backdrop-blur-sm text-white/80 text-[10px] font-medium px-2 py-0.5 rounded-full">
+          Video
+        </div>
       </div>
     </div>
   )
 }
 
-/* ───── Carousel: slide viewer with arrows ───── */
+/* ───────────────────────────────────────────────────
+   CAROUSEL — Slide viewer with internal arrows + dots
+   ─────────────────────────────────────────────────── */
 function CarouselContent({ item }: { item: PipelineItem }) {
   const slides = getCarouselSlides(item)
   const [slideIdx, setSlideIdx] = useState(0)
 
-  // Reset slide index when item changes
   useEffect(() => { setSlideIdx(0) }, [item.job_id])
 
   if (slides.length === 0) {
     return (
-      <div className="aspect-[4/5] max-h-[60vh] rounded-2xl bg-gray-900 flex items-center justify-center text-white/30 text-sm">
+      <div
+        className="rounded-2xl bg-gray-900 flex items-center justify-center text-white/30 text-sm mx-auto"
+        style={{ height: '65vh', aspectRatio: '4/5' }}
+      >
         No slides available
       </div>
     )
   }
 
   return (
-    <div className="relative aspect-[4/5] max-h-[60vh] rounded-2xl overflow-hidden bg-gray-900">
+    <div
+      className="relative rounded-2xl overflow-hidden bg-gray-900 shadow-lg mx-auto"
+      style={{ height: '65vh', aspectRatio: '4/5' }}
+    >
       <img
         src={slides[slideIdx]}
         alt={`Slide ${slideIdx + 1}`}
         className="w-full h-full object-contain"
       />
-      {/* Slide counter */}
-      <div className="absolute top-3 right-3 bg-black/50 backdrop-blur-sm text-white text-xs font-bold px-2 py-1 rounded-full">
-        {slideIdx + 1}/{slides.length}
+      {/* Slide counter badge */}
+      <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-sm text-white text-xs font-bold px-2.5 py-1 rounded-full">
+        {slideIdx + 1} / {slides.length}
       </div>
-      {/* Prev slide */}
+      {/* Prev */}
       {slideIdx > 0 && (
         <button
           onClick={(e) => { e.stopPropagation(); setSlideIdx(i => i - 1) }}
-          className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white/80 hover:text-white transition-colors"
+          className="absolute left-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white/90 hover:bg-black/70 transition-colors"
         >
           <ChevronLeft className="w-5 h-5" />
         </button>
       )}
-      {/* Next slide */}
+      {/* Next */}
       {slideIdx < slides.length - 1 && (
         <button
           onClick={(e) => { e.stopPropagation(); setSlideIdx(i => i + 1) }}
-          className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white/80 hover:text-white transition-colors"
+          className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white/90 hover:bg-black/70 transition-colors"
         >
           <ChevronRight className="w-5 h-5" />
         </button>
       )}
-      {/* Slide dots */}
-      <div className="absolute bottom-3 inset-x-0 flex justify-center gap-1.5">
+      {/* Dot indicators */}
+      <div className="absolute bottom-4 inset-x-0 flex justify-center gap-1.5">
         {slides.map((_, i) => (
           <button
             key={i}
             onClick={(e) => { e.stopPropagation(); setSlideIdx(i) }}
             className={clsx(
-              'w-2 h-2 rounded-full transition-all',
-              i === slideIdx ? 'bg-white scale-110' : 'bg-white/40',
+              'rounded-full transition-all',
+              i === slideIdx ? 'w-6 h-2 bg-white' : 'w-2 h-2 bg-white/40 hover:bg-white/60',
             )}
           />
         ))}
@@ -164,33 +186,57 @@ function CarouselContent({ item }: { item: PipelineItem }) {
   )
 }
 
-/* ───── Thread: text content ───── */
+/* ───────────────────────────────────────────────────
+   THREAD — Styled text preview
+   ─────────────────────────────────────────────────── */
 function ThreadContent({ item }: { item: PipelineItem }) {
   const output = getFirstBrandOutput(item)
   const text = output?.caption || item.caption || item.content_lines?.join('\n') || ''
 
   return (
-    <div className="aspect-[3/4] max-h-[60vh] rounded-2xl overflow-hidden bg-gradient-to-b from-gray-900 to-gray-950 p-6 flex flex-col">
-      <div className="flex items-center gap-2 mb-4">
-        <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white/60 text-xs font-bold">
-          T
+    <div
+      className="rounded-2xl overflow-hidden bg-[#15202b] shadow-lg mx-auto flex flex-col"
+      style={{ height: '65vh', aspectRatio: '9/16' }}
+    >
+      {/* Header bar */}
+      <div className="flex items-center gap-2.5 px-5 pt-5 pb-3 border-b border-white/5">
+        <div className="w-9 h-9 rounded-full bg-sky-500/20 flex items-center justify-center">
+          <span className="text-sky-400 text-sm font-bold">
+            {(item.brands[0] ?? 'T')[0].toUpperCase()}
+          </span>
         </div>
-        <span className="text-white/60 text-xs">{item.brands[0] ?? 'Thread'}</span>
+        <div>
+          <span className="text-white/90 text-sm font-semibold">{item.brands[0] ?? 'Thread'}</span>
+          <span className="text-white/30 text-[10px] block">@{(item.brands[0] ?? 'thread').toLowerCase().replace(/\s/g, '')}</span>
+        </div>
       </div>
-      <div className="flex-1 overflow-y-auto pr-1 scrollbar-thin">
-        <p className="text-white/90 text-sm leading-relaxed whitespace-pre-line">{text}</p>
+      {/* Text body */}
+      <div className="flex-1 overflow-y-auto px-5 py-4 scrollbar-thin">
+        <p className="text-white/90 text-[13px] leading-relaxed whitespace-pre-line">{text}</p>
+      </div>
+      {/* Action bar mock */}
+      <div className="flex items-center justify-around px-5 py-3 border-t border-white/5 text-white/25">
+        <span className="text-[10px]">Reply</span>
+        <span className="text-[10px]">Repost</span>
+        <span className="text-[10px]">Like</span>
+        <span className="text-[10px]">Share</span>
       </div>
     </div>
   )
 }
 
-/* ───── Post / fallback: single image ───── */
+/* ───────────────────────────────────────────────────
+   POST — Single AI-generated image, 9:16 tall
+   ─────────────────────────────────────────────────── */
 function PostContent({ item }: { item: PipelineItem }) {
   const thumbnail = getThumbnail(item)
   const videoUrl = getVideoUrl(item)
 
   return (
-    <div className="aspect-[9/16] max-h-[60vh] rounded-2xl overflow-hidden bg-gray-900">
+    <div
+      className="rounded-2xl overflow-hidden bg-gray-900 shadow-lg mx-auto"
+      style={{ height: '65vh', aspectRatio: '9/16' }}
+    >
       {thumbnail ? (
         <img src={thumbnail} alt={item.title} className="w-full h-full object-contain" />
       ) : videoUrl ? (
@@ -204,9 +250,9 @@ function PostContent({ item }: { item: PipelineItem }) {
   )
 }
 
-/* ═══════════════════════════════════════════════════ */
-/*                   REVIEW MODAL                     */
-/* ═══════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════
+   REVIEW MODAL — Portaled to body to escape space-y-5
+   ═══════════════════════════════════════════════════════ */
 
 export function ReviewModal({ items: externalItems, initialIndex, onApprove, onReject, onEdit, onClose }: Props) {
   const [queue, setQueue] = useState<PipelineItem[]>(() => externalItems.slice(initialIndex))
@@ -222,12 +268,10 @@ export function ReviewModal({ items: externalItems, initialIndex, onApprove, onR
   const item = queue[currentIdx]
   const contentMode = item ? getContentMode(item) : 'unknown'
 
-  // Close when queue is empty
   useEffect(() => {
     if (queue.length === 0) onClose()
   }, [queue.length, onClose])
 
-  // Auto-play video when item changes
   useEffect(() => {
     const v = videoRef.current
     if (!v) return
@@ -240,7 +284,6 @@ export function ReviewModal({ items: externalItems, initialIndex, onApprove, onR
     if (videoRef.current) videoRef.current.muted = muted
   }, [muted])
 
-  // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (isAnimating) return
@@ -300,27 +343,26 @@ export function ReviewModal({ items: externalItems, initialIndex, onApprove, onR
   if (!item) return null
 
   const remaining = queue.length - currentIdx
-  // Wider modal for reels (side-by-side), narrower for everything else
-  const modalWidth = contentMode === 'reel' ? 'max-w-3xl' : 'max-w-md'
+  const modalWidth = contentMode === 'reel' ? 'max-w-[80vw] lg:max-w-3xl' : 'max-w-sm'
 
-  return (
-    <div className="fixed inset-0 z-50 mt-0 flex items-center justify-center">
+  const modal = (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center" style={{ margin: 0 }}>
       {/* Backdrop */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/85 backdrop-blur-sm"
         onClick={onClose}
       />
 
-      {/* Modal content */}
+      {/* Modal */}
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
         transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-        className={clsx('relative z-10 flex flex-col items-center w-full mx-4', modalWidth)}
+        className={clsx('relative z-10 flex flex-col items-center w-full px-4', modalWidth)}
       >
         {/* Counter */}
         <div className="mb-2 flex items-center gap-3">
@@ -348,7 +390,7 @@ export function ReviewModal({ items: externalItems, initialIndex, onApprove, onR
           })}
         </div>
 
-        {/* Content card with swipe animation */}
+        {/* Content card */}
         <AnimatePresence mode="popLayout">
           <motion.div
             key={item.job_id}
@@ -361,9 +403,8 @@ export function ReviewModal({ items: externalItems, initialIndex, onApprove, onR
               transition: { duration: 0.2 },
             }}
             transition={{ type: 'spring', damping: 28, stiffness: 350 }}
-            className="relative w-full"
+            className="w-full"
           >
-            {/* Content-type-specific media */}
             {contentMode === 'reel' && (
               <ReelContent item={item} videoRef={videoRef} muted={muted} setMuted={setMuted} />
             )}
@@ -371,8 +412,8 @@ export function ReviewModal({ items: externalItems, initialIndex, onApprove, onR
             {contentMode === 'thread' && <ThreadContent item={item} />}
             {(contentMode === 'post' || contentMode === 'unknown') && <PostContent item={item} />}
 
-            {/* Meta bar below media */}
-            <div className="mt-2 flex items-center gap-2 px-1">
+            {/* Meta */}
+            <div className="mt-2 flex items-center gap-2 justify-center">
               <span className="text-[10px] font-semibold uppercase tracking-wide text-white/50">
                 {variantLabel(item)}
               </span>
@@ -383,19 +424,19 @@ export function ReviewModal({ items: externalItems, initialIndex, onApprove, onR
                 </span>
               )}
               {item.brands.length > 0 && (
-                <span className="text-[10px] bg-white/10 text-white/60 px-1.5 py-0.5 rounded-md backdrop-blur-sm">
+                <span className="text-[10px] bg-white/10 text-white/60 px-1.5 py-0.5 rounded-md">
                   {item.brands[0]}
                 </span>
               )}
             </div>
-            <p className="mt-1 text-white font-semibold text-sm leading-snug line-clamp-2 px-1">
+            <p className="mt-1 text-white font-semibold text-sm leading-snug line-clamp-1 text-center">
               {item.title || 'Untitled'}
             </p>
           </motion.div>
         </AnimatePresence>
 
-        {/* Action buttons */}
-        <div className="mt-4 flex items-center gap-4">
+        {/* Actions */}
+        <div className="mt-3 flex items-center gap-4">
           <button onClick={handleDecline} disabled={isAnimating} className="group flex flex-col items-center gap-1">
             <div className="w-14 h-14 rounded-full border-2 border-red-400/60 flex items-center justify-center text-red-400 hover:bg-red-500 hover:text-white hover:border-red-500 transition-all duration-200 hover:scale-110">
               <X className="w-7 h-7" />
@@ -424,4 +465,7 @@ export function ReviewModal({ items: externalItems, initialIndex, onApprove, onR
       </motion.div>
     </div>
   )
+
+  // Portal to body to escape any parent CSS (space-y-5, overflow, etc.)
+  return createPortal(modal, document.body)
 }
