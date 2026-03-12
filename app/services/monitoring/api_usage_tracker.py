@@ -1,7 +1,7 @@
 """
 API Usage Tracker — monitors usage across external APIs.
 
-Tracks DeAPI (image generation) and DeepSeek (content generation).
+Tracks DeAPI (image generation), DeepSeek (content generation), and Pexels (web images).
 """
 import logging
 import os
@@ -20,7 +20,7 @@ API_LIMITS = {
     "freepik": {"daily": 100, "label": "Freepik (Image Generation)"},
     "deapi": {"daily": 500, "label": "DeAPI (Image Fallback)"},
     "deepseek": {"daily": 1000, "label": "DeepSeek (Content)"},
-    "searchapi": {"daily": 100, "label": "SearchApi (Web Images)"},
+    "pexels": {"monthly": 20000, "label": "Pexels (Web Images)"},
 }
 
 

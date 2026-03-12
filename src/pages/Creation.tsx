@@ -58,7 +58,7 @@ const IMAGE_MODELS = [
   { id: 'freepik', label: 'Super Quality', sub: 'Freepik', badge: 'NEW', badgeColor: 'bg-emerald-500' },
   { id: 'ZImageTurbo_INT8', label: 'Quality', sub: 'ZImageTurbo', badge: null, badgeColor: '' },
   { id: 'Flux1schnell', label: 'Fast', sub: 'Flux Schnell', badge: null, badgeColor: '' },
-  { id: 'searchapi', label: 'Web Based', sub: 'SearchApi (Web Images)', badge: 'NEW', badgeColor: 'bg-blue-500' },
+  { id: 'pexels', label: 'Web Photos', sub: 'Pexels (Free)', badge: 'FREE', badgeColor: 'bg-green-500' },
 ]
 
 const THREAD_FORMAT_TYPES = [
@@ -620,7 +620,7 @@ export function CreationPage() {
                         {opt.id === 'freepik' && '🎨'}
                         {opt.id === 'ZImageTurbo_INT8' && '✨'}
                         {opt.id === 'Flux1schnell' && '⚡'}
-                        {opt.id === 'searchapi' && '🌐'}
+                        {opt.id === 'pexels' && '📷'}
                       </span>
                       <span className="text-sm font-semibold text-gray-900">{opt.label}</span>
                       <span className="text-[10px] text-gray-500">{opt.sub}</span>

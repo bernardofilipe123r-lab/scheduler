@@ -43,8 +43,8 @@ DEAPI_COST_PER_IMAGE = 0.02  # ~$0.02 per image (approximate)
 # Freepik pricing per image generation (~€0.05 per image based on billing data)
 FREEPIK_COST_PER_IMAGE = 0.05  # ~€0.05 per image
 
-# SearchApi pricing per search (free tier: 100 credits, ~$0.01 per credit estimate)
-SEARCHAPI_COST_PER_SEARCH = 0.01  # ~$0.01 per search credit
+# Pexels pricing (free API, $0 cost — tracked for monitoring only)
+PEXELS_COST_PER_SEARCH = 0.00  # Pexels API is free
 
 
 def _get_or_create_daily(db, user_id: str, target_date: date) -> UserCostDaily:
@@ -68,6 +68,8 @@ def _get_or_create_daily(db, user_id: str, target_date: date) -> UserCostDaily:
             freepik_cost_usd=0.0,
             searchapi_calls=0,
             searchapi_cost_usd=0.0,
+            pexels_calls=0,
+            pexels_cost_usd=0.0,
             reels_generated=0,
             carousels_generated=0,
         )
@@ -136,7 +138,12 @@ def record_freepik_call(user_id: Optional[str] = None) -> None:
 
 
 def record_searchapi_call(user_id: Optional[str] = None) -> None:
-    """Record a SearchApi Google Images search call."""
+    """Legacy — SearchApi removed. No-op for backward compatibility."""
+    pass
+
+
+def record_pexels_call(user_id: Optional[str] = None) -> None:
+    """Record a Pexels API search call (free, but track for monitoring)."""
     uid = user_id or get_current_user_id()
     if not uid:
         return
@@ -144,11 +151,11 @@ def record_searchapi_call(user_id: Optional[str] = None) -> None:
     try:
         with get_db_session() as db:
             record = _get_or_create_daily(db, uid, date.today())
-            record.searchapi_calls = (getattr(record, 'searchapi_calls', None) or 0) + 1
-            record.searchapi_cost_usd = (getattr(record, 'searchapi_cost_usd', None) or 0.0) + SEARCHAPI_COST_PER_SEARCH
+            record.pexels_calls = (getattr(record, 'pexels_calls', None) or 0) + 1
+            record.pexels_cost_usd = 0.0  # Pexels is free
             record.updated_at = datetime.now(timezone.utc)
     except Exception as e:
-        print(f"⚠️ Cost tracking (searchapi) failed: {e}", flush=True)
+        print(f"⚠️ Cost tracking (pexels) failed: {e}", flush=True)
 
 
 def record_content_generated(

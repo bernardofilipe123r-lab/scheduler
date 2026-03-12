@@ -1369,11 +1369,11 @@ interface CreditsResponse {
     total_calls?: number
     error?: string
   }
-  searchapi?: {
+  pexels?: {
     configured?: boolean
-    total_credits?: number
-    used_credits?: number
-    remaining_credits?: number
+    monthly_limit?: number
+    used_this_month?: number
+    remaining?: number
     cost_per_search?: number
     total_cost_usd?: number
     error?: string
@@ -2798,39 +2798,39 @@ export function AdminPage() {
               </div>
             </div>
 
-            {/* SearchApi */}
-            <div className="flex items-start gap-3 p-3 rounded-lg bg-orange-50 border border-orange-100">
-              <Globe className="w-5 h-5 text-orange-500 shrink-0 mt-0.5" />
+            {/* Pexels */}
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-green-50 border border-green-100">
+              <Globe className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
               <div className="min-w-0">
-                <p className="text-xs font-semibold text-orange-700 mb-1">SearchApi (Web Images)</p>
-                {creditsQuery.data?.searchapi?.error ? (
-                  <p className="text-xs text-red-600">{creditsQuery.data.searchapi.error}</p>
-                ) : creditsQuery.data?.searchapi ? (
+                <p className="text-xs font-semibold text-green-700 mb-1">Pexels (Web Images — Free)</p>
+                {creditsQuery.data?.pexels?.error ? (
+                  <p className="text-xs text-red-600">{creditsQuery.data.pexels.error}</p>
+                ) : creditsQuery.data?.pexels ? (
                   (() => {
-                    const sa = creditsQuery.data.searchapi!
-                    const usagePct = sa.total_credits
-                      ? Math.round(((sa.used_credits ?? 0) / sa.total_credits) * 100)
+                    const px = creditsQuery.data.pexels!
+                    const usagePct = px.monthly_limit
+                      ? Math.round(((px.used_this_month ?? 0) / px.monthly_limit) * 100)
                       : 0
                     return (
                       <div className="space-y-1">
                         <div className="flex items-baseline gap-1.5">
-                          <span className="text-lg font-bold text-orange-900">
-                            {sa.remaining_credits ?? 0}
+                          <span className="text-lg font-bold text-green-900">
+                            {px.remaining ?? 0}
                           </span>
-                          <span className="text-xs text-orange-600">credits remaining</span>
+                          <span className="text-xs text-green-600">requests remaining this month</span>
                         </div>
-                        <div className="h-1.5 bg-orange-200 rounded-full overflow-hidden">
+                        <div className="h-1.5 bg-green-200 rounded-full overflow-hidden">
                           <div
-                            className="h-full rounded-full bg-orange-500 transition-all duration-500"
+                            className="h-full rounded-full bg-green-500 transition-all duration-500"
                             style={{ width: `${Math.min(usagePct, 100)}%` }}
                           />
                         </div>
-                        <div className="flex items-center justify-between text-[10px] text-orange-600">
-                          <span>{sa.used_credits ?? 0} used</span>
-                          <span>{sa.total_credits} total</span>
+                        <div className="flex items-center justify-between text-[10px] text-green-600">
+                          <span>{px.used_this_month ?? 0} used</span>
+                          <span>{px.monthly_limit?.toLocaleString()} monthly limit</span>
                         </div>
-                        <div className="text-[10px] text-orange-500">
-                          ${(sa.total_cost_usd ?? 0).toFixed(2)} spent
+                        <div className="text-[10px] text-green-500">
+                          Free — $0.00 cost
                         </div>
                       </div>
                     )
@@ -2877,11 +2877,11 @@ export function AdminPage() {
                         : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
                     )}
                   >
-                    Web Images (SearchApi)
+                    Web Images (Pexels)
                   </button>
                   <span className="text-[10px] text-gray-400 ml-1">
                     {creditsQuery.data?.image_source_mode === 'web'
-                      ? 'Using real Google Images for video slides'
+                      ? 'Using real Pexels photos for video slides'
                       : 'Using AI-generated images (Freepik/DeAPI)'}
                   </span>
                 </div>

@@ -81,7 +81,7 @@ def _compute_fingerprint(text: str, lines: list[str]) -> str:
 # Generates BOTH the viral post AND AI image prompts in one call.
 
 FORMAT_B_PROMPT = """Niche: {niche}
-
+{diversity_block}
 Task:
 Write ONE viral-style insight post.
 
@@ -220,17 +220,50 @@ class StoryPolisher:
     def __init__(self):
         self.client = _get_deepseek_client()
 
-    def generate_content(self, niche: str) -> Optional[PolishedStory]:
+    def generate_content(
+        self,
+        niche: str,
+        topic_hint: str = "",
+        hook_hint: str = "",
+        personality_prompt: str = "",
+        story_category: str = "",
+        recent_titles: list[str] = None,
+    ) -> Optional[PolishedStory]:
         """
         Generate a complete viral reel (text + image prompts) from scratch.
 
         DeepSeek generates everything — no external story source needed.
         The AI PROMPTs in the response are used directly by DeAPI for image generation.
 
+        Diversity parameters guide DeepSeek to produce varied content:
+          - topic_hint: Topic bucket (e.g., "Nutrition & Food Benefits")
+          - hook_hint: Hook style (e.g., "statistic_lead", "controversy_opener")
+          - personality_prompt: Tone modifier (e.g., "You report just-happened stories with urgency.")
+          - story_category: Category (e.g., "scientific_breakthrough", "hidden_cost")
+          - recent_titles: Titles to avoid (prevents repetitive content)
+
         Returns a PolishedStory or None on failure.
         """
         try:
-            user_prompt = FORMAT_B_PROMPT.format(niche=niche)
+            # Build diversity block for the prompt
+            diversity_lines = []
+            if topic_hint and topic_hint != "general":
+                diversity_lines.append(f"Topic focus: {topic_hint}")
+            if story_category:
+                diversity_lines.append(f"Story angle: {story_category.replace('_', ' ')}")
+            if hook_hint:
+                diversity_lines.append(f"Hook style: {hook_hint.replace('_', ' ')}")
+            if personality_prompt:
+                diversity_lines.append(f"Tone: {personality_prompt}")
+            if recent_titles:
+                avoid_list = "\n".join(f"- {t}" for t in recent_titles[:8])
+                diversity_lines.append(f"IMPORTANT: Do NOT repeat or closely paraphrase any of these recent titles:\n{avoid_list}")
+
+            diversity_block = "\n".join(diversity_lines)
+            if diversity_block:
+                diversity_block = "\n" + diversity_block + "\n"
+
+            user_prompt = FORMAT_B_PROMPT.format(niche=niche, diversity_block=diversity_block)
 
             response = self.client.chat.completions.create(
                 model="deepseek-chat",

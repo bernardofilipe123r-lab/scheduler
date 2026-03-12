@@ -178,7 +178,7 @@ async def get_dna_profile(
     ).all()
 
     data = _dna_to_dict(dna)
-    data["brands"] = [{"id": b.id, "name": b.name, "active": b.active} for b in brands]
+    data["brands"] = [{"id": b.id, "name": b.display_name, "active": b.active} for b in brands]
     return {"profile": data}
 
 
@@ -268,7 +268,34 @@ async def assign_brand_to_dna(
 
     return {
         "brand_id": brand.id,
-        "brand_name": brand.name,
+        "brand_name": brand.display_name,
         "content_dna_id": dna_id,
         "content_dna_name": dna.name,
     }
+
+
+@router.post("/{dna_id}/unassign-brand")
+async def unassign_brand_from_dna(
+    dna_id: str,
+    body: BrandAssignment,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Remove a brand's DNA assignment (set content_dna_id to NULL)."""
+    user_id = user["id"]
+    _verify_dna_ownership(db, dna_id, user_id)
+
+    brand = db.query(Brand).filter(
+        Brand.id == body.brand_id,
+        Brand.user_id == user_id,
+        Brand.content_dna_id == dna_id,
+    ).first()
+    if not brand:
+        raise HTTPException(status_code=404, detail="Brand not found or not assigned to this DNA")
+
+    brand.content_dna_id = None
+    db.commit()
+
+    get_content_dna_service().invalidate_cache(user_id=user_id, content_dna_id=dna_id)
+
+    return {"brand_id": brand.id, "unassigned": True}

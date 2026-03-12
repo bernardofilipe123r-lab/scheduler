@@ -3,7 +3,7 @@ Image Sourcer — generates/fetches images for Format B reels.
 
 Image source for video slides is controlled by FORMAT_B_IMAGE_SOURCE env var:
   - "ai" (default): Freepik primary, DeAPI fallback (AI-generated images)
-    - "web": SearchApi Google Images only (real web images, no AI fallback)
+  - "web": Pexels API photos (real web images, no AI fallback)
 
 Thumbnails always use AI generation (Freepik/DeAPI) regardless of toggle.
 """
@@ -77,7 +77,7 @@ class ImageSourcer:
         self._deapi_base_url = "https://api.deapi.ai/api/v1/client"
         self._freepik_key = os.environ.get("FREEPIK_API_KEY")
         self._freepik_base_url = "https://api.freepik.com/v1/ai/text-to-image"
-        self.last_service_used: str = "unknown"  # "freepik", "deapi", or "searchapi"
+        self.last_service_used: str = "unknown"  # "freepik", "deapi", or "pexels"
 
     def _is_freepik_available(self) -> bool:
         """Check if Freepik API key is set and daily usage is under 100%."""
@@ -107,8 +107,8 @@ class ImageSourcer:
         Source a single image based on the configured mode.
 
         When FORMAT_B_IMAGE_SOURCE=web:
-                    1. Try SearchApi Google Images (using plan.search_query)
-                    2. If SearchApi fails, return None (strict mode)
+          1. Try Pexels API photos (using plan.search_query)
+          2. If Pexels fails, return None (strict mode)
 
         When FORMAT_B_IMAGE_SOURCE=ai (default):
           1. Try Freepik (if available)
@@ -122,7 +122,7 @@ class ImageSourcer:
             path = self._source_via_web(plan)
             if path:
                 return path
-            logger.warning("[ImageSourcer] Web mode selected and SearchApi returned no image (strict mode, no AI fallback)")
+            logger.warning("[ImageSourcer] Web mode selected and Pexels returned no image (strict mode, no AI fallback)")
             return None
 
         # AI generation path (default)
@@ -133,7 +133,7 @@ class ImageSourcer:
         return self._source_via_ai(plan)
 
     def _source_via_web(self, plan: ImagePlan) -> Optional[Path]:
-        """Try to fetch a real web image via SearchApi."""
+        """Try to fetch a real web image via Pexels API."""
         query = plan.search_query or plan.query
         if not query:
             return None
@@ -143,12 +143,12 @@ class ImageSourcer:
             web_sourcer = WebImageSourcer(db=self.db)
 
             if not web_sourcer.is_available():
-                logger.warning("[ImageSourcer] SearchApi not configured, skipping web source")
+                logger.warning("[ImageSourcer] Pexels API not configured, skipping web source")
                 return None
 
             path = web_sourcer.search_image(query)
             if path:
-                self.last_service_used = "searchapi"
+                self.last_service_used = "pexels"
                 return self._process_image(path)
             return None
         except Exception as e:

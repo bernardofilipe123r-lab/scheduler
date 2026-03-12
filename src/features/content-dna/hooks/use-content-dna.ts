@@ -9,6 +9,7 @@ import {
   updateDNAProfile,
   deleteDNAProfile,
   assignBrandToDNA,
+  unassignBrandFromDNA,
 } from '../api/content-dna-api'
 import type { ContentDNACreate, ContentDNAUpdate } from '../types'
 
@@ -74,6 +75,19 @@ export function useAssignBrandToDNA() {
   return useMutation({
     mutationFn: ({ dnaId, brandId }: { dnaId: string; brandId: string }) =>
       assignBrandToDNA(dnaId, brandId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: CONTENT_DNA_KEY })
+      queryClient.invalidateQueries({ queryKey: BRANDS_KEY })
+    },
+  })
+}
+
+/** Unassign a brand from a DNA profile (sets content_dna_id to null). */
+export function useUnassignBrandFromDNA() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ dnaId, brandId }: { dnaId: string; brandId: string }) =>
+      unassignBrandFromDNA(dnaId, brandId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: CONTENT_DNA_KEY })
       queryClient.invalidateQueries({ queryKey: BRANDS_KEY })

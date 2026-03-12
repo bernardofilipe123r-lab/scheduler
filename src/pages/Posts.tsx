@@ -4,7 +4,7 @@
  * 5-step wizard:
  *  1. Select brands (multi-select, same pattern as Reels)
  *  2. Choose platforms (Instagram, Facebook) — only shown when Facebook or Instagram are connected
- *  3. Pick AI image model (Freepik / ZImageTurbo / Flux Schnell / SearchApi)
+ *  3. Pick AI image model (Freepik / ZImageTurbo / Flux Schnell / Pexels)
  *  4. Choose mode (Auto vs Manual)
  *  5. Manual create form (title, AI prompt, layout settings, preview)
  */
@@ -57,7 +57,7 @@ const IMAGE_MODELS = [
   { id: 'freepik', label: 'Super Quality', sub: 'Freepik', badge: 'NEW', badgeColor: 'bg-emerald-500' },
   { id: 'ZImageTurbo_INT8', label: '✨ Quality', sub: 'ZImageTurbo', badge: null, badgeColor: '' },
   { id: 'Flux1schnell', label: '⚡ Fast', sub: 'Flux Schnell', badge: null, badgeColor: '' },
-  { id: 'searchapi', label: 'Web Based', sub: 'SearchApi (Web Images)', badge: 'NEW', badgeColor: 'bg-blue-500' },
+  { id: 'pexels', label: 'Web Photos', sub: 'Pexels (Free)', badge: 'FREE', badgeColor: 'bg-green-500' },
 ] as const
 
 const POSTS_PREVIEW_SCALE = 0.2
@@ -499,7 +499,7 @@ export function PostsPage() {
                     {opt.id === 'freepik' && '🎨'}
                     {opt.id === 'ZImageTurbo_INT8' && '✨'}
                     {opt.id === 'Flux1schnell' && '⚡'}
-                    {opt.id === 'searchapi' && '🌐'}
+                    {opt.id === 'pexels' && '🌐'}
                   </div>
                   <div className="text-center">
                     <span className="text-sm font-semibold text-gray-900 block">{opt.label}</span>

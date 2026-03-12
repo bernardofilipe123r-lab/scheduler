@@ -9,6 +9,7 @@ import {
   useCreateContentDNA,
   useDeleteContentDNA,
   useAssignBrandToDNA,
+  useUnassignBrandFromDNA,
   getDNAStrength,
 } from '@/features/content-dna'
 import type { ContentDNAProfile } from '@/features/content-dna'
@@ -22,6 +23,7 @@ export function DNAProfilesManager() {
   const createMutation = useCreateContentDNA()
   const deleteMutation = useDeleteContentDNA()
   const assignMutation = useAssignBrandToDNA()
+  const unassignMutation = useUnassignBrandFromDNA()
 
   const [newName, setNewName] = useState('')
   const [assigningDna, setAssigningDna] = useState<string | null>(null)
@@ -60,6 +62,15 @@ export function DNAProfilesManager() {
       toast.success('Brand assigned to DNA profile')
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Failed to assign brand')
+    }
+  }
+
+  const handleUnassign = async (dnaId: string, brandId: string) => {
+    try {
+      await unassignMutation.mutateAsync({ dnaId, brandId })
+      toast.success('Brand removed from DNA profile')
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Failed to remove brand')
     }
   }
 
@@ -136,6 +147,7 @@ export function DNAProfilesManager() {
               brands={brands ?? []}
               onDelete={handleDelete}
               onAssign={handleAssign}
+              onUnassign={handleUnassign}
               assigningDna={assigningDna}
               setAssigningDna={setAssigningDna}
               editingDnaId={editingDnaId}
@@ -153,6 +165,7 @@ function DNAProfileCard({
   brands,
   onDelete,
   onAssign,
+  onUnassign,
   assigningDna,
   setAssigningDna,
   editingDnaId,
@@ -162,6 +175,7 @@ function DNAProfileCard({
   brands: Brand[]
   onDelete: (id: string) => void
   onAssign: (dnaId: string, brandId: string) => void
+  onUnassign: (dnaId: string, brandId: string) => void
   assigningDna: string | null
   setAssigningDna: (id: string | null) => void
   editingDnaId: string | null
@@ -181,13 +195,13 @@ function DNAProfileCard({
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3">
-            <h3 className="text-base font-semibold text-gray-900 truncate">{dna.name}</h3>
+            <h3 className="text-base font-semibold text-gray-900 truncate">{dna.niche_name || dna.name}</h3>
             <span className={`text-xs font-medium ${strengthTextColor}`}>
               {strength}
             </span>
           </div>
-          {dna.niche_name && (
-            <p className="text-sm text-gray-500 mt-0.5">{dna.niche_name}</p>
+          {dna.niche_name && dna.name !== dna.niche_name && (
+            <p className="text-sm text-gray-500 mt-0.5">{dna.name}</p>
           )}
 
           {/* Strength bar */}
@@ -240,9 +254,16 @@ function DNAProfileCard({
             {assignedBrands.map((b) => (
               <span
                 key={b.id}
-                className="inline-flex items-center gap-1 px-2.5 py-1 bg-primary-50 text-primary-700 rounded-lg text-xs font-medium"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-primary-50 text-primary-700 rounded-lg text-xs font-medium group"
               >
                 {b.display_name}
+                <button
+                  onClick={() => onUnassign(dna.id, b.id)}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity text-primary-400 hover:text-red-500"
+                  title={`Remove ${b.display_name} from this DNA`}
+                >
+                  <X className="w-3 h-3" />
+                </button>
               </span>
             ))}
           </div>

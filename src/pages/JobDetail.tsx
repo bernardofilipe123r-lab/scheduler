@@ -727,11 +727,11 @@ export function JobDetailPage() {
               ? (job.format_b_data as any).content_items[contentIdx]
               : job.format_b_data
             const itemImageService = (itemFormatBData as any)?.image_service
-            const isSearchApiMode = itemImageService === 'searchapi' || (itemFormatBData as any)?.image_source_mode === 'web'
+            const isPexelsMode = itemImageService === 'pexels' || (itemFormatBData as any)?.image_source_mode === 'web'
             const imageServiceLabel = itemImageService === 'freepik'
               ? 'Freepik'
-              : isSearchApiMode
-                ? 'SearchApi'
+              : isPexelsMode
+                ? 'Pexels'
                 : 'DeAPI'
 
             return (
@@ -975,14 +975,14 @@ export function JobDetailPage() {
                                 <div>
                                   <p className="text-[10px] font-semibold text-green-600 mb-1">
                                     {itemImageService === 'freepik' ? 'Freepik Image Prompts:'
-                                      : isSearchApiMode ? 'SearchApi Image Queries:'
+                                      : isPexelsMode ? 'Pexels Image Queries:'
                                       : 'DeAPI Image Prompts (Flux1schnell):'}
                                   </p>
                                   <div className="space-y-1.5">
                                     {((itemFormatBData as any).images as { query?: string; search_query?: string }[]).map((img, idx) => (
                                       <div key={idx} className="text-[11px] bg-white rounded-md p-2 border-l-[3px] border-green-500 border border-gray-100">
                                         <span className="text-green-600 font-medium">Image {idx + 1}:</span>
-                                        <span className="text-gray-600 ml-1.5">{isSearchApiMode ? (img.search_query || img.query || '') : (img.query || '')}</span>
+                                        <span className="text-gray-600 ml-1.5">{isPexelsMode ? (img.search_query || img.query || '') : (img.query || '')}</span>
                                       </div>
                                     ))}
                                   </div>

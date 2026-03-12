@@ -446,6 +446,26 @@ def _run_buffer_check(db: Session, user_id: str, state: TobyState, brands=None):
         print(f"[TOBY] Auto-retry check error: {e}", flush=True)
 
 
+def _get_recent_format_b_titles(db: Session, brand_id: str, limit: int = 10) -> list[str]:
+    """Get recent Format B titles for a brand to prevent repetitive content."""
+    try:
+        from app.models.jobs import GenerationJob
+        from sqlalchemy import Text
+        rows = (
+            db.query(GenerationJob.title)
+            .filter(
+                GenerationJob.brands.cast(Text).contains(brand_id),
+                GenerationJob.content_format == "format_b",
+            )
+            .order_by(GenerationJob.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+        return [r.title for r in rows if r.title]
+    except Exception:
+        return []
+
+
 def _get_next_variant(db: Session, brand_id: str) -> str:
     """Determine the next reel variant by strict alternation.
 
@@ -509,8 +529,18 @@ def _execute_content_plan(db: Session, plan, batch_id: str = None):
         from app.services.discovery.story_polisher import StoryPolisher
         from dataclasses import asdict
 
+        # Gather recent Format B titles for this brand to avoid repetition
+        recent_titles = _get_recent_format_b_titles(db, plan.brand_id, limit=10)
+
         polisher = StoryPolisher()
-        polished = polisher.generate_content(niche=ctx.niche_name or "business")
+        polished = polisher.generate_content(
+            niche=ctx.niche_name or "business",
+            topic_hint=plan.topic_bucket,
+            hook_hint=plan.hook_strategy,
+            personality_prompt=plan.personality_prompt,
+            story_category=plan.story_category or "",
+            recent_titles=recent_titles,
+        )
         if not polished:
             raise ValueError("StoryPolisher failed to generate content")
 

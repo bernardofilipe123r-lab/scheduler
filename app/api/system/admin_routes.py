@@ -537,39 +537,40 @@ async def get_ai_credits(user: dict = Depends(get_current_user)):
     else:
         results["freepik"] = {"error": "API key not configured"}
 
-    # ── SearchApi credits (calculated from local usage tracking) ───
-    searchapi_key = os.getenv("SEARCHAPI_API_KEY")
-    if searchapi_key:
+    # ── Pexels credits (free API — tracked for monitoring) ──────────
+    pexels_key = os.getenv("PEXELS_API_KEY")
+    if pexels_key:
         try:
-            from app.services.monitoring.cost_tracker import SEARCHAPI_COST_PER_SEARCH
+            # Monthly limit: 20,000 requests/month (free)
+            monthly_limit = 20000
 
-            total_credits = int(os.getenv("SEARCHAPI_TOTAL_CREDITS", "100"))
-
-            sa_total_calls = 0
+            pexels_total_calls = 0
             try:
                 from app.db_connection import get_db_session
-                with get_db_session() as sadb:
-                    from app.models.api_usage import APIUsageLog as SALog
-                    sa_total_calls = (
-                        sadb.query(func.count(SALog.id))
-                        .filter(SALog.api_name == "searchapi")
+                with get_db_session() as pdb:
+                    from app.models.api_usage import APIUsageLog as PLog
+                    from datetime import datetime as _dt, timezone as _tz
+                    month_start = _dt.now(_tz.utc).replace(day=1, hour=0, minute=0, second=0)
+                    pexels_total_calls = (
+                        pdb.query(func.count(PLog.id))
+                        .filter(PLog.api_name == "pexels", PLog.called_at >= month_start)
                         .scalar() or 0
                     )
             except Exception:
                 pass
 
-            results["searchapi"] = {
+            results["pexels"] = {
                 "configured": True,
-                "total_credits": total_credits,
-                "used_credits": sa_total_calls,
-                "remaining_credits": max(0, total_credits - sa_total_calls),
-                "cost_per_search": SEARCHAPI_COST_PER_SEARCH,
-                "total_cost_usd": round(sa_total_calls * SEARCHAPI_COST_PER_SEARCH, 2),
+                "monthly_limit": monthly_limit,
+                "used_this_month": pexels_total_calls,
+                "remaining": max(0, monthly_limit - pexels_total_calls),
+                "cost_per_search": 0.0,
+                "total_cost_usd": 0.0,
             }
         except Exception as exc:
-            results["searchapi"] = {"configured": True, "error": str(exc)}
+            results["pexels"] = {"configured": True, "error": str(exc)}
     else:
-        results["searchapi"] = {"error": "API key not configured"}
+        results["pexels"] = {"error": "API key not configured"}
 
     # Include current global image source mode (from DB, persistent across deploys)
     try:

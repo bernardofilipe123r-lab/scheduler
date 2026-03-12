@@ -20,8 +20,6 @@ pgvector>=0.3.0
 
 # Text-Video: External API clients
 google-genai>=1.0.0
-tavily-python>=0.3.0
-newsdataapi>=0.1.30
 yt-dlp>=2024.0.0
 
 # Background Jobs & Scheduling

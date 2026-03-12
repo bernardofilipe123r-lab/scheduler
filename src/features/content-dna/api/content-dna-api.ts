@@ -34,3 +34,10 @@ export async function assignBrandToDNA(dnaId: string, brandId: string): Promise<
 }> {
   return apiClient.post(`/api/content-dna/${dnaId}/assign-brand`, { brand_id: brandId })
 }
+
+export async function unassignBrandFromDNA(dnaId: string, brandId: string): Promise<{
+  brand_id: string
+  unassigned: boolean
+}> {
+  return apiClient.post(`/api/content-dna/${dnaId}/unassign-brand`, { brand_id: brandId })
+}
