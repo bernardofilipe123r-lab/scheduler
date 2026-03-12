@@ -45,7 +45,7 @@ export function useApprovePipelineItem() {
       await queryClient.cancelQueries({ queryKey: pipelineKeys.all })
       queryClient.setQueriesData<PipelineResponse>(
         { queryKey: pipelineKeys.all },
-        (old) => old ? { ...old, items: old.items.filter(i => i.job_id !== jobId) } : old,
+        (old) => old && Array.isArray(old.items) ? { ...old, items: old.items.filter(i => i.job_id !== jobId) } : old,
       )
     },
     onSuccess: () => {
@@ -69,7 +69,7 @@ export function useRejectPipelineItem() {
       await queryClient.cancelQueries({ queryKey: pipelineKeys.all })
       queryClient.setQueriesData<PipelineResponse>(
         { queryKey: pipelineKeys.all },
-        (old) => old ? { ...old, items: old.items.filter(i => i.job_id !== jobId) } : old,
+        (old) => old && Array.isArray(old.items) ? { ...old, items: old.items.filter(i => i.job_id !== jobId) } : old,
       )
     },
     onSuccess: () => {

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Save, Loader2, AlertTriangle, Film, LayoutGrid, MessageCircle, ChevronRight, ArrowLeft, Globe, Plus, Download, Bell } from 'lucide-react'
+import { Save, Loader2, AlertTriangle, Film, LayoutGrid, MessageCircle, ChevronRight, ChevronDown, ArrowLeft, Globe, Plus, Download, Bell, Settings2, Palette } from 'lucide-react'
 import { PlatformIcon } from '@/shared/components'
 import { apiClient } from '@/shared/api/client'
 import { useTobyConfig, useUpdateTobyConfig, useTobyReset, useTobyBrandConfigs, useUpdateTobyBrandConfig } from '../hooks'
@@ -58,7 +58,8 @@ export function TobySettings() {
   const updateBrandMut = useUpdateTobyBrandConfig()
   const resetMut = useTobyReset()
   const [showResetConfirm, setShowResetConfirm] = useState(false)
-  const [tab, setTab] = useState<'brands' | 'general'>('brands')
+  const [generalOpen, setGeneralOpen] = useState(true)
+  const [brandsOpen, setBrandsOpen] = useState(true)
   const [selectedBrand, setSelectedBrand] = useState<string | null>(null)
   const [form, setForm] = useState<Record<string, number | boolean | string>>({})
   const [brandForms, setBrandForms] = useState<Record<string, Record<string, number | boolean | string>>>({})
@@ -241,45 +242,22 @@ export function TobySettings() {
         </div>
       )}
 
-      {/* Main panel */}
+      {/* ── General Section ── */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-        {/* Segmented tab bar */}
-        <div className="px-5 pt-5 pb-4">
-          <div className="inline-flex bg-slate-100 rounded-lg p-1">
-            <button
-              onClick={() => { setTab('brands'); setSelectedBrand(null) }}
-              className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
-                tab === 'brands'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Brands
-              <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full ${
-                tab === 'brands'
-                  ? 'bg-blue-100 text-blue-700'
-                  : 'bg-slate-200 text-slate-500'
-              }`}>
-                {brandConfigs.length}
-              </span>
-            </button>
-            <button
-              onClick={() => setTab('general')}
-              className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
-                tab === 'general'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              General
-            </button>
+        <button
+          onClick={() => setGeneralOpen(o => !o)}
+          className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50/50 transition-colors"
+        >
+          <div className="flex items-center gap-2.5">
+            <Settings2 className="w-4.5 h-4.5 text-gray-400" />
+            <span className="text-sm font-semibold text-gray-900">General</span>
           </div>
-        </div>
+          <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${generalOpen ? '' : '-rotate-90'}`} />
+        </button>
 
-        {/* ── General Tab ── */}
-        {tab === 'general' && (
-          <div className="px-5 pb-5 space-y-6">
-            <div className="bg-slate-50 rounded-xl p-4 space-y-5">
+        {generalOpen && (
+          <div className="px-5 pb-5 space-y-6 border-t border-gray-100">
+            <div className="bg-slate-50 rounded-xl p-4 space-y-5 mt-4">
               <ConfigSlider
                 label="Buffer Days"
                 desc="How many days ahead to keep the content buffer filled"
@@ -340,10 +318,26 @@ export function TobySettings() {
             </div>
           </div>
         )}
+      </div>
 
-        {/* ── Brands Tab — Grid ── */}
-        {tab === 'brands' && !selectedBrandConfig && (
-          <div className="px-5 pb-5">
+      {/* ── Brands Section ── */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+        <button
+          onClick={() => { setBrandsOpen(o => !o); setSelectedBrand(null) }}
+          className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50/50 transition-colors"
+        >
+          <div className="flex items-center gap-2.5">
+            <Palette className="w-4.5 h-4.5 text-gray-400" />
+            <span className="text-sm font-semibold text-gray-900">Brands</span>
+            <span className="text-xs px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500">
+              {brandConfigs.length}
+            </span>
+          </div>
+          <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${brandsOpen ? '' : '-rotate-90'}`} />
+        </button>
+
+        {brandsOpen && !selectedBrandConfig && (
+          <div className="px-5 pb-5 border-t border-gray-100 pt-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {brandConfigs.map(bc => {
                 const color = getBrandColor(bc)
@@ -460,8 +454,8 @@ export function TobySettings() {
           </div>
         )}
 
-        {/* ── Brands Tab — Detail Panel ── */}
-        {tab === 'brands' && selectedBrandConfig && (
+        {/* ── Brand Detail Panel ── */}
+        {brandsOpen && selectedBrandConfig && (
           <BrandDetailPanel
             brand={selectedBrandConfig}
             onBack={() => setSelectedBrand(null)}

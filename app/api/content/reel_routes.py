@@ -58,13 +58,13 @@ scheduler_service = DatabaseSchedulerService()
 async def create_reel(request: ReelCreateRequest, user: dict = Depends(get_current_user)) -> ReelCreateResponse:
     """
     Create a complete Instagram Reel package.
-    
+
     This endpoint generates:
     - A thumbnail image (PNG)
     - A reel image (PNG)
     - A 7-second reel video (MP4) with background music
     - A formatted caption
-    
+
     If a scheduled time is provided, the reel metadata is stored for later publishing.
     """
     try:
@@ -72,7 +72,7 @@ async def create_reel(request: ReelCreateRequest, user: dict = Depends(get_curre
         reel_id = str(uuid.uuid4())
         user_id = user["id"]
         brand_slug = str(request.brand)
-        
+
         # Create temp files for generators that need paths
         tmp_thumb = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
         tmp_reel = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
@@ -81,11 +81,11 @@ async def create_reel(request: ReelCreateRequest, user: dict = Depends(get_curre
         thumbnail_path = Path(tmp_thumb.name)
         reel_image_path = Path(tmp_reel.name)
         video_path = Path(tmp_video.name)
-        
+
         # Initialize services for this request
         image_generator = ImageGenerator(request.brand)
         caption_builder = CaptionBuilder()
-        
+
         # Step 1: Generate thumbnail
         try:
             image_generator.generate_thumbnail(
@@ -97,7 +97,7 @@ async def create_reel(request: ReelCreateRequest, user: dict = Depends(get_curre
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to generate thumbnail: {str(e)}"
             )
-        
+
         # Step 2: Generate reel image
         try:
             image_generator.generate_reel_image(
@@ -111,7 +111,7 @@ async def create_reel(request: ReelCreateRequest, user: dict = Depends(get_curre
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to generate reel image: {str(e)}"
             )
-        
+
         # Step 3: Generate video
         try:
             video_generator = VideoGenerator()
@@ -140,7 +140,7 @@ async def create_reel(request: ReelCreateRequest, user: dict = Depends(get_curre
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Unexpected error during video generation: {str(e)}"
             )
-        
+
         # Step 4: Generate caption
         try:
             caption = caption_builder.build_caption(
@@ -152,7 +152,7 @@ async def create_reel(request: ReelCreateRequest, user: dict = Depends(get_curre
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to generate caption: {str(e)}"
             )
-        
+
         # Upload to Supabase Storage
         try:
             thumb_remote = storage_path(user_id, brand_slug, "thumbnails", f"{reel_id}.png")
@@ -193,7 +193,7 @@ async def create_reel(request: ReelCreateRequest, user: dict = Depends(get_curre
                 # Scheduling failure shouldn't fail the entire request
                 # Log the error but continue
                 print(f"Warning: Failed to schedule reel: {str(e)}")
-        
+
         # Return response with Supabase URLs
         return ReelCreateResponse(
             thumbnail_path=thumbnail_url,
@@ -203,7 +203,7 @@ async def create_reel(request: ReelCreateRequest, user: dict = Depends(get_curre
             reel_id=reel_id,
             scheduled_at=request.schedule_at
         )
-        
+
     except HTTPException:
         # Re-raise HTTP exceptions as-is
         raise
@@ -223,7 +223,7 @@ async def create_reel(request: ReelCreateRequest, user: dict = Depends(get_curre
 async def generate_reel(request: SimpleReelRequest, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
     """
     Generate reel images and video from title and content lines.
-    
+
     Simplified endpoint for web interface testing.
     """
     try:
@@ -231,7 +231,7 @@ async def generate_reel(request: SimpleReelRequest, db: Session = Depends(get_db
         reel_id = str(uuid.uuid4())[:8]
         user_id = user["id"]
         brand_slug = request.brand
-        
+
         # Create database record
         job = GenerationJob(
             job_id=reel_id,
@@ -242,10 +242,11 @@ async def generate_reel(request: SimpleReelRequest, db: Session = Depends(get_db
             variant=request.variant,
             ai_prompt=request.ai_prompt,
             status="generating",
+            pipeline_status="pending",
         )
         db.add(job)
         db.commit()
-        
+
         # Create temp files for generators
         tmp_thumb = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
         tmp_reel = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
@@ -254,24 +255,24 @@ async def generate_reel(request: SimpleReelRequest, db: Session = Depends(get_db
         thumbnail_path = Path(tmp_thumb.name)
         reel_image_path = Path(tmp_reel.name)
         video_path = Path(tmp_video.name)
-        
+
         # Parse brand - resolve dynamically from DB
         brand_id = brand_resolver.resolve_brand_name(request.brand) or request.brand
         brand = brand_id
-        
+
         # Update progress
         job.current_step = "initializing"
         job.progress_percent = 5
         db.commit()
-        
+
         # Initialize image generator with variant and optional AI prompt
         image_generator = ImageGenerator(
-            brand, 
-            variant=request.variant, 
+            brand,
+            variant=request.variant,
             brand_name=request.brand,
             ai_prompt=request.ai_prompt
         )
-        
+
         # Generate thumbnail
         job.current_step = "thumbnail"
         job.progress_percent = 20
@@ -280,7 +281,7 @@ async def generate_reel(request: SimpleReelRequest, db: Session = Depends(get_db
             title=request.title,
             output_path=thumbnail_path
         )
-        
+
         # Generate reel image
         job.current_step = "content"
         job.progress_percent = 50
@@ -291,7 +292,7 @@ async def generate_reel(request: SimpleReelRequest, db: Session = Depends(get_db
             output_path=reel_image_path,
             cta_type=request.cta_type
         )
-        
+
         # Generate video with random duration and music
         job.current_step = "video"
         job.progress_percent = 75
@@ -305,7 +306,7 @@ async def generate_reel(request: SimpleReelRequest, db: Session = Depends(get_db
             output_path=video_path,
             music_url=_music_url,
         )
-        
+
         # Generate caption
         job.current_step = "caption"
         job.progress_percent = 90
@@ -315,7 +316,7 @@ async def generate_reel(request: SimpleReelRequest, db: Session = Depends(get_db
             title=request.title,
             lines=request.content_lines
         )
-        
+
         # Upload to Supabase Storage
         try:
             thumb_remote = storage_path(user_id, brand_slug, "thumbnails", f"{reel_id}.png")
@@ -339,7 +340,7 @@ async def generate_reel(request: SimpleReelRequest, db: Session = Depends(get_db
                 os.unlink(tmp)
             except OSError:
                 pass
-        
+
         # Update database with completion
         job.status = "completed"
         job.current_step = "completed"
@@ -353,7 +354,7 @@ async def generate_reel(request: SimpleReelRequest, db: Session = Depends(get_db
             }
         }
         db.commit()
-        
+
         # Return Supabase URLs
         return {
             "thumbnail_path": thumbnail_url,
@@ -362,7 +363,7 @@ async def generate_reel(request: SimpleReelRequest, db: Session = Depends(get_db
             "caption": caption,
             "reel_id": reel_id
         }
-        
+
     except Exception as e:
         # Update database with error
         if 'reel_id' in locals():

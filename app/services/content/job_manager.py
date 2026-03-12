@@ -29,10 +29,10 @@ def get_brand_type(brand_name: str) -> str:
 
 class JobManager:
     """Manages generation jobs with database persistence."""
-    
+
     def __init__(self, db: Session):
         self.db = db
-    
+
     def create_job(
         self,
         user_id: str,
@@ -104,6 +104,7 @@ class JobManager:
             content_count=content_count,
             status="pending",
             brand_outputs=brand_outputs,
+            pipeline_status="pending",
         )
 
         self.db.add(job)
@@ -111,14 +112,14 @@ class JobManager:
         self.db.refresh(job)
 
         return job
-    
+
     def get_job(self, job_id: str, user_id: str | None = None) -> Optional[GenerationJob]:
         """Get a job by ID, optionally filtered by user."""
         query = self.db.query(GenerationJob).filter_by(job_id=job_id)
         if user_id:
             query = query.filter(GenerationJob.user_id == user_id)
         return query.first()
-    
+
     def get_user_jobs(self, user_id: str, limit: int = 50) -> List[GenerationJob]:
         """Get recent jobs for a user."""
         return (
@@ -128,7 +129,7 @@ class JobManager:
             .limit(limit)
             .all()
         )
-    
+
     def get_all_jobs(self, limit: int = 100, user_id: str | None = None) -> List[GenerationJob]:
         """Get all recent jobs, optionally filtered by user."""
         query = self.db.query(GenerationJob)
@@ -140,7 +141,7 @@ class JobManager:
             .limit(limit)
             .all()
         )
-    
+
     def update_job_status(
         self,
         job_id: str,
@@ -153,7 +154,7 @@ class JobManager:
         job = self.get_job(job_id)
         if not job:
             return None
-        
+
         job.status = status
         if current_step is not None:
             job.current_step = current_step
@@ -161,16 +162,16 @@ class JobManager:
             job.progress_percent = progress_percent
         if error_message is not None:
             job.error_message = error_message
-        
+
         if status == "generating" and not job.started_at:
             job.started_at = datetime.utcnow()
         elif status in ("completed", "failed"):
             job.completed_at = datetime.utcnow()
-        
+
         self.db.commit()
         self.db.refresh(job)
         return job
-    
+
     def update_brand_output(
         self,
         job_id: str,
@@ -231,7 +232,7 @@ class JobManager:
         print(f"   ✓ Database committed.", flush=True)
         sys.stdout.flush()
         return job
-    
+
     def update_job_inputs(
         self,
         job_id: str,
@@ -245,7 +246,7 @@ class JobManager:
         job = self.get_job(job_id, user_id=user_id)
         if not job:
             return None
-        
+
         if title is not None:
             job.title = title
         if content_lines is not None:
@@ -254,19 +255,19 @@ class JobManager:
             job.ai_prompt = ai_prompt
         if cta_type is not None:
             job.cta_type = cta_type
-        
+
         self.db.commit()
         self.db.refresh(job)
         return job
-    
+
     def cleanup_job_files(self, job_id: str) -> bool:
         """Clean up all files associated with a job from Supabase Storage."""
         job = self.get_job(job_id)
         if not job:
             return False
-        
+
         from app.services.storage.supabase_storage import delete_file
-        
+
         def _parse_supabase_url(url: str) -> tuple[str, str] | None:
             """Extract (bucket, path) from a Supabase Storage public URL."""
             if not url or not isinstance(url, str):
@@ -280,7 +281,7 @@ class JobManager:
             if len(parts) != 2:
                 return None
             return (parts[0], parts[1])
-        
+
         def _cleanup_single_output(output: dict):
             """Delete Supabase files referenced by a single brand output dict."""
             url_keys = ["video_url", "thumbnail_url", "yt_thumbnail_url",
@@ -312,18 +313,18 @@ class JobManager:
                         _cleanup_single_output(item)
             elif isinstance(output, dict):
                 _cleanup_single_output(output)
-        
+
         return True
-    
+
     def delete_job(self, job_id: str) -> bool:
         """Delete a job and its associated files."""
         job = self.get_job(job_id)
         if not job:
             return False
-        
+
         # Clean up files first
         self.cleanup_job_files(job_id)
-        
+
         self.db.delete(job)
         self.db.commit()
         return True
