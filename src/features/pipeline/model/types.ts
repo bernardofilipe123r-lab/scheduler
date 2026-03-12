@@ -5,6 +5,17 @@ export type LifecycleStage = 'pending_review' | 'generating' | 'scheduled' | 'pu
 
 export type ContentVariant = 'light' | 'dark' | 'format_b' | 'post' | 'threads'
 
+export interface BrandOutput {
+  status: string
+  thumbnail_path?: string
+  video_path?: string
+  yt_thumbnail_path?: string
+  reel_id?: string
+  carousel_paths?: string[]
+  caption?: string
+  content_index?: number
+}
+
 export interface PipelineItem {
   job_id: string
   id?: number
@@ -23,16 +34,16 @@ export interface PipelineItem {
   created_at: string
   status: string
   lifecycle: LifecycleStage
-  brand_outputs: Record<string, {
-    status: string
-    thumbnail_path?: string
-    video_path?: string
-    yt_thumbnail_path?: string
-    reel_id?: string
-    carousel_paths?: string[]
-    caption?: string
-  }>
+  brand_outputs: Record<string, BrandOutput | BrandOutput[]>
   progress_percent?: number | null
+}
+
+/** Extract the first brand output, handling both single object and array (multi-content) formats */
+export function getFirstBrandOutput(item: PipelineItem): BrandOutput | undefined {
+  const val = Object.values(item.brand_outputs ?? {})[0]
+  if (!val) return undefined
+  if (Array.isArray(val)) return val[0]
+  return val
 }
 
 export interface PipelineStats {

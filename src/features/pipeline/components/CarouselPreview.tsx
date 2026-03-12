@@ -1,11 +1,12 @@
 import type { PipelineItem } from '../model/types'
+import { getFirstBrandOutput } from '../model/types'
 
 interface Props {
   item: PipelineItem
 }
 
 export function CarouselPreview({ item }: Props) {
-  const output = Object.values(item.brand_outputs ?? {})[0]
+  const output = getFirstBrandOutput(item)
   const slides = output?.carousel_paths ?? []
   const cover = slides[0]
 

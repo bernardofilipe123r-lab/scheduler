@@ -1,4 +1,5 @@
 import type { PipelineItem } from '../model/types'
+import { getFirstBrandOutput } from '../model/types'
 import { ReelPreview } from './ReelPreview'
 import { CarouselPreview } from './CarouselPreview'
 import { ThreadPreview } from './ThreadPreview'
@@ -13,9 +14,8 @@ export function ContentPreview({ item }: Props) {
   }
 
   // Check if any brand output has carousel paths
-  const hasCarousel = Object.values(item.brand_outputs ?? {}).some(
-    o => (o.carousel_paths?.length ?? 0) > 0
-  )
+  const output = getFirstBrandOutput(item)
+  const hasCarousel = (output?.carousel_paths?.length ?? 0) > 0
   if (item.content_format === 'carousel' || hasCarousel) {
     return <CarouselPreview item={item} />
   }

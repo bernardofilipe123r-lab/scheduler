@@ -3,6 +3,7 @@ import { CheckCircle2, X, Pencil, ChevronLeft, ChevronRight, Star, Volume2, Volu
 import { clsx } from 'clsx'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { PipelineItem } from '../model/types'
+import { getFirstBrandOutput } from '../model/types'
 
 interface Props {
   items: PipelineItem[]
@@ -14,13 +15,11 @@ interface Props {
 }
 
 function getVideoUrl(item: PipelineItem): string | null {
-  const output = Object.values(item.brand_outputs ?? {})[0]
-  return output?.video_path ?? null
+  return getFirstBrandOutput(item)?.video_path ?? null
 }
 
 function getThumbnail(item: PipelineItem): string | null {
-  const output = Object.values(item.brand_outputs ?? {})[0]
-  return output?.thumbnail_path ?? null
+  return getFirstBrandOutput(item)?.thumbnail_path ?? null
 }
 
 function variantLabel(item: PipelineItem): string {
@@ -32,70 +31,94 @@ function variantLabel(item: PipelineItem): string {
   return item.variant
 }
 
-export function ReviewModal({ items, initialIndex, onApprove, onReject, onEdit, onClose }: Props) {
-  const [currentIndex, setCurrentIndex] = useState(initialIndex)
+export function ReviewModal({ items: externalItems, initialIndex, onApprove, onReject, onEdit, onClose }: Props) {
+  // Internal queue: items that haven't been accepted/declined yet
+  const [queue, setQueue] = useState<PipelineItem[]>(() => {
+    // Start from initialIndex, keep only items from that point forward
+    return externalItems.slice(initialIndex)
+  })
+  const [currentIdx, setCurrentIdx] = useState(0)
+  const totalOriginal = externalItems.length
+  const processedCount = totalOriginal - queue.length
+
   const [direction, setDirection] = useState<'left' | 'right' | null>(null)
-  const [muted, setMuted] = useState(false)
+  const [isAnimating, setIsAnimating] = useState(false)
+  const [muted, setMuted] = useState(true) // Start muted so autoplay works
   const videoRef = useRef<HTMLVideoElement>(null)
 
-  const item = items[currentIndex]
+  const item = queue[currentIdx]
 
-  // Close when no more items
+  // Close when queue is empty
   useEffect(() => {
-    if (!item || items.length === 0) {
-      onClose()
-    }
-  }, [item, items.length, onClose])
+    if (queue.length === 0) onClose()
+  }, [queue.length, onClose])
 
   // Auto-play video when item changes
   useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.currentTime = 0
-      videoRef.current.play().catch(() => { /* autoplay blocked */ })
-    }
-  }, [currentIndex])
+    const v = videoRef.current
+    if (!v) return
+    v.currentTime = 0
+    v.muted = muted
+    v.play().catch(() => { /* autoplay policy */ })
+  }, [currentIdx, item?.job_id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sync muted state to video element
+  useEffect(() => {
+    if (videoRef.current) videoRef.current.muted = muted
+  }, [muted])
 
   // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if (isAnimating) return
       if (e.key === 'Escape') onClose()
-      else if (e.key === 'ArrowRight' || e.key === 'a') handleAccept()
-      else if (e.key === 'ArrowLeft' || e.key === 'd') handleDecline()
-      else if (e.key === 'e') handleEdit()
-      else if (e.key === 'm') setMuted(m => !m)
+      else if (e.key === 'ArrowRight') handleAccept()
+      else if (e.key === 'ArrowLeft') handleDecline()
+      else if (e.key === 'e' || e.key === 'E') handleEdit()
+      else if (e.key === 'm' || e.key === 'M') setMuted(m => !m)
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   })
 
-  const advanceToNext = useCallback(() => {
-    if (currentIndex < items.length - 1) {
-      setCurrentIndex(prev => prev + 1)
-    } else {
-      onClose()
-    }
-  }, [currentIndex, items.length, onClose])
+  const removeCurrentFromQueue = useCallback(() => {
+    setQueue(prev => {
+      const next = [...prev]
+      next.splice(currentIdx, 1)
+      return next
+    })
+    // If we removed the last item in queue, currentIdx may be out of bounds — clamp it
+    setCurrentIdx(prev => {
+      const newLen = queue.length - 1
+      if (newLen <= 0) return 0
+      return Math.min(prev, newLen - 1)
+    })
+  }, [currentIdx, queue.length])
 
   const handleAccept = useCallback(() => {
-    if (!item) return
+    if (!item || isAnimating) return
+    setIsAnimating(true)
     setDirection('right')
     onApprove(item.job_id)
-    // Small delay for animation then advance
+    // Animate out, then remove from queue
     setTimeout(() => {
       setDirection(null)
-      advanceToNext()
-    }, 300)
-  }, [item, onApprove, advanceToNext])
+      setIsAnimating(false)
+      removeCurrentFromQueue()
+    }, 250)
+  }, [item, isAnimating, onApprove, removeCurrentFromQueue])
 
   const handleDecline = useCallback(() => {
-    if (!item) return
+    if (!item || isAnimating) return
+    setIsAnimating(true)
     setDirection('left')
     onReject(item.job_id)
     setTimeout(() => {
       setDirection(null)
-      advanceToNext()
-    }, 300)
-  }, [item, onReject, advanceToNext])
+      setIsAnimating(false)
+      removeCurrentFromQueue()
+    }, 250)
+  }, [item, isAnimating, onReject, removeCurrentFromQueue])
 
   const handleEdit = useCallback(() => {
     if (!item) return
@@ -104,21 +127,21 @@ export function ReviewModal({ items, initialIndex, onApprove, onReject, onEdit, 
   }, [item, onEdit, onClose])
 
   const goToPrev = useCallback(() => {
-    if (currentIndex > 0) setCurrentIndex(prev => prev - 1)
-  }, [currentIndex])
+    if (currentIdx > 0 && !isAnimating) setCurrentIdx(prev => prev - 1)
+  }, [currentIdx, isAnimating])
 
   const goToNext = useCallback(() => {
-    if (currentIndex < items.length - 1) setCurrentIndex(prev => prev + 1)
-  }, [currentIndex, items.length])
+    if (currentIdx < queue.length - 1 && !isAnimating) setCurrentIdx(prev => prev + 1)
+  }, [currentIdx, queue.length, isAnimating])
 
   if (!item) return null
 
   const videoUrl = getVideoUrl(item)
   const thumbnail = getThumbnail(item)
-  const remaining = items.length - currentIndex
+  const remaining = queue.length - currentIdx
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
       <motion.div
         initial={{ opacity: 0 }}
@@ -128,18 +151,18 @@ export function ReviewModal({ items, initialIndex, onApprove, onReject, onEdit, 
         onClick={onClose}
       />
 
-      {/* Modal content */}
+      {/* Modal content — centered with no extra margin */}
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
         transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-        className="relative z-10 flex flex-col items-center max-h-[95vh] w-full max-w-md mx-4"
+        className="relative z-10 flex flex-col items-center w-full max-w-md"
       >
         {/* Counter */}
-        <div className="mb-3 flex items-center gap-3">
+        <div className="mb-2 flex items-center gap-3">
           <span className="text-white/90 text-sm font-medium">
-            {currentIndex + 1} of {items.length}
+            {processedCount + currentIdx + 1} of {totalOriginal}
           </span>
           <span className="text-white/50 text-xs">
             {remaining} left to review
@@ -147,15 +170,15 @@ export function ReviewModal({ items, initialIndex, onApprove, onReject, onEdit, 
         </div>
 
         {/* Progress dots */}
-        <div className="mb-4 flex gap-1 max-w-xs overflow-hidden">
-          {items.slice(Math.max(0, currentIndex - 4), currentIndex + 5).map((_, i) => {
-            const actualIndex = Math.max(0, currentIndex - 4) + i
+        <div className="mb-3 flex gap-1 max-w-xs overflow-hidden">
+          {queue.slice(Math.max(0, currentIdx - 4), currentIdx + 5).map((q, i) => {
+            const actualIndex = Math.max(0, currentIdx - 4) + i
             return (
               <div
-                key={actualIndex}
+                key={q.job_id}
                 className={clsx(
                   'h-1 rounded-full transition-all duration-300',
-                  actualIndex === currentIndex ? 'w-6 bg-white' : 'w-1.5 bg-white/30',
+                  actualIndex === currentIdx ? 'w-6 bg-white' : 'w-1.5 bg-white/30',
                 )}
               />
             )
@@ -163,22 +186,22 @@ export function ReviewModal({ items, initialIndex, onApprove, onReject, onEdit, 
         </div>
 
         {/* Video card with swipe animation */}
-        <AnimatePresence mode="wait">
+        <AnimatePresence mode="popLayout">
           <motion.div
             key={item.job_id}
-            initial={{ opacity: 0, x: direction === 'right' ? -100 : direction === 'left' ? 100 : 0, scale: 0.95 }}
+            initial={{ opacity: 0, x: direction === 'right' ? -80 : direction === 'left' ? 80 : 0, scale: 0.95 }}
             animate={{ opacity: 1, x: 0, scale: 1 }}
             exit={{
               opacity: 0,
               x: direction === 'right' ? 200 : direction === 'left' ? -200 : 0,
               scale: 0.9,
-              transition: { duration: 0.25 },
+              transition: { duration: 0.2 },
             }}
-            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+            transition={{ type: 'spring', damping: 28, stiffness: 350 }}
             className="relative w-full bg-black rounded-2xl overflow-hidden shadow-2xl"
           >
             {/* Video/preview area */}
-            <div className="relative aspect-[9/16] max-h-[60vh] bg-black">
+            <div className="relative aspect-[9/16] max-h-[55vh] bg-black">
               {videoUrl ? (
                 <video
                   ref={videoRef}
@@ -199,18 +222,23 @@ export function ReviewModal({ items, initialIndex, onApprove, onReject, onEdit, 
                 </div>
               )}
 
-              {/* Mute toggle */}
+              {/* Mute toggle — prominent when muted */}
               {videoUrl && (
                 <button
                   onClick={() => setMuted(m => !m)}
-                  className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white/80 hover:text-white transition-colors"
+                  className={clsx(
+                    'absolute top-3 right-3 rounded-full backdrop-blur-sm flex items-center justify-center transition-all',
+                    muted
+                      ? 'w-10 h-10 bg-white/20 text-white hover:bg-white/30'
+                      : 'w-8 h-8 bg-black/40 text-white/80 hover:text-white',
+                  )}
                 >
-                  {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                  {muted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-4 h-4" />}
                 </button>
               )}
 
               {/* Navigation arrows */}
-              {currentIndex > 0 && (
+              {currentIdx > 0 && (
                 <button
                   onClick={goToPrev}
                   className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center text-white/60 hover:text-white transition-colors"
@@ -218,7 +246,7 @@ export function ReviewModal({ items, initialIndex, onApprove, onReject, onEdit, 
                   <ChevronLeft className="w-5 h-5" />
                 </button>
               )}
-              {currentIndex < items.length - 1 && (
+              {currentIdx < queue.length - 1 && (
                 <button
                   onClick={goToNext}
                   className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center text-white/60 hover:text-white transition-colors"
@@ -254,10 +282,11 @@ export function ReviewModal({ items, initialIndex, onApprove, onReject, onEdit, 
         </AnimatePresence>
 
         {/* Action buttons */}
-        <div className="mt-5 flex items-center gap-4">
+        <div className="mt-4 flex items-center gap-4">
           {/* Decline */}
           <button
             onClick={handleDecline}
+            disabled={isAnimating}
             className="group flex flex-col items-center gap-1"
           >
             <div className="w-14 h-14 rounded-full border-2 border-red-400/60 flex items-center justify-center text-red-400 hover:bg-red-500 hover:text-white hover:border-red-500 transition-all duration-200 hover:scale-110">
@@ -280,6 +309,7 @@ export function ReviewModal({ items, initialIndex, onApprove, onReject, onEdit, 
           {/* Accept */}
           <button
             onClick={handleAccept}
+            disabled={isAnimating}
             className="group flex flex-col items-center gap-1"
           >
             <div className="w-14 h-14 rounded-full border-2 border-emerald-400/60 flex items-center justify-center text-emerald-400 hover:bg-emerald-500 hover:text-white hover:border-emerald-500 transition-all duration-200 hover:scale-110">
@@ -290,7 +320,7 @@ export function ReviewModal({ items, initialIndex, onApprove, onReject, onEdit, 
         </div>
 
         {/* Keyboard hint */}
-        <p className="mt-3 text-[10px] text-white/25">
+        <p className="mt-2 text-[10px] text-white/25">
           ← Decline &nbsp;·&nbsp; → Accept &nbsp;·&nbsp; E Edit &nbsp;·&nbsp; M Mute &nbsp;·&nbsp; Esc Close
         </p>
       </motion.div>
