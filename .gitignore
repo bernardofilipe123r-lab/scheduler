@@ -59,3 +59,6 @@ youtube_quota.json
 # Claude Code local overrides (not shared with team)
 .claude/settings.local.json
 .claude/CLAUDE.local.md
+
+
+/downloads

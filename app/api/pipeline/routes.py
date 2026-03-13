@@ -235,6 +235,10 @@ def _approve_single_job(
 
         caption = caption_override or job.caption or brand_data.get("caption", "")
 
+        # Prefer per-brand slide_texts (populated by batch generation)
+        # over job-level content_lines (which may be empty for auto carousels)
+        slide_texts = brand_data.get("slide_texts") or job.content_lines
+
         result = scheduler.schedule_reel(
             user_id=user["id"],
             reel_id=brand_data.get("reel_id", f"{job.job_id}_{brand_name}"),
@@ -247,7 +251,7 @@ def _approve_single_job(
             brand=brand_name,
             variant=variant,
             post_title=job.title,
-            slide_texts=job.content_lines,
+            slide_texts=slide_texts,
             carousel_paths=brand_data.get("carousel_paths"),
             job_id=job.job_id,
             created_by=job.created_by or "user",

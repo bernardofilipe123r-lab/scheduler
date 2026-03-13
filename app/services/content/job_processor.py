@@ -626,6 +626,43 @@ class JobProcessor:
 
             print(f"   ✅ {brand} post background completed", flush=True)
 
+            # ── Pre-render carousel images (cover + text slides) ─────
+            # Same approach as the Toby orchestrator: render all slides
+            # server-side so the Pipeline can display them without
+            # client-side Canvas rendering.
+            if brand_slides and bg_url:
+                try:
+                    import requests as _req
+                    resp = _req.get(bg_url, timeout=60)
+                    resp.raise_for_status()
+                    tmp_bg_render = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+                    tmp_bg_render.write(resp.content)
+                    tmp_bg_render.close()
+
+                    from app.services.media.carousel_renderer import render_carousel_images
+                    composed = render_carousel_images(
+                        brand=brand,
+                        title=brand_title,
+                        background_image=tmp_bg_render.name,
+                        slide_texts=brand_slides,
+                        reel_id=reel_id,
+                        user_id=user_id,
+                    )
+                    if composed:
+                        cover_url = composed.get("coverUrl")
+                        slide_urls = composed.get("slideUrls", [])
+                        if cover_url:
+                            carousel_paths = [cover_url] + slide_urls
+                            _update_output({"carousel_paths": carousel_paths})
+                            print(f"   📑 Pre-rendered {len(carousel_paths)} carousel images", flush=True)
+
+                    try:
+                        os.unlink(tmp_bg_render.name)
+                    except OSError:
+                        pass
+                except Exception as render_err:
+                    print(f"   ⚠️ Carousel pre-render warning (non-fatal): {render_err}", flush=True)
+
             # Track content generation
             try:
                 from app.services.monitoring.cost_tracker import record_content_generated
