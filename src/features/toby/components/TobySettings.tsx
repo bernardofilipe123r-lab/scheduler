@@ -633,6 +633,20 @@ function BrandDetailPanel({
         </div>
       )}
 
+      {/* Reels share-to-feed toggle (Instagram-specific) */}
+      {enabled && reelsEnabled && brand.has_instagram && (
+        <div className="bg-slate-50 rounded-xl p-4 mt-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">Instagram Reels</p>
+          <ToggleRow
+            label="Show on Profile Grid"
+            desc="When off, reels appear only in the Reels tab — not on the main profile grid"
+            icon={<Film className="w-4 h-4" />}
+            enabled={(getVal('reels_share_to_feed', brand.reels_share_to_feed ?? true) as boolean)}
+            onChange={() => onChange('reels_share_to_feed', !(getVal('reels_share_to_feed', brand.reels_share_to_feed ?? true) as boolean))}
+          />
+        </div>
+      )}
+
       {/* Volume sliders */}
       <div className={`bg-slate-50 rounded-xl p-4 mt-4 space-y-5 ${!enabled ? 'opacity-50 pointer-events-none' : ''}`}>
         <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Volume</p>

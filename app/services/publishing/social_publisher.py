@@ -1112,7 +1112,8 @@ class SocialPublisher:
         self,
         video_url: str,
         caption: str = "CHANGE ME",
-        thumbnail_url: Optional[str] = None
+        thumbnail_url: Optional[str] = None,
+        share_to_feed: bool = True
     ) -> Dict[str, Any]:
         """
         Publish a Reel to Instagram using the video_url method.
@@ -1127,6 +1128,7 @@ class SocialPublisher:
             video_url: Public URL to the video file (must be accessible)
             caption: Caption text for the reel
             thumbnail_url: Optional thumbnail URL
+            share_to_feed: If False, reel appears only in Reels tab (not profile grid)
 
         Returns:
             Dict with publish status and Instagram post ID
@@ -1153,6 +1155,11 @@ class SocialPublisher:
                 "access_token": self.ig_access_token,
                 "is_ai_generated": True,
             }
+
+            # Meta API requires share_to_feed as a string, not boolean.
+            # When "false", the reel appears only in the Reels tab (not profile grid).
+            if not share_to_feed:
+                container_payload["share_to_feed"] = "false"
 
             # Add cover/thumbnail URL if provided
             if thumbnail_url:

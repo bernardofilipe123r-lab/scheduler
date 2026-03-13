@@ -980,24 +980,15 @@ class JobProcessor:
         try:
             from app.core.prompt_context import PromptContext
             from app.services.content.threads_generator import ThreadsGenerator
-            from app.models import NicheConfig, Brand
-            from app.db_connection import SessionLocal
+            from app.services.content.niche_config_service import NicheConfigService
 
             tg = ThreadsGenerator()
 
             # Build prompt context from brand's Content DNA
-            ctx_db = SessionLocal()
-            try:
-                brand_obj = ctx_db.query(Brand).filter(
-                    Brand.id == brand, Brand.user_id == job.user_id
-                ).first()
-                niche_cfg = ctx_db.query(NicheConfig).filter(
-                    NicheConfig.brand_id == brand, NicheConfig.user_id == job.user_id
-                ).first()
-            finally:
-                ctx_db.close()
-
-            ctx = PromptContext.from_niche_config(niche_cfg) if niche_cfg else PromptContext()
+            niche_svc = NicheConfigService()
+            ctx = niche_svc.get_context(user_id=job.user_id, brand_id=brand)
+            if not ctx:
+                ctx = PromptContext()
 
             # Determine mode from job data
             # cta_type stores thread mode: "chain" for chain, anything else for single post

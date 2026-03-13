@@ -735,6 +735,25 @@ async def startup_event():
 
                             # Publish now - pass URLs directly
                             print(f"      🏷️ Publishing REEL with brand: {brand}")
+
+                            # Look up share_to_feed preference from TobyBrandConfig
+                            _reel_share_to_feed = True
+                            if brand and _sched_user_id:
+                                try:
+                                    from app.db_connection import get_db_session
+                                    from app.models.toby import TobyBrandConfig as _TBC
+                                    with get_db_session() as _stf_db:
+                                        _tbc = _stf_db.query(_TBC).filter(
+                                            _TBC.user_id == _sched_user_id,
+                                            _TBC.brand_id == brand,
+                                        ).first()
+                                        if _tbc and _tbc.reels_share_to_feed is not None:
+                                            _reel_share_to_feed = _tbc.reels_share_to_feed
+                                            if not _reel_share_to_feed:
+                                                print(f"      📌 Reels-only mode: share_to_feed=false for {brand}")
+                                except Exception as _stf_err:
+                                    print(f"      ⚠️ Could not look up share_to_feed: {_stf_err}")
+
                             result = scheduler_service.publish_now(
                                 video_url=video_path_str,
                                 thumbnail_url=thumbnail_path_str,
@@ -742,7 +761,8 @@ async def startup_event():
                                 platforms=platforms,
                                 brand_name=brand,
                                 metadata=metadata,
-                                schedule_id=schedule_id
+                                schedule_id=schedule_id,
+                                share_to_feed=_reel_share_to_feed
                             )
 
                         print(f"      📊 Publish result: {result}")

@@ -28,6 +28,7 @@ class TobyBrandConfigUpdate(BaseModel):
     reel_slots_per_day: Optional[int] = Field(None, ge=0, le=6)
     post_slots_per_day: Optional[int] = Field(None, ge=0, le=2)
     reel_format: Optional[str] = Field(None, pattern="^(format_a|format_b)$")
+    reels_share_to_feed: Optional[bool] = None
     # Per-content-type platform selection.
     # Dict keyed by content-type key ("reels", "posts") → list of platform IDs.
     # Example: {"reels": ["instagram", "youtube"], "posts": ["instagram", "threads"]}

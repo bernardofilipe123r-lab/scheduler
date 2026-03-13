@@ -32,7 +32,7 @@ router = APIRouter(prefix="/api/toby", tags=["toby"])
 
 def _resolve_user_id(user: dict, target_user_id: str | None) -> str:
     """Return the effective user_id.
-    
+
     Super-admins can pass ?user_id=<id> to access any user's Toby.
     Regular users always get their own id.
     """
@@ -648,6 +648,7 @@ def get_brand_configs(
             "reel_slots_per_day": c.reel_slots_per_day,
             "post_slots_per_day": c.post_slots_per_day,
             "reel_format": c.reel_format or "format_a",
+            "reels_share_to_feed": c.reels_share_to_feed if c.reels_share_to_feed is not None else True,
             "enabled_platforms": c.enabled_platforms,  # None = all connected
             "logo_path": brand.logo_path,
             "brand_color": brand.colors.get("primary") if isinstance(brand.colors, dict) else None,
@@ -704,6 +705,8 @@ def update_brand_config(
         cfg.post_slots_per_day = body.post_slots_per_day
     if body.reel_format is not None:
         cfg.reel_format = body.reel_format
+    if body.reels_share_to_feed is not None:
+        cfg.reels_share_to_feed = body.reels_share_to_feed
     # enabled_platforms: distinguish "field absent" (no change) from "field sent as null" (all connected)
     if "enabled_platforms" in body.model_fields_set:
         from sqlalchemy.orm.attributes import flag_modified
@@ -735,6 +738,7 @@ def update_brand_config(
             "reel_slots_per_day": cfg.reel_slots_per_day,
             "post_slots_per_day": cfg.post_slots_per_day,
             "reel_format": cfg.reel_format or "format_a",
+            "reels_share_to_feed": cfg.reels_share_to_feed if cfg.reels_share_to_feed is not None else True,
             "enabled_platforms": cfg.enabled_platforms,
         },
     }

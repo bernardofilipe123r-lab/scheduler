@@ -10,9 +10,10 @@ Endpoints:
 - GET  /api/admin/supabase-usage                 Supabase usage metrics (super admin only)
 - GET  /api/admin/error-digest                   Condensed error summary (last 48h)
 - GET  /api/admin/format-violations              Proactive format pattern violation check
-- GET  /api/admin/music                          List music library files
-- POST /api/admin/music/download                 Download songs via yt-dlp
-- DELETE /api/admin/music/{filename}             Delete a music file
+- GET  /api/admin/music                          List music library tracks
+- POST /api/admin/music/upload                   Upload MP3 files to music library
+- DELETE /api/admin/music/{track_id}             Delete a music track
+- GET  /api/admin/music/{track_id}/stream        Stream a music track
 """
 
 import asyncio
@@ -22,7 +23,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -1243,77 +1244,118 @@ def get_format_violations(
 
 # ─── Music Library Management ────────────────────────────────────────────────
 
-class MusicDownloadRequest(BaseModel):
-    songs_text: str  # Newline-separated list of song names
-
 
 @router.get("/api/admin/music", summary="List music library (super admin only)")
-async def list_music_library(user: dict = Depends(get_current_user)):
-    """List all MP3 files in the music library."""
-    _require_super_admin(user)
-
-    from app.services.media.music_downloader import list_music_files
-    files = list_music_files()
-    return {"files": files, "count": len(files)}
-
-
-@router.post("/api/admin/music/download", summary="Download songs via yt-dlp (super admin only)")
-async def download_music(
-    request: MusicDownloadRequest,
+async def list_music_library(
     user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    """Download songs from YouTube as MP3 into the music library.
-
-    Accepts a newline-separated list of song names/queries.
-    Uses yt-dlp to search YouTube and extract audio as MP3.
-    """
+    """List all tracks in the admin music library (Supabase Storage)."""
     _require_super_admin(user)
 
-    if not request.songs_text.strip():
-        raise HTTPException(status_code=400, detail="No songs provided")
-
-    songs = [s.strip() for s in request.songs_text.strip().split("\n") if s.strip()]
-    if len(songs) > 50:
-        raise HTTPException(status_code=400, detail="Maximum 50 songs per request")
-
-    from app.services.media.music_downloader import download_songs
-    result = await asyncio.to_thread(download_songs, request.songs_text)
-    return result
+    from app.models.music_library import MusicLibrary
+    tracks = db.query(MusicLibrary).order_by(MusicLibrary.uploaded_at.desc()).all()
+    return {
+        "tracks": [t.to_dict() for t in tracks],
+        "count": len(tracks),
+    }
 
 
-@router.delete("/api/admin/music/{filename}", summary="Delete a music file (super admin only)")
-async def delete_music_file(
-    filename: str,
+@router.post("/api/admin/music/upload", summary="Upload MP3 to music library (super admin only)")
+async def upload_music_track(
+    file: UploadFile = File(...),
     user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    """Delete a music file from the library."""
+    """Upload an MP3 file to the admin music library (stored in Supabase Storage)."""
     _require_super_admin(user)
 
-    from app.services.media.music_downloader import delete_music_file as do_delete
-    if do_delete(filename):
-        return {"deleted": True, "filename": filename}
-    raise HTTPException(status_code=404, detail=f"File '{filename}' not found")
+    import uuid
+    from app.models.music_library import MusicLibrary
+    from app.services.storage.supabase_storage import upload_file
+    from app.utils.ffmpeg import get_audio_duration_from_bytes
 
+    ALLOWED_EXTENSIONS = {".mp3", ".m4a", ".wav", ".aac", ".ogg"}
+    MAX_FILE_SIZE = 30 * 1024 * 1024  # 30 MB
 
-@router.get("/api/admin/music/{filename}/stream", summary="Stream a music file (super admin only)")
-async def stream_music_file(
-    filename: str,
-    user: dict = Depends(get_current_user),
-):
-    """Stream an MP3 file from the music library for playback."""
-    _require_super_admin(user)
+    filename = file.filename or "track.mp3"
+    ext = "." + filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"Unsupported file type '{ext}'. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}")
 
-    from pathlib import Path as _Path
-    from fastapi.responses import FileResponse
-    from app.services.media.music_downloader import get_music_dir
+    data = await file.read()
+    if len(data) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail=f"File too large ({len(data) / 1024 / 1024:.1f} MB). Max 30 MB.")
 
-    safe = _Path(filename).name
-    file_path = get_music_dir() / safe
-    if not file_path.exists() or file_path.suffix != ".mp3":
-        raise HTTPException(status_code=404, detail=f"File '{filename}' not found")
+    track_id = str(uuid.uuid4())
+    remote_path = f"admin/music/{track_id}{ext}"
+    content_type = file.content_type or "audio/mpeg"
+    storage_url = upload_file("media", remote_path, data, content_type)
 
-    return FileResponse(
-        path=str(file_path),
-        media_type="audio/mpeg",
-        filename=safe,
+    duration = get_audio_duration_from_bytes(data, ext)
+
+    track = MusicLibrary(
+        id=track_id,
+        filename=filename,
+        storage_url=storage_url,
+        size_bytes=len(data),
+        duration_seconds=duration,
     )
+    db.add(track)
+    db.commit()
+    db.refresh(track)
+
+    return {"track": track.to_dict()}
+
+
+@router.delete("/api/admin/music/{track_id}", summary="Delete a music track (super admin only)")
+async def delete_music_track(
+    track_id: str,
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete a music track from the library and Supabase Storage."""
+    _require_super_admin(user)
+
+    from app.models.music_library import MusicLibrary
+    from app.services.storage.supabase_storage import delete_file as storage_delete
+
+    track = db.query(MusicLibrary).filter(MusicLibrary.id == track_id).first()
+    if not track:
+        raise HTTPException(status_code=404, detail="Track not found")
+
+    # Delete from Supabase Storage
+    try:
+        url = track.storage_url
+        marker = "/object/public/media/"
+        idx = url.find(marker)
+        if idx != -1:
+            remote_path = url[idx + len(marker):]
+            storage_delete("media", remote_path)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("Failed to delete music from storage: %s", e)
+
+    db.delete(track)
+    db.commit()
+
+    return {"deleted": True, "id": track_id}
+
+
+@router.get("/api/admin/music/{track_id}/stream", summary="Stream a music track (super admin only)")
+async def stream_music_track(
+    track_id: str,
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Redirect to the Supabase Storage public URL for playback."""
+    _require_super_admin(user)
+
+    from app.models.music_library import MusicLibrary
+    from fastapi.responses import RedirectResponse
+
+    track = db.query(MusicLibrary).filter(MusicLibrary.id == track_id).first()
+    if not track:
+        raise HTTPException(status_code=404, detail="Track not found")
+
+    return RedirectResponse(url=track.storage_url)

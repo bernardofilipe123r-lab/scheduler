@@ -1118,7 +1118,8 @@ class DatabaseSchedulerService:
         brand_config: Optional['BrandConfig'] = None,
         brand_name: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
-        schedule_id: Optional[str] = None
+        schedule_id: Optional[str] = None,
+        share_to_feed: bool = True
     ) -> Dict[str, Any]:
         """
         Publish a reel immediately using user's credentials or brand credentials.
@@ -1270,7 +1271,8 @@ class DatabaseSchedulerService:
             results["instagram"] = publisher.publish_instagram_reel(
                 video_url=video_url,
                 caption=caption,
-                thumbnail_url=thumbnail_url
+                thumbnail_url=thumbnail_url,
+                share_to_feed=share_to_feed
             )
             if schedule_id:
                 self.save_platform_result(schedule_id, "instagram", results["instagram"])

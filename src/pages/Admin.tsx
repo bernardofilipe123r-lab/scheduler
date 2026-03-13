@@ -8,7 +8,7 @@ import {
   Bot, Power, Play, Loader2, Zap, Sparkles, Activity,
   Instagram, Facebook, Youtube, ChevronDown, ChevronUp, Check, Link, Calendar, Settings, Brain,
   Cpu, Image, Database, HardDrive, Wifi, Server, Globe, BarChart3,
-  AlertTriangle, Copy, ChevronRight, Music, Download, Square,
+  AlertTriangle, Copy, ChevronRight, Music, Square,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { apiClient } from '@/shared/api/client'
@@ -1908,48 +1908,51 @@ function FormatIntegritySection() {
 
 // ─── Music Library Panel ───────────────────────────────────────────────────
 
-interface MusicFile {
+interface MusicTrack {
+  id: string
   filename: string
-  size_mb: number
-}
-
-interface DownloadResult {
-  downloaded: { song: string; filename: string; size_mb: number }[]
-  failed: { song: string; error: string }[]
-  skipped: { song: string; filename: string }[]
-  total: number
+  storage_url: string
+  size_bytes: number
+  duration_seconds: number | null
+  uploaded_at: string | null
 }
 
 function MusicLibraryPanel() {
   const queryClient = useQueryClient()
-  const [songsText, setSongsText] = useState('')
-  const [lastResult, setLastResult] = useState<DownloadResult | null>(null)
-  const [playingFile, setPlayingFile] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const [playingId, setPlayingId] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
-  const musicQuery = useQuery<{ files: MusicFile[]; count: number }>({
+  const musicQuery = useQuery<{ tracks: MusicTrack[]; count: number }>({
     queryKey: ['admin-music'],
     queryFn: () => apiClient.get('/api/admin/music'),
     staleTime: 30_000,
   })
 
-  const downloadMutation = useMutation({
-    mutationFn: (songs_text: string) =>
-      apiClient.post('/api/admin/music/download', { songs_text }) as Promise<DownloadResult>,
-    onSuccess: (data) => {
-      setLastResult(data)
-      setSongsText('')
+  const uploadMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const form = new FormData()
+      form.append('file', file)
+      return apiClient.post('/api/admin/music/upload', form, { timeout: 120_000 })
+    },
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-music'] })
     },
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (filename: string) =>
-      apiClient.delete(`/api/admin/music/${encodeURIComponent(filename)}`),
+    mutationFn: (trackId: string) =>
+      apiClient.delete(`/api/admin/music/${trackId}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-music'] })
     },
   })
+
+  const handleFiles = (files: FileList | null) => {
+    if (!files) return
+    Array.from(files).forEach(f => uploadMutation.mutate(f))
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-4">
@@ -1973,75 +1976,49 @@ function MusicLibraryPanel() {
         </button>
       </div>
 
-      {/* Download new songs */}
+      {/* Upload */}
       <div className="mb-4">
-        <label className="block text-xs font-medium text-gray-600 mb-1">
-          Paste song names (one per line) — downloads from YouTube as MP3
-        </label>
-        <textarea
-          value={songsText}
-          onChange={e => setSongsText(e.target.value)}
-          rows={5}
-          placeholder={"Hero - Meego\nMontagem Coma - ANDROMEDA\nWho's That Calling - Olga Myko"}
-          className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 bg-gray-50 focus:outline-none focus:ring-1 focus:ring-purple-400 font-mono"
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".mp3,.m4a,.wav,.aac,.ogg"
+          multiple
+          onChange={e => handleFiles(e.target.files)}
+          className="hidden"
         />
         <button
-          onClick={() => downloadMutation.mutate(songsText)}
-          disabled={!songsText.trim() || downloadMutation.isPending}
-          className="mt-2 flex items-center gap-2 px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploadMutation.isPending}
+          className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
-          {downloadMutation.isPending ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" /> Downloading…
-            </>
+          {uploadMutation.isPending ? (
+            <><Loader2 className="w-4 h-4 animate-spin" /> Uploading…</>
           ) : (
-            <>
-              <Download className="w-4 h-4" /> Download Songs
-            </>
+            <><Music className="w-4 h-4" /> Upload MP3 Files</>
           )}
         </button>
       </div>
 
-      {/* Download result */}
-      {lastResult && (
-        <div className="mb-4 p-3 rounded-lg bg-gray-50 border border-gray-100 text-xs space-y-1">
-          {lastResult.downloaded.length > 0 && (
-            <p className="text-emerald-700">
-              ✅ Downloaded: {lastResult.downloaded.map(d => d.filename).join(', ')}
-            </p>
-          )}
-          {lastResult.skipped.length > 0 && (
-            <p className="text-amber-700">
-              ⏭ Skipped (already exist): {lastResult.skipped.map(s => s.filename).join(', ')}
-            </p>
-          )}
-          {lastResult.failed.length > 0 && (
-            <p className="text-red-700">
-              ❌ Failed: {lastResult.failed.map(f => `${f.song} (${f.error})`).join(', ')}
-            </p>
-          )}
-        </div>
-      )}
-
-      {downloadMutation.isError && (
+      {uploadMutation.isError && (
         <div className="mb-4 flex items-center gap-2 text-xs text-red-500 p-2 bg-red-50 rounded-lg">
           <AlertCircle className="w-3.5 h-3.5" />
-          Download failed: {(downloadMutation.error as Error).message}
+          Upload failed: {(uploadMutation.error as Error).message}
         </div>
       )}
 
-      {/* Current music files */}
+      {/* Track list */}
       {musicQuery.isLoading ? (
         <div className="flex items-center gap-2 text-xs text-gray-400 py-1">
           <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading music library…
         </div>
-      ) : musicQuery.data?.files && musicQuery.data.files.length > 0 ? (
+      ) : musicQuery.data?.tracks && musicQuery.data.tracks.length > 0 ? (
         <div className="space-y-1">
-          {musicQuery.data.files.map(file => {
-            const isPlaying = playingFile === file.filename
+          {musicQuery.data.tracks.map(track => {
+            const isPlaying = playingId === track.id
+            const sizeMb = (track.size_bytes / (1024 * 1024)).toFixed(1)
             return (
               <div
-                key={file.filename}
+                key={track.id}
                 className="flex items-center justify-between px-3 py-2 rounded-lg bg-gray-50 border border-gray-100 group"
               >
                 <div className="flex items-center gap-2 min-w-0">
@@ -2049,17 +2026,15 @@ function MusicLibraryPanel() {
                     onClick={() => {
                       if (isPlaying) {
                         audioRef.current?.pause()
-                        setPlayingFile(null)
+                        setPlayingId(null)
                       } else {
-                        if (audioRef.current) {
-                          audioRef.current.pause()
-                        }
-                        const audio = new Audio(`/api/admin/music/${encodeURIComponent(file.filename)}/stream`)
-                        audio.onended = () => setPlayingFile(null)
-                        audio.onerror = () => setPlayingFile(null)
+                        if (audioRef.current) audioRef.current.pause()
+                        const audio = new Audio(`/api/admin/music/${track.id}/stream`)
+                        audio.onended = () => setPlayingId(null)
+                        audio.onerror = () => setPlayingId(null)
                         audio.play()
                         audioRef.current = audio
-                        setPlayingFile(file.filename)
+                        setPlayingId(track.id)
                       }
                     }}
                     className={clsx(
@@ -2072,16 +2047,21 @@ function MusicLibraryPanel() {
                   >
                     {isPlaying ? <Square className="w-3 h-3" /> : <Play className="w-3 h-3" />}
                   </button>
-                  <span className="text-xs text-gray-700 truncate">{file.filename}</span>
-                  <span className="text-[10px] text-gray-400">{file.size_mb} MB</span>
+                  <span className="text-xs text-gray-700 truncate">{track.filename}</span>
+                  <span className="text-[10px] text-gray-400">{sizeMb} MB</span>
+                  {track.duration_seconds && (
+                    <span className="text-[10px] text-gray-400">
+                      {Math.floor(track.duration_seconds / 60)}:{String(Math.floor(track.duration_seconds % 60)).padStart(2, '0')}
+                    </span>
+                  )}
                 </div>
                 <button
                   onClick={() => {
                     if (isPlaying) {
                       audioRef.current?.pause()
-                      setPlayingFile(null)
+                      setPlayingId(null)
                     }
-                    deleteMutation.mutate(file.filename)
+                    deleteMutation.mutate(track.id)
                   }}
                   disabled={deleteMutation.isPending}
                   className="p-1 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
@@ -2094,7 +2074,7 @@ function MusicLibraryPanel() {
           })}
         </div>
       ) : (
-        <p className="text-xs text-gray-400">No music files yet. Download some songs above.</p>
+        <p className="text-xs text-gray-400">No music files yet. Upload some MP3 files above.</p>
       )}
     </div>
   )

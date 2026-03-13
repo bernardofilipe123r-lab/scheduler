@@ -309,5 +309,7 @@ class TobyBrandConfig(Base):
     enabled_platforms = Column(JSON, nullable=True)
     # Reel format: 'format_a' (default) | 'format_b'
     reel_format = Column(String(30), default="format_a", nullable=True)
+    # When False, Instagram Reels appear only in the Reels tab (not profile grid)
+    reels_share_to_feed = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime(timezone=True), default=_utc_now, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=_utc_now, onupdate=_utc_now, nullable=False)

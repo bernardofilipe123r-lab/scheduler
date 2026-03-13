@@ -39,6 +39,7 @@ from app.models.toby_cognitive import (
 )
 from app.models.billing import BrandSubscription
 from app.models.trending_music import TrendingMusic, TrendingMusicFetch
+from app.models.music_library import MusicLibrary
 from app.models.format_b_design import FormatBDesign
 from app.models.story_pool import StoryPool
 from app.models.api_usage import APIUsageLog
@@ -79,6 +80,7 @@ __all__ = [
     "TobyReasoningTrace",
     "TrendingMusic",
     "TrendingMusicFetch",
+    "MusicLibrary",
     "FormatBDesign",
     "StoryPool",
     "APIUsageLog",
