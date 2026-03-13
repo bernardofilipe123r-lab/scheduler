@@ -12,6 +12,8 @@
  */
 import { useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
+import { pipelineKeys } from '@/features/pipeline'
 import {
   ArrowLeft, Check, Zap, Wrench, Loader2,
   Film, LayoutGrid, MessageSquare, Palette,
@@ -87,6 +89,7 @@ type WizardStep =
 
 export function CreationPage() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
 
   // ── Hooks (ALL before any early return) ──
   const { brands: dynamicBrands, brandIds, isLoading: brandsLoading } = useDynamicBrands()
@@ -266,7 +269,7 @@ export function CreationPage() {
       }
       resetWizard()
       toast.success('Job created — generating in the background', { icon: '🚀' })
-      navigate('/pipeline')
+      queryClient.invalidateQueries({ queryKey: pipelineKeys.all })
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Generation failed')
     }
@@ -307,10 +310,10 @@ export function CreationPage() {
         </div>
 
         {contentType === 'reels' && selectedFormat === 'format_a' && (
-          <ManualTextBased brands={effectiveBrands} platforms={selectedPlatforms} onComplete={() => { resetWizard(); navigate('/pipeline') }} />
+          <ManualTextBased brands={effectiveBrands} platforms={selectedPlatforms} onComplete={() => { resetWizard(); queryClient.invalidateQueries({ queryKey: pipelineKeys.all }) }} />
         )}
         {contentType === 'reels' && selectedFormat === 'format_b' && (
-          <ManualFormatB brands={effectiveBrands} platforms={selectedPlatforms} onComplete={() => { resetWizard(); navigate('/pipeline') }} />
+          <ManualFormatB brands={effectiveBrands} platforms={selectedPlatforms} onComplete={() => { resetWizard(); queryClient.invalidateQueries({ queryKey: pipelineKeys.all }) }} />
         )}
         {contentType === 'posts' && (
           <PostsManualForm
@@ -318,7 +321,7 @@ export function CreationPage() {
             platforms={selectedPlatforms}
             imageModel={imageModel}
             contentCount={contentCount}
-            onComplete={() => { resetWizard(); navigate('/pipeline') }}
+            onComplete={() => { resetWizard(); queryClient.invalidateQueries({ queryKey: pipelineKeys.all }) }}
           />
         )}
         {contentType === 'threads' && (
@@ -326,7 +329,7 @@ export function CreationPage() {
             brands={effectiveBrands}
             threadMode={threadMode}
             contentCount={contentCount}
-            onComplete={() => { resetWizard(); navigate('/pipeline') }}
+            onComplete={() => { resetWizard(); queryClient.invalidateQueries({ queryKey: pipelineKeys.all }) }}
           />
         )}
       </div>

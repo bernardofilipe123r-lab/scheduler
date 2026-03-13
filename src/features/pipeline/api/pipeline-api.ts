@@ -23,7 +23,7 @@ export function usePipelineItems(filters: PipelineFilters) {
   return useQuery({
     queryKey: pipelineKeys.list(filters),
     queryFn: () => get<PipelineResponse>(`/api/pipeline?${qs}`),
-    staleTime: isGenerating ? 3_000 : 30_000,
+    staleTime: 0,
     refetchInterval: isGenerating ? 5_000 : false,
   })
 }
