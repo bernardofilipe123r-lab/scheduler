@@ -1,13 +1,26 @@
 import { AtSign } from 'lucide-react'
 import type { PipelineItem } from '../model/types'
+import { getFirstBrandOutput } from '../model/types'
 
 interface Props {
   item: PipelineItem
 }
 
 export function ThreadPreview({ item }: Props) {
-  const lines = item.content_lines ?? []
-  const preview = lines.slice(0, 3).join('\n')
+  const output = getFirstBrandOutput(item)
+
+  // Threads store their content in chain_parts; fall back to caption / content_lines
+  const parts: string[] =
+    output?.chain_parts && output.chain_parts.length > 0
+      ? output.chain_parts
+      : item.content_lines?.length
+        ? item.content_lines
+        : (output?.caption || item.caption)
+          ? [(output?.caption || item.caption)!]
+          : []
+
+  const preview = parts.slice(0, 3).join('\n')
+  const lines = parts  // keep existing "+N more lines" logic below
 
   return (
     <div className="w-full aspect-[4/5] rounded-lg bg-gray-50 border border-gray-200 p-4 flex flex-col">
