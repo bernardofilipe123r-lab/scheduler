@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { get, post, patch, del } from '@/shared/api/client'
 import toast from 'react-hot-toast'
 import { jobKeys } from '@/features/jobs/hooks/use-jobs'
+import { schedulingKeys } from '@/features/scheduling'
 import type { PipelineFilters, PipelineResponse, PipelineStats, PipelineItem } from '../model/types'
 
 export const pipelineKeys = {
@@ -74,6 +75,7 @@ export function useApprovePipelineItem() {
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: pipelineKeys.all })
       queryClient.invalidateQueries({ queryKey: jobKeys.all })
+      queryClient.invalidateQueries({ queryKey: schedulingKeys.all })
       const first = data?.scheduled?.[0]
       if (first?.scheduled_time && first?.schedule_id) {
         const d = new Date(first.scheduled_time)

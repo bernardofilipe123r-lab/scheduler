@@ -114,9 +114,10 @@ function Calendar() {
     const post = scheduledPosts.find(p => p.id === openScheduleParam)
     if (!post) return
     openScheduleHandled.current = true
-    // Navigate calendar to the month containing the post
+    // Navigate calendar to the month containing the post and open modal
     const postDate = parseISO(post.scheduled_time)
     setCurrentMonth(startOfMonth(postDate))
+    setSelectedDay(postDate)
     setSelectedPost(post)
     // Clean the URL param without re-render loop
     setSearchParams(prev => { prev.delete('open_schedule'); return prev }, { replace: true })
