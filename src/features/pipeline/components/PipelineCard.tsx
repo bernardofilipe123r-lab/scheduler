@@ -191,24 +191,26 @@ export function PipelineCard({ item, onApprove, onReject, onEdit, onDelete, onOp
 
         {!isPending && (
           <>
-            <button
-              onClick={() => onOpenReview(item)}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-[#00435c] hover:bg-[#f0f7fa] transition-all rounded-bl-2xl"
-            >
-              <Eye className="w-3.5 h-3.5" />
-              View
-            </button>
-            {onDelete && (
+            {!isGenerating && (
               <>
-                <div className="w-px bg-gray-50" />
                 <button
-                  onClick={() => onDelete(item.job_id)}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-gray-400 hover:bg-red-50 hover:text-red-400 transition-all rounded-br-2xl"
+                  onClick={() => onOpenReview(item)}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-[#00435c] hover:bg-[#f0f7fa] transition-all rounded-bl-2xl"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  Delete
+                  <Eye className="w-3.5 h-3.5" />
+                  View
                 </button>
+                {onDelete && <div className="w-px bg-gray-50" />}
               </>
+            )}
+            {onDelete && (
+              <button
+                onClick={() => onDelete(item.job_id)}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-gray-400 hover:bg-red-50 hover:text-red-400 transition-all ${isGenerating ? 'rounded-bl-2xl ' : ''}rounded-br-2xl`}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Delete
+              </button>
             )}
           </>
         )}

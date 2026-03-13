@@ -776,7 +776,7 @@ export function BrandThemeSkeleton() {
 // ── Pipeline page skeleton ─────────────────────────────────
 export function PipelineSkeleton() {
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5">
+    <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-4">
       {Array.from({ length: 8 }).map((_, i) => (
         <div key={i} className="rounded-2xl border border-gray-100 bg-white overflow-hidden shadow-sm">
           {/* Image preview — aspect-[4/5] to match new card design */}

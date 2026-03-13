@@ -38,7 +38,7 @@ export function PipelineGrid({ items, onApprove, onReject, onEdit, onDelete, onO
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5">
+      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-4">
         {visibleItems.map(item => (
           <PipelineCard
             key={item.job_id}
