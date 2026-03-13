@@ -605,6 +605,14 @@ def _execute_content_plan(db: Session, plan, batch_id: str = None):
     job_manager = JobManager(db)
     slide_texts = result.get("slide_texts", result.get("content_lines", []))
 
+    # Ensure CTA lines on last slide have paragraph break
+    if slide_texts:
+        import re
+        slide_texts = [
+            re.sub(r'(?<!\n)(Follow @|If you want to learn)', r'\n\n\1', s)
+            for s in slide_texts
+        ]
+
     # Determine platforms via centralized registry
     from app.services.brands.resolver import brand_resolver as _brand_resolver
     from app.models.toby import TobyBrandConfig as _TBC

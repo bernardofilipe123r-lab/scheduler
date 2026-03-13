@@ -84,6 +84,12 @@ class JobProcessor:
             )
         return getattr(self, method_name)
 
+    @staticmethod
+    def _ensure_cta_paragraph_break(text: str) -> str:
+        """Ensure CTA lines like 'Follow @...' are separated by a blank line."""
+        import re
+        return re.sub(r'(?<!\n)(Follow @|If you want to learn)', r'\n\n\1', text)
+
     def _run_brands_loop(
         self,
         job_id: str,
@@ -1236,7 +1242,14 @@ class JobProcessor:
                         step_msg = f"Generating content {ci+1}/{content_count}..."
                         self._manager.update_job_status(job_id, "generating", step_msg, 5)
 
-                        batch_posts = cg.generate_post_titles_batch(needed, topic_hint)
+                        # Build PromptContext for niche-aware CTA
+                        first_brand = job.brands[0] if job.brands else None
+                        batch_ctx = None
+                        if first_brand:
+                            from app.services.content.niche_config_service import NicheConfigService
+                            batch_ctx = NicheConfigService().get_context(brand_id=first_brand, user_id=job.user_id)
+
+                        batch_posts = cg.generate_post_titles_batch(needed, topic_hint, ctx=batch_ctx)
                         print(f"   ✓ Got {len(batch_posts)} unique posts", flush=True)
 
                         for i, brand in enumerate(job.brands):
@@ -1246,11 +1259,15 @@ class JobProcessor:
                                 }, content_index=ci if is_multi else None)
                                 continue
                             post_data = batch_posts[i]
+                            # Ensure CTA on last slide has paragraph break
+                            raw_slides = post_data.get("slide_texts", [])
+                            if raw_slides:
+                                raw_slides = [self._ensure_cta_paragraph_break(s) for s in raw_slides]
                             self._manager.update_brand_output(job_id, brand, {
                                 "title": post_data.get("title", job.title),
                                 "caption": post_data.get("caption", ""),
                                 "ai_prompt": post_data.get("image_prompt", ""),
-                                "slide_texts": post_data.get("slide_texts", []),
+                                "slide_texts": raw_slides,
                                 "status": "pending",
                             }, content_index=ci if is_multi else None)
                             print(f"   📝 {brand}[{ci}]: {post_data.get('title', '?')[:60]}...", flush=True)
