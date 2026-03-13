@@ -431,6 +431,7 @@ export function DesignEditorTab({ onBack }: { onBack?: () => void }) {
   const [formatBTab, setFormatBTab] = useState<DesignTab>('thumbnail')
   const formatBRef = useRef<{ save: () => void; reset: () => void; hasChanges: boolean; isPending: boolean } | null>(null)
   const [, forceUpdate] = useState(0)
+  const handleForceUpdate = useCallback(() => forceUpdate(n => n + 1), [])
 
   // Brand selector (shared between both previews + settings)
   const { brands } = useDynamicBrands()
@@ -517,7 +518,7 @@ export function DesignEditorTab({ onBack }: { onBack?: () => void }) {
       </div>
 
       {topTab === 'format-a' && <TextReelsDesign />}
-      {topTab === 'format-b' && <FormatBDesign tab={formatBTab} setTab={setFormatBTab} actionsRef={formatBRef} onStateChange={() => forceUpdate(n => n + 1)} selectedBrand={selectedBrand} />}
+      {topTab === 'format-b' && <FormatBDesign tab={formatBTab} setTab={setFormatBTab} actionsRef={formatBRef} onStateChange={handleForceUpdate} selectedBrand={selectedBrand} />}
     </div>
   )
 }
@@ -584,6 +585,10 @@ function FormatBDesign({ tab, setTab, actionsRef, onStateChange, selectedBrand }
 }) {
   const { data: design, isLoading } = useDesignSettings()
   const updateMutation = useUpdateDesign()
+  const updateMutationRef = useRef(updateMutation)
+  updateMutationRef.current = updateMutation
+  const onStateChangeRef = useRef(onStateChange)
+  onStateChangeRef.current = onStateChange
   const [form, setForm] = useState<Partial<DesignSettings>>({})
 
   // Derive brand logo URLs from the selected brand
@@ -632,34 +637,36 @@ function FormatBDesign({ tab, setTab, actionsRef, onStateChange, selectedBrand }
   const handleSave = useCallback(async () => {
     const payload = buildPayload(form)
     try {
-      await updateMutation.mutateAsync(payload)
+      await updateMutationRef.current.mutateAsync(payload)
       savedRef.current = { ...form }
       setForm(f => ({ ...f }))
       toast.success('Design settings saved')
     } catch {
       toast.error('Failed to save design settings')
     }
-  }, [form, updateMutation, buildPayload])
+  }, [form, buildPayload])
 
   const handleReset = useCallback(async () => {
     const resetForm = { ...form, ...DEFAULTS }
     setForm(resetForm)
     const payload = buildPayload(resetForm)
     try {
-      await updateMutation.mutateAsync(payload)
+      await updateMutationRef.current.mutateAsync(payload)
       savedRef.current = { ...resetForm }
       setForm(f => ({ ...f }))
       toast.success('Reset to defaults and saved')
     } catch {
       toast.error('Failed to save after reset')
     }
-  }, [form, updateMutation, buildPayload])
+  }, [form, buildPayload])
 
   // Expose actions to parent header
+  // Note: handleSave/handleReset intentionally omitted — they're written to a mutable ref
+  // so the parent always calls the latest version without triggering this effect
   useEffect(() => {
     actionsRef.current = { save: handleSave, reset: handleReset, hasChanges, isPending: updateMutation.isPending }
-    onStateChange()
-  }, [hasChanges, updateMutation.isPending, handleSave, handleReset])
+    onStateChangeRef.current()
+  }, [hasChanges, updateMutation.isPending])
 
   if (isLoading) {
     return <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>

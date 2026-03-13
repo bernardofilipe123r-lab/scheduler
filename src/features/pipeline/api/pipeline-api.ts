@@ -56,6 +56,7 @@ export function useApprovePipelineItem() {
     mutationFn: ({ jobId, caption }: { jobId: string; caption?: string }) =>
       post(`/api/pipeline/${jobId}/approve`, { caption }),
     onMutate: async ({ jobId }) => {
+      toast.loading('Scheduling…', { id: 'approve-' + jobId })
       await queryClient.cancelQueries({ queryKey: pipelineKeys.all })
       const lifecycle = findItemLifecycle(queryClient, jobId)
       // Remove from all cached lists
@@ -72,7 +73,8 @@ export function useApprovePipelineItem() {
         return next
       })
     },
-    onSuccess: (data: any) => {
+    onSuccess: (data: any, { jobId }) => {
+      toast.dismiss('approve-' + jobId)
       queryClient.invalidateQueries({ queryKey: pipelineKeys.all })
       queryClient.invalidateQueries({ queryKey: jobKeys.all })
       queryClient.invalidateQueries({ queryKey: schedulingKeys.all })
@@ -108,7 +110,8 @@ export function useApprovePipelineItem() {
         toast.success('Content approved and scheduled!')
       }
     },
-    onError: () => {
+    onError: (_err, { jobId }) => {
+      toast.dismiss('approve-' + jobId)
       queryClient.invalidateQueries({ queryKey: pipelineKeys.all })
       toast.error('Failed to schedule — please try again')
     },
