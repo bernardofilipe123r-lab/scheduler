@@ -774,12 +774,15 @@ export function BrandThemeSkeleton() {
 // skeleton to match. It mirrors: Greeting → Stats strip → Today's Coverage →
 // Row2 (Brand Health | Jobs Queue | Publishing Today) → Recent Jobs table.
 // ── Pipeline page skeleton ─────────────────────────────────
-export function PipelineSkeleton() {
+export function PipelineSkeleton({ status }: { status?: string }) {
+  // Determine button layout based on active tab
+  const buttonCount = status === 'pending_review' ? 3 : status === 'generating' ? 1 : 2
+
   return (
     <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-4">
       {Array.from({ length: 8 }).map((_, i) => (
         <div key={i} className="rounded-2xl border border-gray-100 bg-white overflow-hidden shadow-sm">
-          {/* Image preview — aspect-[4/5] to match new card design */}
+          {/* Image preview */}
           <Sk className="aspect-[4/5] w-full rounded-none" />
           {/* Card body */}
           <div className="p-3.5 space-y-2.5">
@@ -791,24 +794,34 @@ export function PipelineSkeleton() {
               </div>
               <Sk className="h-4 w-8 rounded-md" />
             </div>
-            {/* Title */}
-            <div className="space-y-1.5">
-              <Sk className="h-3.5 w-full rounded" />
-              <Sk className="h-3.5 w-2/3 rounded" />
-            </div>
-            {/* Brand + time */}
-            <div className="flex items-center justify-between pt-0.5">
+            {/* Brand + time + source */}
+            <div className="flex flex-col gap-0.5 pt-0.5">
               <Sk className="h-4 w-20 rounded-md" />
               <Sk className="h-2.5 w-16 rounded" />
+              <Sk className="h-2 w-10 rounded mt-0.5" />
             </div>
           </div>
           {/* Action buttons */}
           <div className="border-t border-gray-50 flex">
-            <Sk className="flex-1 h-9 rounded-none rounded-bl-2xl" />
-            <div className="w-px bg-gray-50" />
-            <Sk className="flex-1 h-9 rounded-none" />
-            <div className="w-px bg-gray-50" />
-            <Sk className="flex-1 h-9 rounded-none rounded-br-2xl" />
+            {buttonCount === 1 && (
+              <Sk className="flex-1 h-9 rounded-none rounded-bl-2xl rounded-br-2xl" />
+            )}
+            {buttonCount === 2 && (
+              <>
+                <Sk className="flex-1 h-9 rounded-none rounded-bl-2xl" />
+                <div className="w-px bg-gray-50" />
+                <Sk className="flex-1 h-9 rounded-none rounded-br-2xl" />
+              </>
+            )}
+            {buttonCount === 3 && (
+              <>
+                <Sk className="flex-1 h-9 rounded-none rounded-bl-2xl" />
+                <div className="w-px bg-gray-50" />
+                <Sk className="flex-1 h-9 rounded-none" />
+                <div className="w-px bg-gray-50" />
+                <Sk className="flex-1 h-9 rounded-none rounded-br-2xl" />
+              </>
+            )}
           </div>
         </div>
       ))}

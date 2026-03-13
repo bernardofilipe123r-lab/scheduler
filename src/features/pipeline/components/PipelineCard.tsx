@@ -141,12 +141,7 @@ export function PipelineCard({ item, onApprove, onReject, onEdit, onDelete, onOp
           )}
         </div>
 
-        {/* Title */}
-        <p className="text-[13px] font-semibold text-gray-800 line-clamp-2 leading-snug">
-          {item.title || 'Untitled'}
-        </p>
-
-        {/* Brand + time */}
+        {/* Brand + time + source */}
         <div className="flex flex-col gap-0.5 pt-0.5">
           {item.brands.length > 0 && (
             <span className="text-[10px] font-medium bg-gray-50 text-gray-500 px-2 py-0.5 rounded-md border border-gray-100 self-start">
@@ -155,6 +150,12 @@ export function PipelineCard({ item, onApprove, onReject, onEdit, onDelete, onOp
           )}
           <span className="text-[10px] text-gray-300">
             {format(new Date(item.created_at), 'MMM d, h:mm a')}
+          </span>
+          <span className={clsx(
+            'text-[9px] font-semibold uppercase tracking-wide mt-0.5',
+            item.created_by === 'toby' ? 'text-[#006d8f]' : 'text-gray-400',
+          )}>
+            {item.created_by === 'toby' ? '✦ Toby' : 'Manual'}
           </span>
         </div>
       </div>

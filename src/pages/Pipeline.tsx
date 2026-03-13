@@ -173,7 +173,7 @@ export function PipelinePage() {
       />
 
       {/* Loading skeleton */}
-      {itemsLoading && <PipelineSkeleton />}
+      {itemsLoading && <PipelineSkeleton status={filters.status} />}
 
       {/* Content grid */}
       {!itemsLoading && items.length > 0 && (
