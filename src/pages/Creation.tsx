@@ -223,49 +223,58 @@ export function CreationPage() {
     try {
       if (contentType === 'reels') {
         if (selectedFormat === 'format_a') {
-          await createJob.mutateAsync({
-            title: 'Auto-generating...',
-            content_lines: [],
-            brands,
-            variant: 'dark' as Variant,
-            platforms: selectedPlatforms,
-            music_source: 'trending_random',
-            content_count: contentCount,
-          })
+          // One job per brand — each brand gets content from its own DNA
+          await Promise.all(brands.map(brand =>
+            createJob.mutateAsync({
+              title: 'Auto-generating...',
+              content_lines: [],
+              brands: [brand],
+              variant: 'dark' as Variant,
+              platforms: selectedPlatforms,
+              music_source: 'trending_random',
+              content_count: contentCount,
+            })
+          ))
         } else if (selectedFormat === 'format_b') {
           if (!niche) {
             toast.error('Set up your Content DNA first (niche is required for auto mode)')
             return
           }
-          await generateFormatB.mutateAsync({
-            mode: 'full_auto',
-            brands,
-            platforms: selectedPlatforms,
-            niche,
-            content_count: contentCount,
-          })
+          await Promise.all(brands.map(brand =>
+            generateFormatB.mutateAsync({
+              mode: 'full_auto',
+              brands: [brand],
+              platforms: selectedPlatforms,
+              niche,
+              content_count: contentCount,
+            })
+          ))
         }
       } else if (contentType === 'posts') {
-        await createJob.mutateAsync({
-          title: 'Auto-generated posts',
-          content_lines: [],
-          brands,
-          variant: 'post' as Variant,
-          image_model: imageModel,
-          platforms: selectedPlatforms,
-          content_count: contentCount,
-        })
+        await Promise.all(brands.map(brand =>
+          createJob.mutateAsync({
+            title: 'Auto-generated posts',
+            content_lines: [],
+            brands: [brand],
+            variant: 'post' as Variant,
+            image_model: imageModel,
+            platforms: selectedPlatforms,
+            content_count: contentCount,
+          })
+        ))
       } else if (contentType === 'threads') {
-        await createJob.mutateAsync({
-          title: 'Thread posts',
-          content_lines: [],
-          brands,
-          variant: 'threads' as Variant,
-          platforms: ['threads'],
-          content_count: contentCount,
-          ai_prompt: threadFormatType || undefined,
-          cta_type: threadMode === 'chain' ? 'chain' : undefined,
-        })
+        await Promise.all(brands.map(brand =>
+          createJob.mutateAsync({
+            title: 'Thread posts',
+            content_lines: [],
+            brands: [brand],
+            variant: 'threads' as Variant,
+            platforms: ['threads'],
+            content_count: contentCount,
+            ai_prompt: threadFormatType || undefined,
+            cta_type: threadMode === 'chain' ? 'chain' : undefined,
+          })
+        ))
       }
       resetWizard()
       toast.success('Job created — generating in the background', { icon: '🚀' })

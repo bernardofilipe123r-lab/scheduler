@@ -1,4 +1,5 @@
-import { Loader2, Clock, CalendarCheck, Globe, XCircle } from 'lucide-react'
+import { useState } from 'react'
+import { Loader2, Clock, CalendarCheck, Globe, XCircle, X } from 'lucide-react'
 import { useTobyBuffer } from '@/features/toby'
 import type { PipelineStats as Stats } from '../model/types'
 
@@ -41,6 +42,7 @@ interface Props {
 export function PipelineStats({ stats, isLoading }: Props) {
   const { data: buffer } = useTobyBuffer()
   const contentUntil = getContentUntilDate(buffer)
+  const [bannerDismissed, setBannerDismissed] = useState(false)
   const approvalRate = stats?.rate ?? 0
   const dasharray = `${approvalRate}, 100`
 
@@ -50,12 +52,19 @@ export function PipelineStats({ stats, isLoading }: Props) {
 
   return (
     <div className="space-y-3">
-      {contentUntil && (
+      {contentUntil && !bannerDismissed && (
         <div className="flex items-center gap-2 px-4 py-2.5 bg-emerald-50 border border-emerald-200 rounded-xl">
           <CalendarCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-          <p className="text-sm font-medium text-emerald-700">
+          <p className="text-sm font-medium text-emerald-700 flex-1">
             You have content until {contentUntil}
           </p>
+          <button
+            onClick={() => setBannerDismissed(true)}
+            className="p-0.5 rounded-md text-emerald-500 hover:text-emerald-700 hover:bg-emerald-100 transition-colors shrink-0"
+            aria-label="Dismiss"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
 
