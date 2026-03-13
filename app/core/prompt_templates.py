@@ -597,13 +597,16 @@ def build_post_content_prompt(count: int, history_context: str = "", topic_hint:
     # @BRANDHANDLE is a safe render-time token (no braces) that won't confuse the model.
     slide4_instruction = (
         f"A concluding takeaway paragraph (2-3 sentences summarizing the key insight or actionable advice for {audience_label}). "
-        f"Then on a NEW paragraph (separated by a blank line): write a short, specific CTA that directly references "
-        f"what THIS post covers — not a generic phrase. "
-        f"Examples: 'If you want to learn more about how circadian lighting affects metabolism, follow @BRANDHANDLE!', "
-        f"'Want more evidence-based tips on sleep and energy? Follow @BRANDHANDLE!'. "
-        f"Keep the literal token @BRANDHANDLE — it will be replaced with the real account handle at render time."
+        f"Then on a NEW paragraph (separated by a blank line): ONE single sentence that weaves a specific reference to "
+        f"this post's topic together with a follow call-to-action. "
+        f"The sentence MUST contain @BRANDHANDLE (literal token — do not change it). "
+        f"Examples of the correct format: "
+        f"'If you want to learn more about how circadian lighting affects metabolism, follow @BRANDHANDLE!', "
+        f"'Want more evidence-based tips on omega-3 and brain function? Follow @BRANDHANDLE!', "
+        f"'For more science-backed nutrition advice, follow @BRANDHANDLE!'. "
+        f"NEVER split this into two sentences or two paragraphs — it must be exactly one sentence."
     )
-    slide4_cta_line = "If you want more on [this post's topic], follow @BRANDHANDLE!"
+    slide4_cta_line = "If you want more [specific content reference from this post], follow @BRANDHANDLE!"
 
     # Caption mechanism instruction — uses niche description, not body/health
     niche_mechanism = ctx.niche_description if ctx.niche_description else f"the key concepts in {niche_label}"

@@ -458,7 +458,11 @@ class CarouselSlideRenderer:
     @staticmethod
     def _replace_handles(text: str, handle: str) -> str:
         """Replace brand handle placeholders."""
-        return re.sub(r'@?\{\{?brandhandle\}?\}?', handle, text, flags=re.IGNORECASE)
+        # Replace @BRANDHANDLE (plain caps token used in AI-generated CTAs)
+        result = re.sub(r'@BRANDHANDLE\b', handle, text)
+        # Replace brace-style placeholders: @{{brandhandle}}, @{brandhandle}, {{brandhandle}}, {brandhandle}
+        result = re.sub(r'@?\{\{?brandhandle\}?\}?', handle, result, flags=re.IGNORECASE)
+        return result
 
     # ─── Shared helpers ───────────────────────────────────────────────────────
 
