@@ -11,7 +11,7 @@ export function ReelPreview({ item }: Props) {
   const video = output?.video_path
 
   return (
-    <div className="relative w-full aspect-[9/16] rounded-lg overflow-hidden bg-gray-900">
+    <div className="relative w-full aspect-[4/5] overflow-hidden bg-gray-900">
       {thumb ? (
         <img src={thumb} alt={item.title} className="w-full h-full object-cover" />
       ) : video ? (

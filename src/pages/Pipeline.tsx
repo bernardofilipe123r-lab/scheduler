@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { GitPullRequestDraft } from 'lucide-react'
+import { CheckCircle2 } from 'lucide-react'
 import { AnimatePresence } from 'framer-motion'
 import {
   PipelineStats,
@@ -39,6 +39,7 @@ export function PipelinePage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [reviewModalIndex, setReviewModalIndex] = useState<number | null>(null)
   const [bulkAction, setBulkAction] = useState<{ action: 'approve' | 'reject'; count: number } | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
   const hasAutoSwitched = useRef(false)
 
   // Auto-switch to pending_review if generating tab is empty on first load
@@ -50,7 +51,19 @@ export function PipelinePage() {
     hasAutoSwitched.current = true
   }, [statsData, filters.status, setStatus])
 
-  const items = pipelineData?.items ?? []
+  const allItems = pipelineData?.items ?? []
+
+  // Client-side search filter
+  const items = useMemo(() => {
+    if (!searchQuery.trim()) return allItems
+    const q = searchQuery.toLowerCase()
+    return allItems.filter(i =>
+      (i.title ?? '').toLowerCase().includes(q) ||
+      (i.caption ?? '').toLowerCase().includes(q) ||
+      i.brands.some(b => b.toLowerCase().includes(q)),
+    )
+  }, [allItems, searchQuery])
+
   const pendingItems = useMemo(() => items.filter(i => i.lifecycle === 'pending_review'), [items])
 
   const toggleSelect = useCallback((id: string) => {
@@ -80,7 +93,6 @@ export function PipelinePage() {
     setSelectedIds(prev => { const next = new Set(prev); next.delete(id); return next })
   }, [reject])
 
-  // Bulk actions now go through confirmation modal
   const handleBulkApproveRequest = useCallback(() => {
     if (selectedIds.size === 0) return
     setBulkAction({ action: 'approve', count: selectedIds.size })
@@ -117,16 +129,28 @@ export function PipelinePage() {
   }, [items])
 
   const showAllReviewedBanner = filters.status === 'pending_review' && items.length === 0 && !itemsLoading && (statsData?.pending_review ?? 0) === 0 && (statsData?.scheduled ?? 0) > 0
+  const pendingCount = statsData?.pending_review ?? 0
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <GitPullRequestDraft className="w-6 h-6 text-gray-400" />
+      <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Pipeline</h1>
-          <p className="text-sm text-gray-500">All your content — review, schedule, and track</p>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Pipeline</h1>
+          <p className="text-sm text-gray-400 mt-1">Review, schedule, and track your content</p>
         </div>
+        {pendingCount > 0 && (
+          <button
+            onClick={() => setStatus('pending_review')}
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#00435c] text-white text-sm font-medium rounded-xl hover:bg-[#002d3f] transition-colors shadow-sm"
+          >
+            <CheckCircle2 className="w-4 h-4" />
+            Review All
+            <span className="bg-white/20 text-white text-xs font-semibold px-1.5 py-0.5 rounded-md">
+              {pendingCount}
+            </span>
+          </button>
+        )}
       </div>
 
       {/* Stats bar */}
@@ -144,6 +168,8 @@ export function PipelinePage() {
         onBulkReject={handleBulkRejectRequest}
         onSelectAll={handleSelectAll}
         totalPending={pendingItems.length}
+        searchQuery={searchQuery}
+        onSearch={setSearchQuery}
       />
 
       {/* Loading skeleton */}
@@ -182,7 +208,7 @@ export function PipelinePage() {
         />
       )}
 
-      {/* Review modal (Tinder-style video review) */}
+      {/* Review modal */}
       <AnimatePresence>
         {reviewModalIndex !== null && items.length > 0 && (
           <ReviewModal

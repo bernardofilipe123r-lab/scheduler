@@ -20,9 +20,12 @@ export function CarouselPreview({ item }: Props) {
         </div>
       )}
       {slides.length > 1 && (
-        <span className="absolute top-2 right-2 bg-black/50 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full backdrop-blur-sm">
-          1/{slides.length}
-        </span>
+        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-black/30 backdrop-blur-md px-2.5 py-1 rounded-full">
+          {slides.slice(0, Math.min(slides.length, 5)).map((_, i) => (
+            <span key={i} className={`w-1.5 h-1.5 rounded-full ${i === 0 ? 'bg-white' : 'bg-white/40'}`} />
+          ))}
+          <span className="text-[9px] text-white/70 font-medium ml-0.5">1/{slides.length}</span>
+        </div>
       )}
     </div>
   )

@@ -1,7 +1,9 @@
-import { CheckCircle2, XCircle, Filter, RotateCcw } from 'lucide-react'
+import { CheckCircle2, XCircle, Search } from 'lucide-react'
 import { clsx } from 'clsx'
 import type { PipelineFilters } from '../model/types'
 import { useDynamicBrands } from '@/features/brands/hooks/use-dynamic-brands'
+
+const CHEVRON_SVG = `url('data:image/svg+xml;charset=utf-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%239ca3af%22 stroke-width=%222%22%3E%3Cpolyline points=%226 9 12 15 18 9%22/%3E%3C/svg%3E')`
 
 interface Props {
   filters: PipelineFilters
@@ -14,16 +16,18 @@ interface Props {
   onBulkReject: () => void
   onSelectAll: () => void
   totalPending: number
+  searchQuery: string
+  onSearch: (q: string) => void
 }
 
-const STATUS_TABS = [
-  { value: 'generating' as const, label: 'Generating' },
-  { value: 'pending_review' as const, label: 'Pending Review' },
-  { value: 'scheduled' as const, label: 'Scheduled' },
-  { value: 'published' as const, label: 'Published' },
-  { value: 'rejected' as const, label: 'Rejected' },
-  { value: 'failed' as const, label: 'Failed' },
-  { value: 'all' as const, label: 'All' },
+const STATUS_TABS: { value: PipelineFilters['status']; label: string }[] = [
+  { value: 'generating', label: 'Generating' },
+  { value: 'pending_review', label: 'Pending' },
+  { value: 'scheduled', label: 'Scheduled' },
+  { value: 'published', label: 'Published' },
+  { value: 'rejected', label: 'Rejected' },
+  { value: 'failed', label: 'Failed' },
+  { value: 'all', label: 'All' },
 ]
 
 const CONTENT_TYPES = [
@@ -33,49 +37,76 @@ const CONTENT_TYPES = [
   { value: 'threads' as const, label: 'Threads' },
 ]
 
+const SELECT_CLASS = 'text-xs border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-600 focus:ring-2 focus:ring-[#006d8f]/20 focus:border-[#006d8f] outline-none transition-all cursor-pointer appearance-none pr-7'
+
 export function PipelineToolbar({
   filters,
   onStatusChange,
   onBrandChange,
   onContentTypeChange,
-  onReset,
   selectedCount,
   onBulkApprove,
   onBulkReject,
   onSelectAll,
   totalPending,
+  searchQuery,
+  onSearch,
 }: Props) {
   const { brands } = useDynamicBrands()
+  const allSelected = selectedCount === totalPending && totalPending > 0
 
   return (
     <div className="space-y-3">
-      {/* Status tabs */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="flex bg-gray-100 rounded-lg p-0.5">
+      {/* Tabs + Filters row */}
+      <div className="flex items-center justify-between gap-4">
+        {/* Tab Pills */}
+        <div className="flex bg-gray-100/80 rounded-xl p-1 gap-0.5">
           {STATUS_TABS.map(tab => (
             <button
               key={tab.value}
               onClick={() => onStatusChange(tab.value)}
               className={clsx(
-                'px-3 py-1.5 text-xs font-medium rounded-md transition-colors',
+                'px-3.5 py-2 text-xs font-medium rounded-lg transition-all',
                 filters.status === tab.value
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700',
+                  ? 'bg-white text-[#00435c] shadow-sm'
+                  : 'text-gray-400 hover:text-gray-600',
               )}
             >
               {tab.label}
+              {tab.value === 'pending_review' && totalPending > 0 && (
+                <span className={clsx(
+                  'ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full',
+                  filters.status === 'pending_review'
+                    ? 'bg-amber-100 text-amber-700'
+                    : 'bg-gray-200 text-gray-500',
+                )}>
+                  {totalPending}
+                </span>
+              )}
             </button>
           ))}
         </div>
 
-        <div className="flex items-center gap-2 ml-auto">
-          <Filter className="w-3.5 h-3.5 text-gray-400" />
+        {/* Filters */}
+        <div className="flex items-center gap-2">
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-300 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => onSearch(e.target.value)}
+              placeholder="Search content..."
+              className="text-xs pl-8 pr-3 py-2 w-40 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#006d8f]/20 focus:border-[#006d8f] outline-none transition-all placeholder:text-gray-300"
+            />
+          </div>
 
           {/* Brand filter */}
           <select
             value={filters.brand ?? ''}
             onChange={e => onBrandChange(e.target.value || null)}
-            className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-gray-700 focus:ring-1 focus:ring-blue-400 focus:border-blue-400"
+            className={SELECT_CLASS}
+            style={{ backgroundImage: CHEVRON_SVG, backgroundPosition: 'right 8px center', backgroundRepeat: 'no-repeat' }}
           >
             <option value="">All Brands</option>
             {brands.map(b => (
@@ -87,64 +118,47 @@ export function PipelineToolbar({
           <select
             value={filters.content_type}
             onChange={e => onContentTypeChange(e.target.value as PipelineFilters['content_type'])}
-            className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-gray-700 focus:ring-1 focus:ring-blue-400 focus:border-blue-400"
+            className={SELECT_CLASS}
+            style={{ backgroundImage: CHEVRON_SVG, backgroundPosition: 'right 8px center', backgroundRepeat: 'no-repeat' }}
           >
             {CONTENT_TYPES.map(ct => (
               <option key={ct.value} value={ct.value}>{ct.label}</option>
             ))}
           </select>
-
-          {(filters.brand || filters.content_type !== 'all') && (
-            <button
-              onClick={onReset}
-              className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
-              title="Reset filters"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-            </button>
-          )}
         </div>
       </div>
 
-      {/* Bulk actions bar */}
+      {/* Bulk actions bar — shown on pending tab */}
       {filters.status === 'pending_review' && totalPending > 0 && (
-        <div className="flex items-center gap-3 bg-gray-50 rounded-xl px-4 py-2.5">
-          <label className="flex items-center gap-2 cursor-pointer select-none">
+        <div className="flex items-center justify-between bg-white rounded-xl border border-gray-100 px-4 py-2.5 shadow-sm">
+          <label className="flex items-center gap-2.5 cursor-pointer select-none group">
             <input
               type="checkbox"
-              checked={selectedCount === totalPending && totalPending > 0}
+              checked={allSelected}
               onChange={onSelectAll}
-              className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              className="w-4 h-4 rounded border-gray-300 text-[#006d8f] focus:ring-[#006d8f] transition-colors"
             />
-            <span className="text-xs font-medium text-gray-700">
-              {selectedCount === totalPending && totalPending > 0 ? 'All selected' : 'Select all'}
+            <span className="text-xs font-medium text-gray-500 group-hover:text-gray-700 transition-colors">
+              {allSelected ? 'All selected' : 'Select all'}
             </span>
           </label>
 
-          {selectedCount > 0 && (
-            <>
-              <div className="w-px h-4 bg-gray-200" />
-              <span className="text-xs text-gray-500 tabular-nums">
-                {selectedCount} of {totalPending}
-              </span>
-              <div className="ml-auto flex items-center gap-2">
-                <button
-                  onClick={onBulkApprove}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500 text-white text-xs font-medium hover:bg-emerald-600 transition-colors shadow-sm"
-                >
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  Accept {selectedCount}
-                </button>
-                <button
-                  onClick={onBulkReject}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500 text-white text-xs font-medium hover:bg-red-600 transition-colors shadow-sm"
-                >
-                  <XCircle className="w-3.5 h-3.5" />
-                  Decline {selectedCount}
-                </button>
-              </div>
-            </>
-          )}
+          <div className={clsx('flex items-center gap-1.5 transition-opacity', selectedCount === 0 && 'opacity-40 pointer-events-none')}>
+            <button
+              onClick={onBulkApprove}
+              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors"
+            >
+              <CheckCircle2 className="w-3 h-3" />
+              {selectedCount > 0 ? `Approve ${selectedCount}` : 'Approve Selected'}
+            </button>
+            <button
+              onClick={onBulkReject}
+              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-red-50 text-red-500 hover:bg-red-100 transition-colors"
+            >
+              <XCircle className="w-3 h-3" />
+              {selectedCount > 0 ? `Reject ${selectedCount}` : 'Reject Selected'}
+            </button>
+          </div>
         </div>
       )}
     </div>
