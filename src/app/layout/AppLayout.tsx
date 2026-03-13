@@ -14,19 +14,37 @@ import { LockedBanner } from '@/features/billing/LockedBanner'
 import vtLogo from '@/assets/icons/vt-logo.png'
 
 /* ── System Status Banner ──────────────────────────────────
-   Priority: Railway (critical) > AI services > Social platforms
-   Only the single highest-priority active banner is shown at a time.
-   Dismissing it reveals the next lower-priority issue if one exists.
+   Priority: Railway (critical) > AI services > Social platforms.
+   Only one banner shown at a time. Dismissing hides ALL banners.
+   Re-shows if: a different incident appears (new fingerprint),
+   or the same incident is still active 1 hour after dismissal.
 ── */
 interface AIService { name: string; status: string; detail: string }
 interface SocialIssue { platform: string; name: string; status: string; detail: string }
-type BannerLevel = 'critical' | 'degraded' | 'social'
+
+const BANNER_DISMISS_KEY = 'vt-sysbanner-dismiss'
+
+function getBannerDismiss(): { ts: number; fp: string } | null {
+  try { const s = localStorage.getItem(BANNER_DISMISS_KEY); return s ? JSON.parse(s) : null }
+  catch { return null }
+}
+
+function formatActive(startMs: number): string {
+  const min = Math.floor((Date.now() - startMs) / 60_000)
+  if (min < 2) return 'just now'
+  if (min < 60) return `${min}m`
+  const h = Math.floor(min / 60), m = min % 60
+  return m ? `${h}h ${m}m` : `${h}h`
+}
 
 function SystemStatusBanner() {
   const [railwayStatus, setRailwayStatus] = useState<{ message: string; url?: string } | null>(null)
   const [aiServices, setAiServices] = useState<AIService[]>([])
   const [socialIssues, setSocialIssues] = useState<SocialIssue[]>([])
-  const [dismissed, setDismissed] = useState<Set<BannerLevel>>(new Set())
+  // Persisted dismiss record (fp = incident fingerprint, ts = when dismissed)
+  const [dismissRec, setDismissRec] = useState<{ ts: number; fp: string } | null>(getBannerDismiss)
+  // Track when each fingerprint was first seen this session
+  const firstSeenRef = useRef<Record<string, number>>({})
 
   useEffect(() => {
     let cancelled = false
@@ -84,41 +102,70 @@ function SystemStatusBanner() {
     return () => { cancelled = true; clearInterval(id) }
   }, [])
 
-  // Determine the single highest-priority active + non-dismissed banner
-  type BannerConfig = { level: BannerLevel; bg: string; dismissHover: string; title: string; message: string; url?: string }
-  let banner: BannerConfig | null = null
+  const ONE_HOUR = 60 * 60_000
+  const now = Date.now()
 
-  if (railwayStatus && !dismissed.has('critical')) {
-    banner = {
-      level: 'critical',
-      bg: 'bg-red-600',
-      dismissHover: 'hover:bg-red-700',
-      title: 'Infrastructure issue',
-      message: `${railwayStatus.message}. Some features (scheduling, publishing) may be temporarily unavailable.`,
-      url: railwayStatus.url,
+  // Returns true if we should show a banner with this fingerprint
+  function shouldShow(fp: string): boolean {
+    if (!dismissRec) return true
+    if (dismissRec.fp !== fp) return true          // different incident → always show
+    return now - dismissRec.ts >= ONE_HOUR          // same incident → re-show after 1h
+  }
+
+  function handleDismiss(fp: string) {
+    const rec = { ts: now, fp }
+    try { localStorage.setItem(BANNER_DISMISS_KEY, JSON.stringify(rec)) } catch {}
+    setDismissRec(rec)
+  }
+
+  type BannerDef = { fp: string; bg: string; hoverBg: string; title: string; message: string; url?: string }
+  let banner: BannerDef | null = null
+
+  if (railwayStatus) {
+    const fp = `critical:${railwayStatus.url ?? railwayStatus.message}`
+    if (shouldShow(fp)) {
+      if (!firstSeenRef.current[fp]) firstSeenRef.current[fp] = now
+      const age = formatActive(firstSeenRef.current[fp])
+      banner = {
+        fp, bg: 'bg-red-600', hoverBg: 'hover:bg-red-700',
+        title: 'Infrastructure issue',
+        message: `${railwayStatus.message} (active ${age}). Scheduling & publishing may be affected.`,
+        url: railwayStatus.url,
+      }
     }
-  } else if (aiServices.length > 0 && !dismissed.has('degraded')) {
-    banner = {
-      level: 'degraded',
-      bg: 'bg-amber-500',
-      dismissHover: 'hover:bg-amber-600',
-      title: 'Service degradation',
-      message: `${aiServices.map(s => s.detail).join(' ')} Content will resume automatically once services recover.`,
+  }
+
+  if (!banner && aiServices.length > 0) {
+    const fp = `ai:${aiServices.map(s => s.name).sort().join(',')}`
+    if (shouldShow(fp)) {
+      if (!firstSeenRef.current[fp]) firstSeenRef.current[fp] = now
+      const age = formatActive(firstSeenRef.current[fp])
+      const names = aiServices.map(s => s.name).join(', ')
+      banner = {
+        fp, bg: 'bg-amber-500', hoverBg: 'hover:bg-amber-600',
+        title: 'Service degradation',
+        message: `${names} errors (active ${age}). Image content may be delayed.`,
+      }
     }
-  } else if (socialIssues.length > 0 && !dismissed.has('social')) {
-    const names = [...new Set(socialIssues.map(i => i.name))].join(', ')
-    banner = {
-      level: 'social',
-      bg: 'bg-orange-500',
-      dismissHover: 'hover:bg-orange-600',
-      title: 'Social platform issues',
-      message: `${names} — ${socialIssues.map(i => i.detail).join(' ')} Publishing may be affected until resolved.`,
+  }
+
+  if (!banner && socialIssues.length > 0) {
+    const names = [...new Set(socialIssues.map(i => i.name))]
+    const fp = `social:${names.sort().join(',')}`
+    if (shouldShow(fp)) {
+      if (!firstSeenRef.current[fp]) firstSeenRef.current[fp] = now
+      const age = formatActive(firstSeenRef.current[fp])
+      banner = {
+        fp, bg: 'bg-orange-500', hoverBg: 'hover:bg-orange-600',
+        title: 'Social platform issues',
+        message: `${names.join(', ')} (active ${age}). Publishing may be affected until resolved.`,
+      }
     }
   }
 
   if (!banner) return null
 
-  const { level, bg, dismissHover, title, message, url } = banner
+  const { fp, bg, hoverBg, title, message, url } = banner
   return (
     <div className={`${bg} text-white text-sm px-4 py-2.5 flex items-center gap-3`}>
       <AlertTriangle className="w-4 h-4 shrink-0" />
@@ -132,8 +179,8 @@ function SystemStatusBanner() {
         )}
       </p>
       <button
-        onClick={() => setDismissed(prev => new Set([...prev, level]))}
-        className={`shrink-0 p-0.5 ${dismissHover} rounded transition-colors`}
+        onClick={() => handleDismiss(fp)}
+        className={`shrink-0 p-0.5 ${hoverBg} rounded transition-colors`}
         aria-label="Dismiss"
       >
         <X className="w-4 h-4" />
