@@ -13,10 +13,20 @@ import { useBillingStatus } from '@/features/billing/useBillingStatus'
 import { LockedBanner } from '@/features/billing/LockedBanner'
 import vtLogo from '@/assets/icons/vt-logo.png'
 
-/* ── Railway Status Banner ─────────────────────────────── */
-function RailwayStatusBanner() {
-  const [status, setStatus] = useState<{ message: string; url?: string } | null>(null)
-  const [dismissed, setDismissed] = useState(false)
+/* ── System Status Banner ──────────────────────────────────
+   Priority: Railway (critical) > AI services > Social platforms
+   Only the single highest-priority active banner is shown at a time.
+   Dismissing it reveals the next lower-priority issue if one exists.
+── */
+interface AIService { name: string; status: string; detail: string }
+interface SocialIssue { platform: string; name: string; status: string; detail: string }
+type BannerLevel = 'critical' | 'degraded' | 'social'
+
+function SystemStatusBanner() {
+  const [railwayStatus, setRailwayStatus] = useState<{ message: string; url?: string } | null>(null)
+  const [aiServices, setAiServices] = useState<AIService[]>([])
+  const [socialIssues, setSocialIssues] = useState<SocialIssue[]>([])
+  const [dismissed, setDismissed] = useState<Set<BannerLevel>>(new Set())
 
   useEffect(() => {
     let cancelled = false
@@ -31,44 +41,16 @@ function RailwayStatusBanner() {
           const incidents = data?.activeIncidents ?? []
           const name = incidents[0]?.name ?? 'Railway is experiencing issues'
           const url = incidents[0]?.url ?? 'https://status.railway.com'
-          setStatus({ message: name, url })
+          setRailwayStatus({ message: name, url })
+        } else {
+          setRailwayStatus(null)
         }
-      } catch {
-        /* silently ignore – don't bother users if status fetch fails */
-      }
+      } catch { /* silently ignore */ }
     }
     check()
-    const id = setInterval(check, 5 * 60_000) // re-check every 5 min
+    const id = setInterval(check, 5 * 60_000)
     return () => { cancelled = true; clearInterval(id) }
   }, [])
-
-  if (!status || dismissed) return null
-
-  return (
-    <div className="bg-red-600 text-white text-sm px-4 py-2.5 flex items-center gap-3">
-      <AlertTriangle className="w-4 h-4 shrink-0" />
-      <p className="flex-1 min-w-0">
-        <span className="font-semibold">Infrastructure issue:</span>{' '}
-        {status.message}. Some features (scheduling, publishing) may be temporarily unavailable.{' '}
-        {status.url && (
-          <a href={status.url} target="_blank" rel="noopener noreferrer" className="underline hover:text-red-100">
-            View status&nbsp;&rarr;
-          </a>
-        )}
-      </p>
-      <button onClick={() => setDismissed(true)} className="shrink-0 p-0.5 hover:bg-red-700 rounded transition-colors" aria-label="Dismiss">
-        <X className="w-4 h-4" />
-      </button>
-    </div>
-  )
-}
-
-/* ── AI Service Health Banner ──────────────────────────── */
-interface AIService { name: string; status: string; detail: string }
-
-function AIServiceBanner() {
-  const [services, setServices] = useState<AIService[]>([])
-  const [dismissed, setDismissed] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -78,39 +60,13 @@ function AIServiceBanner() {
         if (!res.ok) return
         const data = await res.json()
         if (cancelled) return
-        setServices(data.services ?? [])
-      } catch {
-        /* silently ignore */
-      }
+        setAiServices(data.services ?? [])
+      } catch { /* silently ignore */ }
     }
     check()
     const id = setInterval(check, 5 * 60_000)
     return () => { cancelled = true; clearInterval(id) }
   }, [])
-
-  if (services.length === 0 || dismissed) return null
-
-  return (
-    <div className="bg-amber-500 text-white text-sm px-4 py-2.5 flex items-center gap-3">
-      <AlertTriangle className="w-4 h-4 shrink-0" />
-      <p className="flex-1 min-w-0">
-        <span className="font-semibold">Service degradation:</span>{' '}
-        {services.map(s => s.detail).join(' ')}
-        {' '}Content will resume automatically once services recover.
-      </p>
-      <button onClick={() => setDismissed(true)} className="shrink-0 p-0.5 hover:bg-amber-600 rounded transition-colors" aria-label="Dismiss">
-        <X className="w-4 h-4" />
-      </button>
-    </div>
-  )
-}
-
-/* ── Social Platform Health Banner ─────────────────────── */
-interface SocialIssue { platform: string; name: string; status: string; detail: string }
-
-function SocialHealthBanner() {
-  const [issues, setIssues] = useState<SocialIssue[]>([])
-  const [dismissed, setDismissed] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -120,29 +76,66 @@ function SocialHealthBanner() {
         if (!res.ok) return
         const data = await res.json()
         if (cancelled) return
-        setIssues(data.ok ? [] : (data.issues ?? []))
-      } catch {
-        /* silently ignore */
-      }
+        setSocialIssues(data.ok ? [] : (data.issues ?? []))
+      } catch { /* silently ignore */ }
     }
     check()
     const id = setInterval(check, 5 * 60_000)
     return () => { cancelled = true; clearInterval(id) }
   }, [])
 
-  if (issues.length === 0 || dismissed) return null
+  // Determine the single highest-priority active + non-dismissed banner
+  type BannerConfig = { level: BannerLevel; bg: string; dismissHover: string; title: string; message: string; url?: string }
+  let banner: BannerConfig | null = null
 
-  const names = [...new Set(issues.map(i => i.name))].join(', ')
+  if (railwayStatus && !dismissed.has('critical')) {
+    banner = {
+      level: 'critical',
+      bg: 'bg-red-600',
+      dismissHover: 'hover:bg-red-700',
+      title: 'Infrastructure issue',
+      message: `${railwayStatus.message}. Some features (scheduling, publishing) may be temporarily unavailable.`,
+      url: railwayStatus.url,
+    }
+  } else if (aiServices.length > 0 && !dismissed.has('degraded')) {
+    banner = {
+      level: 'degraded',
+      bg: 'bg-amber-500',
+      dismissHover: 'hover:bg-amber-600',
+      title: 'Service degradation',
+      message: `${aiServices.map(s => s.detail).join(' ')} Content will resume automatically once services recover.`,
+    }
+  } else if (socialIssues.length > 0 && !dismissed.has('social')) {
+    const names = [...new Set(socialIssues.map(i => i.name))].join(', ')
+    banner = {
+      level: 'social',
+      bg: 'bg-orange-500',
+      dismissHover: 'hover:bg-orange-600',
+      title: 'Social platform issues',
+      message: `${names} — ${socialIssues.map(i => i.detail).join(' ')} Publishing may be affected until resolved.`,
+    }
+  }
 
+  if (!banner) return null
+
+  const { level, bg, dismissHover, title, message, url } = banner
   return (
-    <div className="bg-orange-500 text-white text-sm px-4 py-2.5 flex items-center gap-3">
+    <div className={`${bg} text-white text-sm px-4 py-2.5 flex items-center gap-3`}>
       <AlertTriangle className="w-4 h-4 shrink-0" />
       <p className="flex-1 min-w-0">
-        <span className="font-semibold">Social platform issues:</span>{' '}
-        {names} — {issues.map(i => i.detail).join(' ')}
-        {' '}Publishing may be affected until resolved.
+        <span className="font-semibold">{title}:</span>{' '}
+        {message}
+        {url && (
+          <a href={url} target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80 ml-1">
+            View status&nbsp;&rarr;
+          </a>
+        )}
       </p>
-      <button onClick={() => setDismissed(true)} className="shrink-0 p-0.5 hover:bg-orange-600 rounded transition-colors" aria-label="Dismiss">
+      <button
+        onClick={() => setDismissed(prev => new Set([...prev, level]))}
+        className={`shrink-0 p-0.5 ${dismissHover} rounded transition-colors`}
+        aria-label="Dismiss"
+      >
         <X className="w-4 h-4" />
       </button>
     </div>
@@ -384,9 +377,7 @@ export function AppLayout() {
 
       {/* Main area */}
       <div className={`flex-1 min-w-0 flex flex-col min-h-screen transition-all duration-200 ease-in-out ${expanded ? 'ml-52' : 'ml-16'}`}>
-        <RailwayStatusBanner />
-        <AIServiceBanner />
-        <SocialHealthBanner />
+        <SystemStatusBanner />
         {isLocked && <LockedBanner />}
         {/* Page content */}
         <main className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 flex-1 min-w-0">
