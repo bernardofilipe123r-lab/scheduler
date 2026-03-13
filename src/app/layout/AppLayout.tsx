@@ -24,9 +24,10 @@ interface SocialIssue { platform: string; name: string; status: string; detail: 
 
 const BANNER_DISMISS_KEY = 'vt-sysbanner-dismiss'
 
-function getBannerDismiss(): { ts: number; fp: string } | null {
-  try { const s = localStorage.getItem(BANNER_DISMISS_KEY); return s ? JSON.parse(s) : null }
-  catch { return null }
+// Stored as { [fp]: dismissedAtMs }
+function loadDismissMap(): Record<string, number> {
+  try { const s = localStorage.getItem(BANNER_DISMISS_KEY); return s ? JSON.parse(s) : {} }
+  catch { return {} }
 }
 
 function formatActive(startMs: number): string {
@@ -41,8 +42,8 @@ function SystemStatusBanner() {
   const [railwayStatus, setRailwayStatus] = useState<{ message: string; url?: string } | null>(null)
   const [aiServices, setAiServices] = useState<AIService[]>([])
   const [socialIssues, setSocialIssues] = useState<SocialIssue[]>([])
-  // Persisted dismiss record (fp = incident fingerprint, ts = when dismissed)
-  const [dismissRec, setDismissRec] = useState<{ ts: number; fp: string } | null>(getBannerDismiss)
+  // dismissMap: { [fp]: dismissedAtMs } — one entry per dismissed fingerprint
+  const [dismissMap, setDismissMap] = useState<Record<string, number>>(loadDismissMap)
   // Track when each fingerprint was first seen this session
   const firstSeenRef = useRef<Record<string, number>>({})
 
@@ -105,17 +106,17 @@ function SystemStatusBanner() {
   const ONE_HOUR = 60 * 60_000
   const now = Date.now()
 
-  // Returns true if we should show a banner with this fingerprint
+  // Returns true if this fingerprint's banner should be visible
   function shouldShow(fp: string): boolean {
-    if (!dismissRec) return true
-    if (dismissRec.fp !== fp) return true          // different incident → always show
-    return now - dismissRec.ts >= ONE_HOUR          // same incident → re-show after 1h
+    const dismissedAt = dismissMap[fp]
+    if (dismissedAt === undefined) return true       // never dismissed
+    return now - dismissedAt >= ONE_HOUR             // same incident → re-show after 1h
   }
 
   function handleDismiss(fp: string) {
-    const rec = { ts: now, fp }
-    try { localStorage.setItem(BANNER_DISMISS_KEY, JSON.stringify(rec)) } catch {}
-    setDismissRec(rec)
+    const next = { ...dismissMap, [fp]: now }
+    try { localStorage.setItem(BANNER_DISMISS_KEY, JSON.stringify(next)) } catch {}
+    setDismissMap(next)
   }
 
   type BannerDef = { fp: string; bg: string; hoverBg: string; title: string; message: string; url?: string }

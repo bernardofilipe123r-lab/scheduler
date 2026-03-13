@@ -147,13 +147,13 @@ export function PipelineCard({ item, onApprove, onReject, onEdit, onDelete, onOp
         </p>
 
         {/* Brand + time */}
-        <div className="flex items-center justify-between pt-0.5">
+        <div className="flex flex-col gap-0.5 pt-0.5">
           {item.brands.length > 0 && (
-            <span className="text-[10px] font-medium bg-gray-50 text-gray-500 px-2 py-0.5 rounded-md border border-gray-100">
+            <span className="text-[10px] font-medium bg-gray-50 text-gray-500 px-2 py-0.5 rounded-md border border-gray-100 self-start">
               {item.brands[0]}
             </span>
           )}
-          <span className="text-[10px] text-gray-300 ml-auto">
+          <span className="text-[10px] text-gray-300">
             {format(new Date(item.created_at), 'MMM d, h:mm a')}
           </span>
         </div>
