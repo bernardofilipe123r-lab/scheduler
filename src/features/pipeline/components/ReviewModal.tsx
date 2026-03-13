@@ -198,39 +198,83 @@ function CarouselContent({ item }: { item: PipelineItem }) {
 }
 
 /* ───────────────────────────────────────────────────
-   THREAD — Styled text preview
+   THREAD — Real Threads-like preview with connected posts
    ─────────────────────────────────────────────────── */
+
+function ThreadActionIcons({ className }: { className?: string }) {
+  return (
+    <div className={clsx('flex items-center gap-5 text-white/25', className)}>
+      {/* Heart */}
+      <svg width="16" height="16" viewBox="0 0 18 18" fill="none"><path d="M16 7.53c0-2-.35-3.63-2.35-3.63-.91 0-1.63.42-2.2 1-.35.36-.65.79-.89 1.23a.65.65 0 0 1-1.13 0 6.5 6.5 0 0 0-.89-1.23c-.57-.59-1.29-1-2.2-1C4.34 3.9 2.99 5.52 2.99 7.53c0 2.24 1.63 4.41 6 8.49 4.37-4.08 7.01-6.25 7.01-8.49Z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
+      {/* Comment */}
+      <svg width="16" height="16" viewBox="0 0 18 18" fill="none"><path d="M1.08 10.32C.58 5.3 4.79 1.08 9.82 1.58c3.79.39 6.83 3.47 7.12 7.3.13 1.58-.22 3.07-.89 4.34l.87 3.42a.65.65 0 0 1-.79.79l-3.42-.87a7.46 7.46 0 0 1-4.34.89c-3.79-.28-6.9-3.33-7.29-7.13Z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
+      {/* Repost */}
+      <svg width="16" height="16" viewBox="0 0 18 18" fill="none"><path d="M6.41 1.24a.65.65 0 0 1 .88-.08l2.67 2.25a.65.65 0 0 1-.04.98L7.32 6.82a.65.65 0 1 1-.83-1.0l1.5-1.39H5.2A2.75 2.75 0 0 0 2.45 7.26v4.5a2.75 2.75 0 0 0 2.75 2.75.63.63 0 0 1 0 1.25 4 4 0 0 1-4-4v-4.5a4 4 0 0 1 4-4h2.65L6.49 2.12a.65.65 0 0 1-.08-.88Z" fill="currentColor"/><path d="M11.59 17.79a.65.65 0 0 1-.88.08l-2.67-2.25a.65.65 0 0 1 .04-.98l2.67-2.47a.65.65 0 0 1 .83 1.0l-1.5 1.39h2.72a2.75 2.75 0 0 0 2.75-2.75v-4.5a2.75 2.75 0 0 0-2.75-2.75.63.63 0 1 1 0-1.25 4 4 0 0 1 4 4v4.5a4 4 0 0 1-4 4h-2.65l1.36 1.15a.65.65 0 0 1 .08.88Z" fill="currentColor"/></svg>
+      {/* Share */}
+      <svg width="16" height="16" viewBox="0 0 18 18" fill="none"><path d="M14.53 2.85H3.71c-.77 0-1.4.07-1.71.32a.94.94 0 0 0-.38.94c.11.18.32.42.63.78l3.23 3.2 4.35-2.03L7.28 9.5l1.14 4.78c.24.45.44.69.63.78.15.01.22-.01.38-.14.18-.14.31-.41.51-.77l5.58-9.41c.27-.51.35-.78.38-.97a.56.56 0 0 0-.18-.49.94.94 0 0 0-.69-.17h-.06c-.23.02-.56.02-1.04.02h-.36Z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
+    </div>
+  )
+}
+
 function ThreadContent({ item }: { item: PipelineItem }) {
   const output = getFirstBrandOutput(item)
-  const text = output?.caption || item.caption || item.content_lines?.join('\n') || ''
+  const brandName = item.brands[0] ?? 'Thread'
+  const handle = brandName.toLowerCase().replace(/\s/g, '')
+
+  // Collect all thread parts
+  const parts: string[] = []
+  if (output?.chain_parts && output.chain_parts.length > 0) {
+    parts.push(...output.chain_parts)
+  } else {
+    const text = output?.caption || item.caption || item.content_lines?.join('\n') || ''
+    if (text) parts.push(text)
+  }
+
+  if (parts.length === 0) {
+    parts.push('No content preview')
+  }
 
   return (
     <div
-      className="rounded-2xl overflow-hidden bg-[#15202b] shadow-lg mx-auto flex flex-col"
-      style={{ height: '65vh', aspectRatio: '9/16' }}
+      className="rounded-2xl overflow-hidden bg-white shadow-lg mx-auto flex flex-col"
+      style={{ maxHeight: '70vh', width: '100%', maxWidth: 480 }}
     >
-      {/* Header bar */}
-      <div className="flex items-center gap-2.5 px-5 pt-5 pb-3 border-b border-white/5">
-        <div className="w-9 h-9 rounded-full bg-sky-500/20 flex items-center justify-center">
-          <span className="text-sky-400 text-sm font-bold">
-            {(item.brands[0] ?? 'T')[0].toUpperCase()}
-          </span>
-        </div>
-        <div>
-          <span className="text-white/90 text-sm font-semibold">{item.brands[0] ?? 'Thread'}</span>
-          <span className="text-white/30 text-[10px] block">@{(item.brands[0] ?? 'thread').toLowerCase().replace(/\s/g, '')}</span>
-        </div>
+      {/* Threads header */}
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100">
+        <span className="text-[15px] font-semibold text-gray-900">Threads Preview</span>
       </div>
-      {/* Text body */}
-      <div className="flex-1 overflow-y-auto px-5 py-4 scrollbar-thin">
-        <p className="text-white/90 text-[13px] leading-relaxed whitespace-pre-line">{text}</p>
-      </div>
-      {/* Action bar mock */}
-      <div className="flex items-center justify-around px-5 py-3 border-t border-white/5 text-white/25">
-        <span className="text-[10px]">Reply</span>
-        <span className="text-[10px]">Repost</span>
-        <span className="text-[10px]">Like</span>
-        <span className="text-[10px]">Share</span>
+
+      {/* Scrollable thread body */}
+      <div className="flex-1 overflow-y-auto px-4 py-3">
+        {parts.map((text, idx) => {
+          const isLast = idx === parts.length - 1
+          return (
+            <div key={idx} className="flex gap-3">
+              {/* Avatar + connector line */}
+              <div className="flex flex-col items-center flex-shrink-0">
+                <div className="w-9 h-9 rounded-full bg-gray-900 flex items-center justify-center flex-shrink-0">
+                  <span className="text-white text-xs font-bold">
+                    {brandName[0].toUpperCase()}
+                  </span>
+                </div>
+                {!isLast && (
+                  <div className="w-0.5 flex-1 bg-gray-200 my-1 min-h-[16px]" />
+                )}
+              </div>
+              {/* Post content */}
+              <div className={clsx('flex-1 min-w-0', isLast ? 'pb-4' : 'pb-2')}>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[13px] font-semibold text-gray-900">{handle}</span>
+                  <span className="text-[11px] text-gray-400">now</span>
+                </div>
+                <p className="text-[14px] leading-[1.45] text-gray-800 whitespace-pre-line mt-0.5">
+                  {text}
+                </p>
+                <ThreadActionIcons className="mt-2" />
+              </div>
+            </div>
+          )
+        })}
       </div>
     </div>
   )
@@ -409,7 +453,7 @@ export function ReviewModal({ items: externalItems, initialIndex, onApprove, onR
   if (!item) return null
 
   const remaining = queue.length - currentIdx
-  const modalWidth = contentMode === 'reel' ? 'max-w-[80vw] lg:max-w-3xl' : 'max-w-sm'
+  const modalWidth = contentMode === 'reel' ? 'max-w-[80vw] lg:max-w-3xl' : contentMode === 'thread' ? 'max-w-lg' : 'max-w-sm'
 
   const modal = (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center" style={{ margin: 0 }}>

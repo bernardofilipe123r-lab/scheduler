@@ -14,6 +14,9 @@ export interface BrandOutput {
   carousel_paths?: string[]
   caption?: string
   content_index?: number
+  is_chain?: boolean
+  chain_parts?: string[]
+  format_type?: string
 }
 
 export interface PipelineItem {
