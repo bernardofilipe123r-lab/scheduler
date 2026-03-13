@@ -17,7 +17,7 @@ def _resolve_cta_topic(ctx: Optional[PromptContext]) -> str:
         if not topic and ctx.topic_keywords:
             topic = ctx.topic_keywords[0]
         if not topic and ctx.niche_name:
-            topic = ctx.niche_name.split()[0].lower()
+            topic = ctx.niche_name.lower()
         if topic:
             return topic
     return "this topic"

@@ -430,24 +430,30 @@ class CarouselSlideRenderer:
         font: ImageFont.FreeTypeFont, x: int, y: int,
         max_width: int, color: tuple,
     ):
-        """Draw word-wrapped text with line height."""
-        words = text.split()
-        current = ""
+        """Draw word-wrapped text with line height, respecting paragraph breaks."""
+        paragraphs = text.split("\n\n")
         current_y = y
         line_spacing = int(TEXT_FONT_SIZE * TEXT_LINE_HEIGHT)
+        paragraph_spacing = int(line_spacing * 0.6)
 
-        for word in words:
-            test = f"{current} {word}".strip()
-            bbox = draw.textbbox((0, 0), test, font=font)
-            if bbox[2] - bbox[0] <= max_width:
-                current = test
-            else:
-                if current:
-                    draw.text((x, current_y), current, fill=color, font=font)
-                    current_y += line_spacing
-                current = word
-        if current:
-            draw.text((x, current_y), current, fill=color, font=font)
+        for p_idx, paragraph in enumerate(paragraphs):
+            if p_idx > 0:
+                current_y += paragraph_spacing
+            words = paragraph.split()
+            current = ""
+            for word in words:
+                test = f"{current} {word}".strip()
+                bbox = draw.textbbox((0, 0), test, font=font)
+                if bbox[2] - bbox[0] <= max_width:
+                    current = test
+                else:
+                    if current:
+                        draw.text((x, current_y), current, fill=color, font=font)
+                        current_y += line_spacing
+                    current = word
+            if current:
+                draw.text((x, current_y), current, fill=color, font=font)
+                current_y += line_spacing
 
     @staticmethod
     def _replace_handles(text: str, handle: str) -> str:

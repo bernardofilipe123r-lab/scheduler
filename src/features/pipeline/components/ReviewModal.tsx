@@ -128,6 +128,15 @@ function CarouselContent({ item }: { item: PipelineItem }) {
 
   useEffect(() => { setSlideIdx(0) }, [item.job_id])
 
+  // Preload all slide images so navigation is instant
+  useEffect(() => {
+    slides.forEach((src) => {
+      const img = new Image()
+      img.src = src
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.job_id])
+
   if (slides.length === 0) {
     return (
       <div
@@ -321,7 +330,7 @@ export function ReviewModal({ items: externalItems, initialIndex, onApprove, onR
     const handler = (e: KeyboardEvent) => {
       if (isAnimating) return
       if (e.key === 'Escape') onClose()
-      else if (e.key === 'ArrowRight' && isPending) { autoSchedule ? handleAccept() : handleDownload() }
+      else if (e.key === 'ArrowRight' && isPending) { if (autoSchedule) handleAccept(); else handleDownload() }
       else if (e.key === 'ArrowLeft' && isPending) handleDecline()
       else if ((e.key === 'e' || e.key === 'E') && isPending) handleEdit()
       else if ((e.key === 'd' || e.key === 'D') && !isPending) handleDeleteItem()
