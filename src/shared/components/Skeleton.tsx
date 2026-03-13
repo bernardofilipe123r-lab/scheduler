@@ -776,36 +776,39 @@ export function BrandThemeSkeleton() {
 // ── Pipeline page skeleton ─────────────────────────────────
 export function PipelineSkeleton() {
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5">
       {Array.from({ length: 8 }).map((_, i) => (
-        <div key={i} className="rounded-xl border border-gray-200 bg-white overflow-hidden">
-          {/* Image preview area */}
-          <div className="p-2">
-            <Sk className="aspect-[9/16] max-h-40 rounded-lg" />
-          </div>
-          {/* Meta: variant + quality score */}
-          <div className="px-3 pb-1 flex items-center justify-between">
-            <Sk className="h-2.5 w-12 rounded" />
-            <Sk className="h-2.5 w-8 rounded" />
-          </div>
-          {/* Title */}
-          <div className="px-3 pb-1 space-y-1">
-            <Sk className="h-3.5 w-full rounded" />
-            <Sk className="h-3.5 w-3/4 rounded" />
-          </div>
-          {/* Brand tag */}
-          <div className="px-3 pb-1">
-            <Sk className="h-4 w-16 rounded-md" />
-          </div>
-          {/* Date */}
-          <div className="px-3 pb-2">
-            <Sk className="h-2.5 w-20 rounded" />
+        <div key={i} className="rounded-2xl border border-gray-100 bg-white overflow-hidden shadow-sm">
+          {/* Image preview — aspect-[4/5] to match new card design */}
+          <Sk className="aspect-[4/5] w-full rounded-none" />
+          {/* Card body */}
+          <div className="p-3.5 space-y-2.5">
+            {/* Type dot + score */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <Sk className="w-1.5 h-1.5 rounded-full" />
+                <Sk className="h-2.5 w-10 rounded" />
+              </div>
+              <Sk className="h-4 w-8 rounded-md" />
+            </div>
+            {/* Title */}
+            <div className="space-y-1.5">
+              <Sk className="h-3.5 w-full rounded" />
+              <Sk className="h-3.5 w-2/3 rounded" />
+            </div>
+            {/* Brand + time */}
+            <div className="flex items-center justify-between pt-0.5">
+              <Sk className="h-4 w-20 rounded-md" />
+              <Sk className="h-2.5 w-16 rounded" />
+            </div>
           </div>
           {/* Action buttons */}
-          <div className="border-t border-gray-100 flex">
+          <div className="border-t border-gray-50 flex">
+            <Sk className="flex-1 h-9 rounded-none rounded-bl-2xl" />
+            <div className="w-px bg-gray-50" />
             <Sk className="flex-1 h-9 rounded-none" />
-            <div className="w-px bg-gray-100" />
-            <Sk className="flex-1 h-9 rounded-none" />
+            <div className="w-px bg-gray-50" />
+            <Sk className="flex-1 h-9 rounded-none rounded-br-2xl" />
           </div>
         </div>
       ))}
