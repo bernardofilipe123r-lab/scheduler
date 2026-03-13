@@ -155,9 +155,9 @@ CRITICAL_MODULES = [
     ("app.api.auth.bsky_auth_routes", "Bluesky OAuth routes"),
     ("app.api.auth.threads_oauth_routes", "Threads OAuth routes"),
     ("app.api.auth.tiktok_oauth_routes", "TikTok OAuth routes"),
-    ("app.api.niche_config_routes", "NicheConfig routes"),
-    ("app.api.content_dna_routes", "Content DNA routes"),
-    ("app.api.content_dna_template_routes", "Content DNA template routes"),
+    ("app.api.brands.niche_config_routes", "NicheConfig routes"),
+    ("app.api.brands.content_dna_routes", "Content DNA routes"),
+    ("app.api.brands.content_dna_template_routes", "Content DNA template routes"),
     ("app.api.pipeline.routes", "Pipeline routes"),
     ("app.api.pipeline.schemas", "Pipeline schemas"),
     ("app.api.billing.routes", "Billing routes"),
@@ -802,6 +802,256 @@ def check_services():
 
 
 # ═══════════════════════════════════════════════════════════════
+# CHECK A: Module existence for all app/ imports
+# ═══════════════════════════════════════════════════════════════
+
+def check_import_drift():
+    """Parse all 'from app.X import Y' across app/ and verify targets exist on disk."""
+    import ast as _ast
+
+    print(f"\n{BOLD}━━━ Import Drift Detection ━━━{RESET}")
+    app_dir = ROOT / "app"
+    errors = []
+
+    for py_file in sorted(app_dir.rglob("*.py")):
+        if "__pycache__" in str(py_file):
+            continue
+        try:
+            source = py_file.read_text(encoding="utf-8", errors="replace")
+            tree = _ast.parse(source, filename=str(py_file))
+        except SyntaxError:
+            continue
+
+        for node in _ast.walk(tree):
+            if not isinstance(node, _ast.ImportFrom):
+                continue
+            module = node.module or ""
+            if not module.startswith("app."):
+                continue
+            # Convert dotted module to file path
+            parts = module.split(".")
+            mod_as_file = ROOT / ("/".join(parts) + ".py")
+            mod_as_pkg = ROOT / "/".join(parts) / "__init__.py"
+            if not mod_as_file.exists() and not mod_as_pkg.exists():
+                rel = py_file.relative_to(ROOT)
+                errors.append((str(rel), getattr(node, "lineno", "?"), module))
+
+    if errors:
+        for filepath, lineno, module in errors:
+            fail(f"IMPORT DRIFT: {filepath}:{lineno} → {module} not found on disk")
+    else:
+        ok("All app/ imports resolve to existing modules on disk")
+
+
+# ═══════════════════════════════════════════════════════════════
+# CHECK B: VARIANT_PROCESSORS completeness
+# ═══════════════════════════════════════════════════════════════
+
+def check_variant_processors():
+    """Verify every method name in VARIANT_PROCESSORS exists on JobProcessor."""
+    import ast as _ast
+
+    print(f"\n{BOLD}━━━ VARIANT_PROCESSORS Completeness ━━━{RESET}")
+
+    jp_file = ROOT / "app" / "services" / "content" / "job_processor.py"
+    if not jp_file.exists():
+        fail("job_processor.py not found")
+        return
+
+    source = jp_file.read_text(encoding="utf-8", errors="replace")
+    tree = _ast.parse(source)
+
+    # Find class JobProcessor
+    jp_class = None
+    for node in _ast.walk(tree):
+        if isinstance(node, _ast.ClassDef) and node.name == "JobProcessor":
+            jp_class = node
+            break
+
+    if not jp_class:
+        fail("JobProcessor class not found in job_processor.py")
+        return
+
+    # Find VARIANT_PROCESSORS dict
+    variant_map = {}
+    for item in _ast.walk(jp_class):
+        if isinstance(item, _ast.Assign):
+            for target in item.targets:
+                if isinstance(target, _ast.Name) and target.id == "VARIANT_PROCESSORS":
+                    if isinstance(item.value, _ast.Dict):
+                        for k, v in zip(item.value.keys, item.value.values):
+                            if isinstance(k, _ast.Constant) and isinstance(v, _ast.Constant):
+                                variant_map[k.value] = v.value
+
+    if not variant_map:
+        fail("VARIANT_PROCESSORS dict not found or empty in JobProcessor")
+        return
+
+    # Collect all method names on JobProcessor
+    methods = {
+        node.name for node in _ast.walk(jp_class)
+        if isinstance(node, (_ast.FunctionDef, _ast.AsyncFunctionDef))
+    }
+
+    # Verify expected mappings still exist
+    expected = {
+        "light": "regenerate_brand",
+        "dark": "regenerate_brand",
+        "format_b": "process_format_b_brand",
+        "post": "process_post_brand",
+        "threads": "process_threads_brand",
+    }
+
+    for variant, method in expected.items():
+        if variant not in variant_map:
+            fail(f"VARIANT GAP: expected variant '{variant}' missing from VARIANT_PROCESSORS")
+        elif variant_map[variant] != method:
+            warn(f"VARIANT CHANGE: '{variant}' maps to '{variant_map[variant]}' (expected '{method}')")
+
+    # Verify all current methods exist
+    for variant, method in variant_map.items():
+        if method in methods:
+            ok(f"VARIANT_PROCESSORS['{variant}'] → {method}()")
+        else:
+            fail(f"VARIANT GAP: '{variant}' maps to '{method}' but method not found in JobProcessor")
+
+
+# ═══════════════════════════════════════════════════════════════
+# CHECK C: SUPPORTED_PLATFORMS vs SocialPublisher methods
+# ═══════════════════════════════════════════════════════════════
+
+def check_platform_publisher_methods():
+    """Verify each platform in SUPPORTED_PLATFORMS has all required publish methods."""
+    import ast as _ast
+
+    print(f"\n{BOLD}━━━ Platform Publisher Method Coverage ━━━{RESET}")
+
+    # Parse SUPPORTED_PLATFORMS from platforms.py using AST (no import needed)
+    platforms_file = ROOT / "app" / "core" / "platforms.py"
+    if not platforms_file.exists():
+        fail("app/core/platforms.py not found")
+        return
+
+    source = platforms_file.read_text()
+    tree = _ast.parse(source)
+
+    platforms = []
+    for node in _ast.walk(tree):
+        if isinstance(node, _ast.Assign):
+            for target in node.targets:
+                if isinstance(target, _ast.Name) and target.id == "SUPPORTED_PLATFORMS":
+                    if isinstance(node.value, _ast.Tuple):
+                        platforms = [
+                            elt.value for elt in node.value.elts
+                            if isinstance(elt, _ast.Constant)
+                        ]
+        elif isinstance(node, _ast.AnnAssign):
+            target = node.target
+            if isinstance(target, _ast.Name) and target.id == "SUPPORTED_PLATFORMS" and node.value:
+                if isinstance(node.value, _ast.Tuple):
+                    platforms = [
+                        elt.value for elt in node.value.elts
+                        if isinstance(elt, _ast.Constant)
+                    ]
+
+    if not platforms:
+        fail("Could not parse SUPPORTED_PLATFORMS from platforms.py")
+        return
+
+    # Read social_publisher.py and find all method names
+    pub_file = ROOT / "app" / "services" / "publishing" / "social_publisher.py"
+    if not pub_file.exists():
+        fail("social_publisher.py not found")
+        return
+
+    pub_source = pub_file.read_text()
+
+    # Expected methods per platform
+    PLATFORM_METHODS = {
+        "instagram": ["publish_instagram_reel", "publish_instagram_carousel", "publish_instagram_image_post"],
+        "facebook": ["publish_facebook_reel", "publish_facebook_carousel", "publish_facebook_image_post"],
+        "youtube": [],  # YouTube uses separate publisher module
+        "threads": ["publish_threads_post", "publish_threads_carousel", "publish_threads_chain"],
+        "tiktok": ["publish_tiktok_video"],
+        "bluesky": ["publish_bsky_post", "publish_bsky_carousel"],
+    }
+
+    for platform in platforms:
+        methods = PLATFORM_METHODS.get(platform, [])
+        if not methods and platform == "youtube":
+            # YouTube uses its own publisher module
+            yt_pub = ROOT / "app" / "services" / "youtube" / "publisher.py"
+            if yt_pub.exists() and yt_pub.stat().st_size > 0:
+                ok(f"Platform '{platform}' → youtube/publisher.py exists")
+            else:
+                fail(f"PUBLISHER GAP: platform '{platform}' → youtube/publisher.py missing or empty")
+            continue
+
+        for method in methods:
+            if f"def {method}" in pub_source or f"async def {method}" in pub_source:
+                ok(f"Platform '{platform}' → {method}()")
+            else:
+                fail(f"PUBLISHER GAP: platform '{platform}' has no publish method '{method}'")
+
+
+# ═══════════════════════════════════════════════════════════════
+# CHECK D: NicheConfig ↔ PromptContext field alignment (AST-based)
+# ═══════════════════════════════════════════════════════════════
+
+def check_niche_prompt_alignment():
+    """Verify fields accessed on niche in prompt_context.py exist in NicheConfig model."""
+    import ast as _ast
+    import re as _re
+
+    print(f"\n{BOLD}━━━ NicheConfig ↔ PromptContext AST Alignment ━━━{RESET}")
+
+    # Parse all niche field accesses in prompt_context.py
+    ctx_file = ROOT / "app" / "core" / "prompt_context.py"
+    if not ctx_file.exists():
+        fail("prompt_context.py not found")
+        return
+
+    ctx_source = ctx_file.read_text()
+    # Find fields accessed as self.niche.X or ctx.niche.X or niche.X
+    niche_fields = set(_re.findall(r"(?:self\.niche|ctx\.niche|niche)\.(\w+)", ctx_source))
+    # Exclude method calls and builtins
+    niche_fields -= {"get", "items", "keys", "values", "__dict__"}
+
+    # Parse Column declarations from NicheConfig model
+    nc_file = ROOT / "app" / "models" / "niche_config.py"
+    if not nc_file.exists():
+        fail("niche_config.py not found")
+        return
+
+    nc_source = nc_file.read_text()
+    nc_tree = _ast.parse(nc_source)
+
+    nc_columns = set()
+    for node in _ast.walk(nc_tree):
+        if isinstance(node, _ast.Assign):
+            for target in node.targets:
+                if isinstance(target, _ast.Name):
+                    # Check if value is Column() call
+                    if isinstance(node.value, _ast.Call):
+                        func = node.value.func
+                        if isinstance(func, _ast.Name) and func.id == "Column":
+                            nc_columns.add(target.id)
+    # Ignore meta columns
+    nc_columns -= {"id", "user_id", "created_at", "updated_at"}
+
+    if not niche_fields:
+        warn("No niche field accesses found in prompt_context.py")
+        return
+
+    gaps = niche_fields - nc_columns
+    if gaps:
+        for field in sorted(gaps):
+            fail(f"SCHEMA GAP: '{field}' used in prompt_context.py but not declared in NicheConfig model")
+    else:
+        ok(f"All {len(niche_fields)} niche fields in prompt_context.py have matching NicheConfig columns")
+
+
+# ═══════════════════════════════════════════════════════════════
 # 7. REACT HOOKS LINT CHECK
 # ═══════════════════════════════════════════════════════════════
 
@@ -866,6 +1116,10 @@ def main():
         check_imports()
         check_symbols()
         check_niche_config_fields()
+        check_import_drift()
+        check_variant_processors()
+        check_platform_publisher_methods()
+        check_niche_prompt_alignment()
         check_react_hooks()
 
     if run_all or args.imports or args.db:

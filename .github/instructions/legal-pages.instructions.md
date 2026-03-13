@@ -19,4 +19,4 @@ When adding or removing a **social platform integration**, ALL three pages must 
 3. **Data Deletion** — Include platform's tokens/IDs in "What Gets Deleted" list
 4. **Privacy** — Include platform in "Your Rights" / "Revoke access" instructions
 
-Currently integrated platforms: **Instagram, Facebook, Threads, TikTok, YouTube**
+Currently integrated platforms: **Instagram, Facebook, Threads, TikTok, YouTube, Bluesky**

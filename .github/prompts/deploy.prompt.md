@@ -1,7 +1,7 @@
 ---
+mode: "agent"
 description: "Deploy to Railway — check status, set env vars, redeploy, verify logs"
-agent: "agent"
-tools: [execute, read, search]
+tools: ["codebase", "terminal", "editFiles"]
 ---
 
 Deploy the current state to Railway production.

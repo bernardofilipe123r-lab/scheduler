@@ -48,7 +48,205 @@ POST_PERSONALITIES = {
 
 HOOK_STRATEGIES = ["question", "myth_buster", "shocking_stat", "personal_story", "bold_claim"]
 
-TITLE_FORMATS = ["how_x_does_y", "number_one_mistake", "why_experts_say", "stop_doing_this", "hidden_truth"]
+# ─────────────────────────────────────────────────────────────────────────────
+# CAROUSEL TITLE FORMAT POOL — 40 distinct structural patterns
+#
+# Each entry maps a format_id → { "template": str, "instruction": str }
+# The template uses [X], [Y], [Z] as fill-in slots for DeepSeek.
+# The instruction tells DeepSeek EXACTLY how to follow the template.
+#
+# These are injected into the prompt as a HARD CONSTRAINT so DeepSeek cannot
+# freely choose a structure — it must fill in the slots of the given template.
+# ─────────────────────────────────────────────────────────────────────────────
+CAROUSEL_TITLE_TEMPLATES = {
+    # HOW-CAN patterns
+    "how_specific_x_supports_y": {
+        "template": "HOW A SPECIFIC TYPE OF [X] CAN [VERB] YOUR [Y]",
+        "instruction": "Fill in [X] with a specific practice/food/habit, [VERB] with an active verb (improve, boost, protect, regulate, reset), [Y] with a body system or outcome. Example: HOW A SPECIFIC TYPE OF BREATHING CAN REGULATE YOUR STRESS HORMONES",
+    },
+    "how_x_directly_affects_y": {
+        "template": "HOW [X] DIRECTLY AFFECTS YOUR [Y] ACCORDING TO NEW RESEARCH",
+        "instruction": "Fill in [X] with a food/habit/nutrient, [Y] with a health outcome or body system. Example: HOW MAGNESIUM DIRECTLY AFFECTS YOUR SLEEP QUALITY ACCORDING TO NEW RESEARCH",
+    },
+    "how_x_reshapes_y": {
+        "template": "HOW [X] PHYSICALLY RESHAPES YOUR [Y] OVER TIME",
+        "instruction": "Fill in [X] with a lifestyle habit or nutrient, [Y] with a specific organ or system. Example: HOW INTERMITTENT FASTING PHYSICALLY RESHAPES YOUR MITOCHONDRIA OVER TIME",
+    },
+    "how_x_in_y_changes_z": {
+        "template": "HOW [X] IN YOUR [Y] IS CHANGING YOUR [Z]",
+        "instruction": "Fill in [X] with a substance/compound, [Y] with where it is (gut/bloodstream/cells), [Z] with an outcome. Example: HOW LECTINS IN YOUR GUT ARE CHANGING YOUR INFLAMMATION LEVELS",
+    },
+    # WHY patterns
+    "why_most_people_x": {
+        "template": "WHY MOST PEOPLE GET [X] COMPLETELY WRONG AND WHAT TO DO INSTEAD",
+        "instruction": "Fill in [X] with a common health topic or belief. Example: WHY MOST PEOPLE GET PROTEIN TIMING COMPLETELY WRONG AND WHAT TO DO INSTEAD",
+    },
+    "why_x_is_the_reason": {
+        "template": "WHY [X] IS THE REAL REASON YOU STRUGGLE WITH [Y]",
+        "instruction": "Fill in [X] with an overlooked factor, [Y] with a common health complaint. Example: WHY CORTISOL IS THE REAL REASON YOU STRUGGLE WITH BELLY FAT",
+    },
+    "why_doctors_miss_x": {
+        "template": "WHY MOST DOCTORS STILL MISS THE CONNECTION BETWEEN [X] AND [Y]",
+        "instruction": "Fill in [X] and [Y] with two connected health topics. Example: WHY MOST DOCTORS STILL MISS THE CONNECTION BETWEEN GUT HEALTH AND SKIN INFLAMMATION",
+    },
+    "why_your_x_is_lying": {
+        "template": "WHY YOUR [X] IS LYING TO YOU ABOUT [Y]",
+        "instruction": "Fill in [X] with a common health metric/tool, [Y] with what it misrepresents. Example: WHY YOUR CALORIE COUNT IS LYING TO YOU ABOUT METABOLIC HEALTH",
+    },
+    # STUDY / RESEARCH patterns
+    "study_reveals_x_does_y": {
+        "template": "STUDY REVEALS [X] CAN [Y] WITHIN [TIMEFRAME]",
+        "instruction": "Fill in [X] with a food/substance, [Y] with a specific health benefit, [TIMEFRAME] with a concrete time period. Example: STUDY REVEALS TART CHERRY CAN REDUCE INFLAMMATION WITHIN 48 HOURS",
+    },
+    "new_research_links_x_y": {
+        "template": "NEW RESEARCH LINKS [X] DEFICIENCY TO [Y] IN OVER [N]% OF ADULTS",
+        "instruction": "Fill in [X] with a nutrient, [Y] with a health condition, [N] with a percentage. Example: NEW RESEARCH LINKS VITAMIN K2 DEFICIENCY TO ARTERIAL STIFFNESS IN OVER 60% OF ADULTS",
+    },
+    "scientists_find_x_does_y": {
+        "template": "SCIENTISTS FIND THAT [X] CONSUMPTION [VERB] YOUR [Y] FASTER THAN EXPECTED",
+        "instruction": "Fill in [X] with a food or substance, [VERB] with reduces/increases/reshapes, [Y] with a measurable outcome. Example: SCIENTISTS FIND THAT POLYPHENOL CONSUMPTION RESHAPES YOUR GUT MICROBIOME FASTER THAN EXPECTED",
+    },
+    "research_confirms_x": {
+        "template": "RESEARCH CONFIRMS THE [X] TRIGGER MOST PEOPLE OVERLOOK FOR [Y]",
+        "instruction": "Fill in [X] with a type of trigger (dietary/lifestyle/hormonal), [Y] with a health outcome. Example: RESEARCH CONFIRMS THE HORMONAL TRIGGER MOST PEOPLE OVERLOOK FOR POOR SLEEP",
+    },
+    # THE TRUTH / HIDDEN patterns
+    "hidden_truth_about_x": {
+        "template": "THE HIDDEN TRUTH ABOUT [X] YOUR [SOURCE] NEVER TOLD YOU",
+        "instruction": "Fill in [X] with a health topic, [SOURCE] with doctors/nutritionists/dietitians. Example: THE HIDDEN TRUTH ABOUT DIETARY FAT YOUR NUTRITIONIST NEVER TOLD YOU",
+    },
+    "what_x_actually_does_to_y": {
+        "template": "WHAT [X] ACTUALLY DOES TO YOUR [Y] AFTER [TIMEFRAME]",
+        "instruction": "Fill in [X] with a food/habit, [Y] with a body outcome, [TIMEFRAME] with a concrete time. Example: WHAT PROCESSED SUGAR ACTUALLY DOES TO YOUR DOPAMINE AFTER ONE WEEK",
+    },
+    "the_real_reason_x": {
+        "template": "THE REAL REASON [X] IS MAKING YOUR [Y] WORSE THAN YOU THINK",
+        "instruction": "Fill in [X] with a common food/habit, [Y] with a health complaint. Example: THE REAL REASON STRESS IS MAKING YOUR GUT PERMEABILITY WORSE THAN YOU THINK",
+    },
+    "what_nobody_tells_you_about_x": {
+        "template": "WHAT NOBODY TELLS YOU ABOUT [X] AND YOUR [Y]",
+        "instruction": "Fill in [X] with a supplement/food/habit, [Y] with a specific body system. Example: WHAT NOBODY TELLS YOU ABOUT COLLAGEN AND YOUR JOINT CARTILAGE",
+    },
+    # STOP / QUIT patterns
+    "stop_doing_x_if_you_want_y": {
+        "template": "STOP DOING [X] IF YOU WANT TO [Y]",
+        "instruction": "Fill in [X] with a common but counterproductive habit, [Y] with a desired health outcome. Example: STOP DOING CARDIO FIRST THING IF YOU WANT TO BURN FAT EFFICIENTLY",
+    },
+    "you_need_to_stop_x": {
+        "template": "YOU NEED TO STOP [X] IMMEDIATELY IF YOU HAVE [Y]",
+        "instruction": "Fill in [X] with a common habit, [Y] with a specific health condition. Example: YOU NEED TO STOP EATING LATE AT NIGHT IMMEDIATELY IF YOU HAVE ACID REFLUX",
+    },
+    # BODY'S SECRET / SIGNAL patterns
+    "body_signal_not_x": {
+        "template": "YOUR BODY'S [ADJECTIVE] WARNING SIGN FOR [CONDITION] IS NOT [COMMON_SYMPTOM]",
+        "instruction": "Fill in [ADJECTIVE] with quietest/earliest/most-missed, [CONDITION] with a deficiency or health state, [COMMON_SYMPTOM] with what people wrongly expect. Example: YOUR BODY'S EARLIEST WARNING SIGN FOR IRON DEFICIENCY IS NOT FATIGUE",
+    },
+    "what_your_x_reveals_about_y": {
+        "template": "WHAT YOUR [X] REVEALS ABOUT YOUR [Y] THAT MOST TESTS MISS",
+        "instruction": "Fill in [X] with a visible or testable body marker, [Y] with an underlying health state. Example: WHAT YOUR NAIL TEXTURE REVEALS ABOUT YOUR ZINC STATUS THAT MOST TESTS MISS",
+    },
+    "your_body_does_x_when": {
+        "template": "YOUR BODY DOES [X] WHEN YOU [Y] AND MOST PEOPLE NEVER NOTICE",
+        "instruction": "Fill in [X] with a biological process, [Y] with a common action/state. Example: YOUR BODY RELEASES ADRENALINE WHEN YOU SKIP BREAKFAST AND MOST PEOPLE NEVER NOTICE",
+    },
+    # THE SCIENCE patterns
+    "science_of_x_and_y": {
+        "template": "THE SCIENCE OF [X]: WHY [Y] IS MORE IMPORTANT THAN YOU THINK",
+        "instruction": "Fill in [X] with a health mechanism, [Y] with a variable that controls it. Example: THE SCIENCE OF SLEEP CYCLES: WHY SLEEP TIMING IS MORE IMPORTANT THAN YOU THINK",
+    },
+    "the_link_between_x_and_y": {
+        "template": "THE [ADJECTIVE] LINK BETWEEN [X] AND [Y] EXPERTS NOW AGREE ON",
+        "instruction": "Fill in [ADJECTIVE] with surprising/powerful/overlooked/undeniable, [X] and [Y] with two connected factors. Example: THE SURPRISING LINK BETWEEN MORNING SUNLIGHT AND EVENING MELATONIN EXPERTS NOW AGREE ON",
+    },
+    # NUMBER patterns
+    "n_signs_x": {
+        "template": "THE [N] SIGNS YOUR [X] IS SILENTLY SIGNALING A PROBLEM",
+        "instruction": "Fill in [N] with 3-7, [X] with a body system or organ. Example: THE 5 SIGNS YOUR LYMPHATIC SYSTEM IS SILENTLY SIGNALING A PROBLEM",
+    },
+    "n_foods_x": {
+        "template": "THE [N] [TYPE] FOODS THAT [NEGATIVE_EFFECT] YOUR [BODY_SYSTEM]",
+        "instruction": "Fill in [N] with 3-7, [TYPE] with common/everyday/processed, [NEGATIVE_EFFECT] with quietly damage/inflame/deplete, [BODY_SYSTEM] with specific organ or system. Example: THE 4 EVERYDAY FOODS THAT QUIETLY DEPLETE YOUR ADRENAL RESERVES",
+    },
+    "n_underrated_x_for_y": {
+        "template": "THE [N] MOST UNDERRATED [X] FOR BETTER [Y] (BACKED BY SCIENCE)",
+        "instruction": "Fill in [N] with 3-7, [X] with foods/habits/strategies, [Y] with a health outcome. Example: THE 5 MOST UNDERRATED HABITS FOR BETTER HORMONAL BALANCE (BACKED BY SCIENCE)",
+    },
+    # THIS IS / NOT WHAT YOU THINK patterns
+    "x_is_not_what_you_think": {
+        "template": "[X] IS NOT WHAT YOU THINK: THE TRUTH YOUR [Y] MISSED",
+        "instruction": "Fill in [X] with a common health concept in ALL CAPS, [Y] with the source that missed it (school/doctor/diet culture). Example: METABOLIC RATE IS NOT WHAT YOU THINK: THE TRUTH YOUR DIET CULTURE MISSED",
+    },
+    "not_about_x_its_about_y": {
+        "template": "IT'S NOT ABOUT [X]: YOUR [Y] ACTUALLY DEPENDS ON [Z]",
+        "instruction": "Fill in [X] with the commonly blamed factor, [Y] with the health goal, [Z] with the actual key factor. Example: IT'S NOT ABOUT WILLPOWER: YOUR SUGAR CRAVINGS ACTUALLY DEPEND ON YOUR GUT BACTERIA",
+    },
+    # BEFORE YOU / IF YOU patterns
+    "before_you_x": {
+        "template": "BEFORE YOU [X], READ WHAT SCIENCE NOW SAYS ABOUT [Y]",
+        "instruction": "Fill in [X] with a common health action (take a supplement/start a diet), [Y] with the topic. Example: BEFORE YOU TAKE VITAMIN D SUPPLEMENTS, READ WHAT SCIENCE NOW SAYS ABOUT COFACTORS",
+    },
+    "if_you_have_x_you_need_to_know": {
+        "template": "IF YOU HAVE [SYMPTOM], THIS IS WHAT YOUR [BODY_PART] IS TRYING TO TELL YOU",
+        "instruction": "Fill in [SYMPTOM] with a common complaint, [BODY_PART] with the organ involved. Example: IF YOU HAVE BRAIN FOG, THIS IS WHAT YOUR GUT-BRAIN AXIS IS TRYING TO TELL YOU",
+    },
+    # DATA / NUMBERS patterns  
+    "x_of_adults_dont_know": {
+        "template": "[N]% OF ADULTS DON'T KNOW THEIR [X] IS AT DANGEROUS LEVELS",
+        "instruction": "Fill in [N] with a realistic percentage (40-80), [X] with a measurable health marker. Example: 67% OF ADULTS DON'T KNOW THEIR OMEGA-3 INDEX IS AT DANGEROUS LEVELS",
+    },
+    "data_shows_x_doubles_y": {
+        "template": "DATA SHOWS [X] [VERB] YOUR RISK OF [Y] BY [N]%",
+        "instruction": "Fill in [X] with a lifestyle factor, [VERB] with increases/doubles/reduces, [Y] with a health risk, [N] with a percentage. Example: DATA SHOWS CHRONIC SLEEP DEBT INCREASES YOUR RISK OF METABOLIC SYNDROME BY 45%",
+    },
+    # WHAT HAPPENS WHEN patterns
+    "what_happens_when_x": {
+        "template": "WHAT HAPPENS TO YOUR [BODY_SYSTEM] WHEN YOU [ACTION] FOR [TIMEFRAME]",
+        "instruction": "Fill in [BODY_SYSTEM] with a specific organ/system, [ACTION] with a habit/change, [TIMEFRAME] with a time period. Example: WHAT HAPPENS TO YOUR GUT MICROBIOME WHEN YOU AVOID PROCESSED FOOD FOR 30 DAYS",
+    },
+    "what_x_days_of_y_does_to_z": {
+        "template": "WHAT [N] DAYS OF [HABIT] DOES TO YOUR [BODY_OUTCOME]",
+        "instruction": "Fill in [N] with a number of days, [HABIT] with a specific practice, [BODY_OUTCOME] with a measurable result. Example: WHAT 14 DAYS OF COLD SHOWERS DOES TO YOUR NOREPINEPHRINE LEVELS",
+    },
+    # MOST PEOPLE DONT patterns
+    "most_people_dont_realize_x": {
+        "template": "MOST PEOPLE DON'T REALIZE [X] IS AFFECTING THEIR [Y] RIGHT NOW",
+        "instruction": "Fill in [X] with a common overlooked factor, [Y] with a health aspect. Example: MOST PEOPLE DON'T REALIZE ARTIFICIAL LIGHT IS AFFECTING THEIR CORTISOL RHYTHM RIGHT NOW",
+    },
+    "almost_nobody_talks_about_x": {
+        "template": "ALMOST NOBODY TALKS ABOUT HOW [X] AFFECTS YOUR [Y]",
+        "instruction": "Fill in [X] with an overlooked factor, [Y] with a health outcome. Example: ALMOST NOBODY TALKS ABOUT HOW MEAL ORDER AFFECTS YOUR BLOOD GLUCOSE RESPONSE",
+    },
+    # THIS SPECIFIC patterns
+    "this_x_does_y_faster": {
+        "template": "THIS SPECIFIC [X] [VERB] YOUR [Y] FASTER THAN ANY [ALTERNATIVE]",
+        "instruction": "Fill in [X] with a habit/food type, [VERB] with repairs/restores/reduces, [Y] with a health outcome, [ALTERNATIVE] with a common alternative. Example: THIS SPECIFIC BREATHING TECHNIQUE LOWERS YOUR CORTISOL FASTER THAN ANY SUPPLEMENT",
+    },
+    "this_x_is_why_y": {
+        "template": "THIS [X] IS EXACTLY WHY YOUR [Y] NEVER IMPROVES",
+        "instruction": "Fill in [X] with a specific habit/pattern/mistake, [Y] with a health goal. Example: THIS MORNING PATTERN IS EXACTLY WHY YOUR ENERGY LEVELS NEVER IMPROVE",
+    },
+    # THE MISTAKE patterns
+    "biggest_mistake_for_x": {
+        "template": "THE BIGGEST [X] MISTAKE THAT'S QUIETLY DAMAGING YOUR [Y]",
+        "instruction": "Fill in [X] with a health category (diet/sleep/exercise), [Y] with a body system. Example: THE BIGGEST HYDRATION MISTAKE THAT'S QUIETLY DAMAGING YOUR KIDNEY FUNCTION",
+    },
+    "experts_agree_x_is_wrong": {
+        "template": "EXPERTS NOW AGREE: EVERYTHING YOU KNOW ABOUT [X] IS WRONG",
+        "instruction": "Fill in [X] with a common health topic. Example: EXPERTS NOW AGREE: EVERYTHING YOU KNOW ABOUT DIETARY CHOLESTEROL IS WRONG",
+    },
+    # YOUR [X] IS / ISN'T patterns
+    "your_x_isnt_the_problem": {
+        "template": "YOUR [X] ISN'T THE PROBLEM: THE REAL CAUSE OF [Y] EXPLAINED",
+        "instruction": "Fill in [X] with the commonly blamed factor, [Y] with a health issue. Example: YOUR GENETICS ISN'T THE PROBLEM: THE REAL CAUSE OF OBESITY EXPLAINED",
+    },
+    "your_x_needs_y": {
+        "template": "YOUR [BODY_PART] DESPERATELY NEEDS [X] AND MOST PEOPLE ARE DEFICIENT",
+        "instruction": "Fill in [BODY_PART] with a specific organ (liver/thyroid/adrenals/mitochondria), [X] with a nutrient or practice. Example: YOUR MITOCHONDRIA DESPERATELY NEED COENZYME Q10 AND MOST PEOPLE ARE DEFICIENT",
+    },
+}
+
+# The list of format IDs used by Thompson Sampling (must match keys above)
+TITLE_FORMATS = list(CAROUSEL_TITLE_TEMPLATES.keys())
 
 VISUAL_STYLES = ["dark_cinematic", "light_clean", "vibrant_bold"]
 

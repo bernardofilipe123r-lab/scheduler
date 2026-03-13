@@ -541,10 +541,14 @@ def _build_carousel_cta_topic(ctx: PromptContext) -> str:
     return "this topic"
 
 
-def build_post_content_prompt(count: int, history_context: str = "", topic_hint: str = None, ctx: PromptContext = None) -> str:
+def build_post_content_prompt(count: int, history_context: str = "", topic_hint: str = None, ctx: PromptContext = None, title_format: str = None) -> str:
     """
     Build the prompt for batch carousel post generation.
     Fully niche-agnostic — all domain-specific content comes from ctx.
+
+    Args:
+        title_format: An ID from CAROUSEL_TITLE_TEMPLATES. When provided, DeepSeek MUST
+                      use the template's exact structural pattern for the title.
     """
     if ctx is None:
         ctx = PromptContext()
@@ -642,7 +646,7 @@ Each post is a DIFFERENT topic. Each must be {title_style_note}.
 - Title examples: {title_examples}
 - Do NOT end the title with a period
 - Do NOT use reel-style titles like "5 SIGNS..." or "THINGS THAT DESTROY..."
-- IMPORTANT: Vary the opening word of each title. Do NOT start every title with "YOUR". Use diverse patterns like "STUDY REVEALS...", "NEW RESEARCH SHOWS...", "THE HIDDEN REASON...", "HOW [X] ACTUALLY...", "WHY [X] IS...", "WHAT HAPPENS WHEN...", "THIS COMMON [X]..." etc.
+{title_format_constraint}
 
 {topic_block}
 

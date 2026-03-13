@@ -1,11 +1,11 @@
 ---
 name: skill-builder
-description: "Use when creating new skills, optimizing existing skills, or auditing skill quality for either .github/ (Copilot) or .claude/ (Claude Code). Guides skill development following best practices."
+description: "Use when creating new skills, optimizing existing skills, or auditing skill quality. Guides skill development following best practices."
 ---
 
 # Skill Builder
 
-Guides creation and optimization of agent skills for both GitHub Copilot (`.github/skills/`) and Claude Code (`.claude/skills/`).
+Guides creation and optimization of agent skills for GitHub Copilot (`.github/skills/`).
 
 ## Mode 1: Build a New Skill
 
@@ -24,28 +24,15 @@ Run the **Discovery Interview** first before writing any files.
 
 1. **Choose type**: Task skill (step-by-step workflow) or Reference skill (knowledge to apply)
 2. **Write SKILL.md**: Context → Steps → Output format → Notes. Keep under 500 lines.
-3. **Create in BOTH locations**:
-   - `.github/skills/{name}/SKILL.md` (GitHub Copilot - uses `description` in YAML frontmatter)
-   - `.claude/skills/{name}/SKILL.md` (Claude Code - uses `name` + `description` in YAML frontmatter)
-4. **Update main instruction files**: Add brief entry to `copilot-instructions.md` and `.claude/CLAUDE.md`
+3. **Create skill file**: `.github/skills/{name}/SKILL.md` (uses `description` in YAML frontmatter)
+4. **Update main instruction file**: Add brief entry to `copilot-instructions.md`
 5. **Test**: Natural language triggers and `/skill-name` invocation
 
-### Frontmatter Differences
+### Frontmatter Format
 
-GitHub Copilot (`.github/skills/`):
 ```yaml
 ---
 description: "Use when someone asks to [action], [action], or [action]."
----
-```
-
-Claude Code (`.claude/skills/`):
-```yaml
----
-name: skill-name
-description: Use when someone asks to [action], [action], or [action].
-argument-hint: [optional args]
-disable-model-invocation: true  # if has side effects
 ---
 ```
 
@@ -57,10 +44,10 @@ disable-model-invocation: true  # if has side effects
 - [ ] Clear numbered steps for task skills
 - [ ] Output format specified
 - [ ] All file paths documented
-- [ ] Documented in copilot-instructions.md AND .claude/CLAUDE.md
-- [ ] Exists in BOTH `.github/skills/` AND `.claude/skills/`
+- [ ] Documented in copilot-instructions.md
+- [ ] Exists in `.github/skills/`
 
 ## Notes
-- Always create skills in BOTH locations so the user can use either GitHub Copilot or Claude Code
-- Skill content can differ slightly to match each tool's conventions
+- Keep skills focused: one skill per domain
+- Under 500 lines — reference supporting files for extended content
 - SKILL.md content only loads when invoked — descriptions are always in context

@@ -1,7 +1,7 @@
 ---
+mode: "agent"
 description: "Audit customization freshness — compare code surface against skills, instructions, and agents to find drift and stale documentation"
-agent: "agent"
-tools: [read, search]
+tools: ["codebase", "terminal"]
 ---
 
 Perform a knowledge freshness audit across the entire agent customization layer.

@@ -60,7 +60,7 @@ Verifies specific symbols exist in modules:
 ### 3. FastAPI Boot
 Loads `app.main:app` and validates startup doesn't crash.
 
-### 4. Endpoint Smoke Tests (116 endpoints)
+### 4. Endpoint Smoke Tests (~246 endpoints)
 Uses FastAPI `TestClient` (no network) in three categories:
 
 | Category | Expected | Count |

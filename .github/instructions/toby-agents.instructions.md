@@ -34,7 +34,7 @@ applyTo: "app/services/toby/**/*.py"
 
 - **Never schedule fallback content.** If AI generation fails, raise an exception instead of using fallback titles. Empty buffer slots are preferable to publishing placeholder content.
 
-- **Self-monitoring philosophy:** Dedup and quality checks are Toby's cognitive responsibility, not external patches. The Quality Guard agent (`agents/quality_guard.py`) runs as step 0 of every tick — before buffer fill. `scripts/dedup_sweeper.py` exists as a manual backup for incident response only.
+- **Self-monitoring philosophy:** Dedup and quality checks are Toby's cognitive responsibility, not external patches. The Quality Guard agent (`agents/quality_guard.py`) runs as step 0 of every tick — before buffer fill.
 
 - **Platform-scoped retry contract (CRITICAL):**
   When a post has "partial" status (some platforms succeeded, others failed), any retry path MUST set `extra_data['retry_platforms']` (list of failed platform names) and `extra_data['succeeded_platforms']` (list of succeeded platform names). This tells `check_and_publish()` to only retry the failed platforms. **Without this, all platforms get re-published, causing duplicates on already-succeeded platforms.** Three retry paths enforce this:

@@ -26,9 +26,9 @@ from app.api.system.admin_routes import router as admin_router
 from app.api.auth.routes import router as auth_router
 from app.api.content.prompts_routes import router as prompts_router
 from app.api.system.health_routes import router as health_router
-from app.api.niche_config_routes import router as niche_config_router
-from app.api.content_dna_routes import router as content_dna_router
-from app.api.content_dna_template_routes import router as content_dna_template_router
+from app.api.brands.niche_config_routes import router as niche_config_router
+from app.api.brands.content_dna_routes import router as content_dna_router
+from app.api.brands.content_dna_template_routes import router as content_dna_template_router
 from app.api.toby.routes import router as toby_router
 from app.api.system.legal_routes import router as legal_router
 from app.api.auth.ig_oauth_routes import router as ig_oauth_router

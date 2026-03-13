@@ -96,14 +96,17 @@ def _resolve_strategy(
         resolved["personality_prompt"] = personality_prompt or _get_pp(content_type, strategy.personality)
         resolved["story_category"] = story_category or strategy.story_category
         resolved["personality_id"] = strategy.personality
+        resolved["title_format"] = strategy.title_format
     else:
         # Fallback when learning engine is unavailable
         import random
+        from app.services.toby.learning_engine import TITLE_FORMATS
         resolved["topic_bucket"] = topic_hint or "general"
         resolved["hook_strategy"] = hook_hint or "question"
         resolved["personality_prompt"] = personality_prompt or ""
         resolved["story_category"] = story_category
         resolved["personality_id"] = "edu_calm"
+        resolved["title_format"] = random.choice(TITLE_FORMATS)
 
     return resolved
 
@@ -166,12 +169,13 @@ def generate_carousel_content(
     brand_id: str,
     *,
     topic_hint: Optional[str] = None,
+    title_format_hint: Optional[str] = None,
     db=None,
 ) -> Dict:
     """
     Generate ONE carousel/post for a single brand.
 
-    Uses Toby's learning engine for topic selection, then generates
+    Uses Toby's learning engine for topic/title_format selection, then generates
     via ContentGeneratorV2 with brand-specific Content DNA.
 
     Returns dict with title, caption, image_prompt, slide_texts.
@@ -192,16 +196,24 @@ def generate_carousel_content(
         db=db,
     )
 
-    # 3. Build brand-scoped + cross-brand avoidance context
+    # 3. Resolve title format: explicit hint > learned format > random from pool
+    title_format = title_format_hint or strategy.get("title_format")
+    if not title_format:
+        from app.services.toby.learning_engine import TITLE_FORMATS
+        import random
+        title_format = random.choice(TITLE_FORMATS)
+
+    # 4. Build brand-scoped + cross-brand avoidance context
     avoidance = _get_brand_avoidance_context(brand_id, "post")
 
-    # 4. Generate with full context
+    # 5. Generate with full context + mandatory title format constraint
     generator = ContentGeneratorV2()
     results = generator.generate_post_titles_batch(
         count=1,
         topic_hint=strategy["topic_bucket"],
         ctx=ctx,
         brand_avoidance_context=avoidance,
+        title_format=title_format,
     )
     if not results:
         from app.services.content.generator import ContentGenerationError

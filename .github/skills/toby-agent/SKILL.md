@@ -200,8 +200,7 @@ new content types, platforms, and patterns are automatically covered without ext
 | 3. Fallback rejection | `orchestrator.py` `_execute_content_plan()` + `scheduler.py` | Titles matching "content generation temporarily unavailable" are NEVER scheduled |
 | 4. Pre-publish dedup | `scheduler.py` `get_pending_publications()` | Catches duplicates in the batch about to publish (same brand+title → keep first, fail rest) |
 
-**External backup:** `scripts/dedup_sweeper.py` exists as a manual tool for incident response,
-but the primary mechanism is Toby's own Quality Guard agent.
+**Primary mechanism:** Toby's own Quality Guard agent handles all dedup at runtime.
 
 **DB indexes supporting dedup:**
 - `ix_sched_reels_brand_time_status` — fast brand+time+status lookups

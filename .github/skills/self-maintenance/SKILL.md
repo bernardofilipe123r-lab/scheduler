@@ -31,7 +31,7 @@ Performs a comprehensive health check. Run periodically (weekly) or after large 
 
 ### 6. Customization Drift
 - Run: `python scripts/validate_customization_drift.py`
-- Update `.github/skills/`, `.github/instructions/`, `.claude/rules/`, `.claude/skills/` if drifted
+- Update `.github/skills/`, `.github/instructions/` if drifted
 
 ### 7. Dependency Health
 - `npm outdated`, `pip list --outdated`, `npm audit`

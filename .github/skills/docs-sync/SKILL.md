@@ -1,6 +1,6 @@
 ---
 name: docs-sync
-description: "Use after any code change to verify and update documentation, skills, rules, and instructions. Ensures .github/ and .claude/ customization files stay in sync with the codebase. Auto-invoked at the end of every coding session."
+description: "Use after any code change to verify and update documentation, skills, and instructions. Ensures .github/ customization files stay in sync with the codebase. Auto-invoked at the end of every coding session."
 ---
 
 # Self-Healing Documentation Pipeline

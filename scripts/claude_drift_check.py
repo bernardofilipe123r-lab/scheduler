@@ -21,25 +21,25 @@ import os
 TRIGGER_MATRIX = {
     "app/api/": [
         ".github/skills/api-validation/SKILL.md",
-        ".claude/skills/api-validation/SKILL.md",
+        ".github/skills/api-validation/SKILL.md",
     ],
     "app/models/": [
         ".github/skills/database-migrations/SKILL.md",
-        ".claude/skills/database-migrations/SKILL.md",
+        ".github/skills/database-migrations/SKILL.md",
     ],
     "app/services/toby/": [
         ".github/skills/toby-agent/SKILL.md",
-        ".claude/skills/toby-agent/SKILL.md",
+        ".github/skills/toby-agent/SKILL.md",
         ".github/instructions/toby-agents.instructions.md",
     ],
     "app/services/media/": [
         ".github/skills/media-rendering/SKILL.md",
-        ".claude/skills/media-rendering/SKILL.md",
+        ".github/skills/media-rendering/SKILL.md",
         ".github/instructions/reel-formats.instructions.md",
     ],
     "app/services/content/": [
         ".github/skills/content-pipeline/SKILL.md",
-        ".claude/skills/content-pipeline/SKILL.md",
+        ".github/skills/content-pipeline/SKILL.md",
     ],
     "app/services/discovery/": [
         ".github/skills/content-pipeline/SKILL.md",
@@ -47,23 +47,23 @@ TRIGGER_MATRIX = {
     ],
     "app/core/prompt": [
         ".github/skills/content-pipeline/SKILL.md",
-        ".claude/skills/content-pipeline/SKILL.md",
+        ".github/skills/content-pipeline/SKILL.md",
     ],
     "app/core/viral_patterns": [
         ".github/skills/content-pipeline/SKILL.md",
-        ".claude/skills/content-pipeline/SKILL.md",
+        ".github/skills/content-pipeline/SKILL.md",
     ],
     "app/services/billing/": [
         ".github/skills/billing-stripe/SKILL.md",
-        ".claude/skills/billing-stripe/SKILL.md",
+        ".github/skills/billing-stripe/SKILL.md",
     ],
     "app/services/publishing/": [
         ".github/skills/platform-publishing/SKILL.md",
-        ".claude/skills/platform-publishing/SKILL.md",
+        ".github/skills/platform-publishing/SKILL.md",
     ],
     "app/services/analytics/": [
         ".github/skills/analytics-metrics/SKILL.md",
-        ".claude/skills/analytics-metrics/SKILL.md",
+        ".github/skills/analytics-metrics/SKILL.md",
     ],
     "src/pages/Terms": [
         ".github/instructions/legal-pages.instructions.md",
@@ -80,16 +80,16 @@ TRIGGER_MATRIX = {
     ],
     "migrations/": [
         ".github/skills/database-migrations/SKILL.md",
-        ".claude/skills/database-migrations/SKILL.md",
+        ".github/skills/database-migrations/SKILL.md",
         ".github/instructions/migration-sql.instructions.md",
     ],
     ".github/agents/": [
         ".github/copilot-instructions.md",
-        ".claude/CLAUDE.md",
+        ".github/copilot-instructions.md",
     ],
     ".github/prompts/": [
         ".github/copilot-instructions.md",
-        ".claude/CLAUDE.md",
+        ".github/copilot-instructions.md",
     ],
 }
 
@@ -152,7 +152,7 @@ def main():
     # Only check code files and agent/prompt files, not docs/config themselves
     code_files = [
         f for f in modified_files
-        if not f.startswith((".github/", ".claude/", "docs/", "scripts/claude_"))
+        if not f.startswith((".github/", ".github/", "docs/", "scripts/claude_"))
         and not f.endswith((".md", ".json", ".yaml", ".yml"))
         or f.startswith(("app/", "src/", "migrations/", ".github/agents/", ".github/prompts/"))
     ]

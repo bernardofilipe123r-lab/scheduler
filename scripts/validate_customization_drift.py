@@ -17,6 +17,10 @@ Checks:
     3. Publishing token services vs platform-publishing skill
     4. Model files vs migration coverage
     5. Service domains vs skill coverage
+    6. Instruction file coverage for critical patterns
+    7. Endpoint count drift (actual routes vs documented)
+    8. Toby agents list drift (disk vs orchestrator imports)
+    9. Platform list drift (code vs legal pages vs skill)
 """
 import argparse
 import os
@@ -295,6 +299,157 @@ def check_instruction_coverage():
 
 
 # ═══════════════════════════════════════════════════════════════
+# CHECK 7: Endpoint count drift — actual routes vs documented count
+# ═══════════════════════════════════════════════════════════════
+def check_endpoint_count_drift():
+    print(f"\n{BOLD}━━━ Endpoint Count Drift ━━━{RESET}")
+
+    import ast
+
+    route_count = 0
+    api_dir = ROOT / "app" / "api"
+    if not api_dir.is_dir():
+        fail("app/api/ directory not found")
+        return
+
+    for py_file in api_dir.rglob("*.py"):
+        if py_file.stem == "__init__" or "__pycache__" in str(py_file):
+            continue
+        try:
+            tree = ast.parse(py_file.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Call):
+                    func = node.func
+                    # Match router.get, router.post, router.put, router.delete, router.patch
+                    if isinstance(func, ast.Attribute) and func.attr in ("get", "post", "put", "delete", "patch"):
+                        if isinstance(func.value, ast.Name) and func.value.id == "router":
+                            route_count += 1
+        except SyntaxError:
+            warn(f"Could not parse {py_file.relative_to(ROOT)}")
+
+    skill_text = read_text(".github/skills/api-validation/SKILL.md")
+    if not skill_text:
+        warn("api-validation skill not found — skipping endpoint count drift")
+        return
+
+    # Look for a documented endpoint count (e.g., "~85 endpoints" or "85 endpoints")
+    match = re.search(r"~?(\d+)\s*endpoints?", skill_text)
+    if match:
+        documented = int(match.group(1))
+        drift = abs(route_count - documented)
+        if drift <= 5:
+            ok(f"Endpoint count: {route_count} actual vs ~{documented} documented (drift={drift}, OK)")
+        else:
+            fail(f"ENDPOINT DRIFT: {route_count} actual vs ~{documented} documented (drift={drift} — update api-validation skill)")
+    else:
+        warn(f"No endpoint count found in api-validation skill (actual count: {route_count})")
+
+
+# ═══════════════════════════════════════════════════════════════
+# CHECK 8: Toby agents list drift — disk vs skill vs orchestrator
+# ═══════════════════════════════════════════════════════════════
+def check_toby_agents_list_drift():
+    print(f"\n{BOLD}━━━ Toby Agents List Drift ━━━{RESET}")
+
+    # Agents on disk
+    agents_dir = ROOT / "app" / "services" / "toby" / "agents"
+    if not agents_dir.is_dir():
+        fail("app/services/toby/agents/ directory not found")
+        return
+
+    disk_agents = set(list_py_files("app/services/toby/agents"))
+
+    # Agents imported in orchestrator
+    orch_text = read_text("app/services/toby/orchestrator.py")
+    if not orch_text:
+        fail("orchestrator.py not found")
+        return
+
+    # Find from app.services.toby.agents.X import Y patterns
+    orch_imports = set()
+    for m in re.finditer(r"from\s+app\.services\.toby\.agents\.(\w+)\s+import", orch_text):
+        orch_imports.add(m.group(1))
+
+    # Compare
+    disk_only = disk_agents - orch_imports
+    orch_only = orch_imports - disk_agents
+
+    if not disk_only and not orch_only:
+        ok(f"Toby agents in sync: disk={sorted(disk_agents)}, orchestrator={sorted(orch_imports)}")
+    else:
+        if disk_only:
+            warn(f"Agent files on disk but NOT imported in orchestrator: {sorted(disk_only)}")
+        if orch_only:
+            fail(f"Orchestrator imports agents that DON'T EXIST on disk: {sorted(orch_only)}")
+
+
+# ═══════════════════════════════════════════════════════════════
+# CHECK 9: Platform list drift — code vs skill vs legal pages
+# ═══════════════════════════════════════════════════════════════
+def check_platform_list_drift():
+    print(f"\n{BOLD}━━━ Platform List Drift ━━━{RESET}")
+
+    import ast
+
+    # Get SUPPORTED_PLATFORMS from code
+    platforms_file = ROOT / "app" / "core" / "platforms.py"
+    if not platforms_file.exists():
+        fail("app/core/platforms.py not found")
+        return
+
+    try:
+        tree = ast.parse(platforms_file.read_text(encoding="utf-8"))
+        code_platforms = set()
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.Assign, ast.AnnAssign)):
+                target = node.targets[0] if isinstance(node, ast.Assign) else node.target
+                if isinstance(target, ast.Name) and target.id == "SUPPORTED_PLATFORMS":
+                    val = node.value
+                    if isinstance(val, ast.Tuple):
+                        for elt in val.elts:
+                            if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
+                                code_platforms.add(elt.value.lower())
+    except SyntaxError:
+        fail("Could not parse platforms.py")
+        return
+
+    if not code_platforms:
+        fail("Could not extract SUPPORTED_PLATFORMS from platforms.py")
+        return
+
+    ok(f"Code platforms: {sorted(code_platforms)}")
+
+    # Check legal pages mention all platforms
+    legal_pages = [
+        "src/pages/Terms.tsx",
+        "src/pages/PrivacyPolicy.tsx",
+        "src/pages/DataDeletion.tsx",
+    ]
+
+    for page in legal_pages:
+        text = read_text(page).lower()
+        if not text:
+            warn(f"Legal page not found: {page}")
+            continue
+        missing = [p for p in code_platforms if p not in text]
+        if missing:
+            fail(f"{page} missing platforms: {missing}")
+        else:
+            ok(f"{page} mentions all {len(code_platforms)} platforms")
+
+    # Check platform-publishing skill
+    skill_text = read_text(".github/skills/platform-publishing/SKILL.md").lower()
+    if skill_text:
+        missing_in_skill = [p for p in code_platforms if p not in skill_text]
+        if missing_in_skill:
+            fail(f"platform-publishing skill missing platforms: {missing_in_skill}")
+        else:
+            ok(f"platform-publishing skill covers all {len(code_platforms)} platforms")
+    else:
+        warn("platform-publishing skill not found")
+
+
+# ═══════════════════════════════════════════════════════════════
 # Main
 # ═══════════════════════════════════════════════════════════════
 def main():
@@ -314,6 +469,9 @@ def main():
     if not args.quick:
         check_model_migration_coverage()
         check_service_domain_coverage()
+        check_endpoint_count_drift()
+        check_toby_agents_list_drift()
+        check_platform_list_drift()
 
     print(f"\n{BOLD}{'=' * 60}{RESET}")
     color = GREEN if failed == 0 else RED

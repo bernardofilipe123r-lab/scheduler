@@ -59,6 +59,20 @@ jobs:
           YOUTUBE_CLIENT_ID: "placeholder"
           YOUTUBE_CLIENT_SECRET: "placeholder"
 
+      - name: Pipeline health check
+        run: python scripts/health_check.py
+        env:
+          DATABASE_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder"
+          SUPABASE_URL: "https://placeholder.supabase.co"
+          SUPABASE_KEY: "placeholder"
+          DEEPSEEK_API_KEY: "placeholder"
+          DEAPI_API_KEY: "placeholder"
+          STRIPE_SECRET_KEY: "placeholder"
+          STRIPE_WEBHOOK_SECRET: "placeholder"
+          META_ACCESS_TOKEN: "placeholder"
+          YOUTUBE_CLIENT_ID: "placeholder"
+          YOUTUBE_CLIENT_SECRET: "placeholder"
+
       # ── Structural checks ──────────────────────────────
       - name: Customization drift detection
         run: python scripts/validate_customization_drift.py
@@ -70,3 +84,12 @@ jobs:
       - name: Reviewer guardrails (push)
         run: python scripts/reviewer_guardrails.py
         if: github.event_name == 'push'
+
+      # ── Deploy reminder ────────────────────────────────
+      - name: Deploy reminder
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  ✅ QA passed — Railway auto-deploys on push"
+          echo "  📋 Verify: railway logs --tail 50"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

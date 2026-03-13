@@ -63,6 +63,38 @@ When adding/removing a social platform, update: `src/pages/Terms.tsx`, `src/page
 | Feature modules | `src/features/{domain}/` |
 | Dynamic brands | `src/features/brands/hooks/use-dynamic-brands.ts` |
 
+## Extension Patterns (How to Add New Things)
+
+### Adding a new social platform
+1. Add platform ID to `SUPPORTED_PLATFORMS` in `app/core/platforms.py`
+2. Add publish methods to `app/services/publishing/social_publisher.py` following the existing pattern: `publish_{platform}_{content_type}`
+3. Add token service: `app/services/publishing/{platform}_token_service.py`
+4. Add OAuth routes: `app/api/auth/{platform}_oauth_routes.py`
+5. Register router in `app/main.py`
+6. Update all 3 legal pages: `Terms.tsx`, `PrivacyPolicy.tsx`, `DataDeletion.tsx`
+7. Run: `python scripts/validate_api.py --imports && python scripts/health_check.py`
+
+### Adding a new content format/variant
+1. Add variant key + method name to `JobProcessor.VARIANT_PROCESSORS` in `app/services/content/job_processor.py`
+2. Implement the method on `JobProcessor` following the existing pattern
+3. Add generation function to `app/services/content/unified_generator.py`
+4. Run: `python scripts/health_check.py` (check 10 will catch missing method)
+
+### Adding a new Toby agent
+1. Create `app/services/toby/agents/{name}.py`
+2. Export a main function (e.g. `{name}_loop` or `{name}_execute`)
+3. Import and call from `app/services/toby/orchestrator.py`
+4. Run: `python scripts/health_check.py` (check 17 validates import chain)
+
+### Adding a new API endpoint
+1. Add to the correct domain route file: `app/api/{domain}/routes.py`
+2. If the domain doesn't exist yet: create `app/api/{domain}/__init__.py` and `app/api/{domain}/routes.py`, register router in `app/main.py`
+3. Run: `python scripts/validate_api.py --imports`
+4. Run: `python scripts/validate_customization_drift.py` (it will tell you which skill file to update)
+
+### Adding a new NicheConfig field (Content DNA)
+Follow `.github/prompts/add-nicheconfig-field.prompt.md` exactly. `health_check.py` check 8 will catch field mismatches between NicheConfig model and PromptContext usage.
+
 ## Toby Agent Architecture
 
 Toby runs a 5-min tick loop (`orchestrator.py`) with these phases:
@@ -90,6 +122,12 @@ Toby generates content → goes to Pipeline (pending_review) → user reviews in
 # Validation (run before committing)
 python scripts/validate_api.py --imports   # Quick: import + hooks check
 python scripts/validate_api.py             # Full: routes, auth, schemas
+python scripts/health_check.py             # Pipeline health: 18 checks, no API calls
+python scripts/validate_customization_drift.py  # Skill/doc drift detection
+
+# Test data
+TEST_MODE=1 python scripts/seed_test_data.py          # Seed test fixtures
+TEST_MODE=1 python scripts/seed_test_data.py --clean   # Remove test data only
 
 # Database migrations
 psql "$DATABASE_URL" -f migrations/{file}.sql
@@ -137,15 +175,6 @@ Check the trigger matrix in `self-maintenance.instructions.md`. If code changes 
 | `self-maintenance` | Codebase health audit |
 | `skill-builder` | Create or audit skills |
 
-## Available Agents
-
-| Agent | Purpose | Tools |
-|---|---|---|
-| `reviewer` | Read-only code review for anti-patterns, hooks violations, security | read, search |
-| `architect` | System design, ADRs, trade-off analysis for complex features | codebase, search, fetch |
-| `pipeline-debugger` | Debug Toby tick loop, content generation, publishing failures | codebase, search, execute |
-| `tech-debt-auditor` | Identify and prioritize technical debt across the codebase | codebase, search |
-
 ## Available Prompts
 
 | Prompt | Purpose |
@@ -160,6 +189,7 @@ Check the trigger matrix in `self-maintenance.instructions.md`. If code changes 
 | `knowledge-audit` | Audit customization freshness |
 | `pre-commit-qa` | Full pre-commit validation suite |
 | `validate` | Run API validation + fix failures |
+| `health-check` | Run pipeline health check, diagnose failures, fix them |
 
 ## QA Enforcement
 

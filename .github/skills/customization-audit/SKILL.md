@@ -5,7 +5,7 @@ description: "Use when you need a commit-aware audit that checks whether skills,
 # Customization Audit
 
 ## When to Use
-- You want a full sync check across `.github/` and `.claude/` customization files
+- You want a full sync check across `.github/` customization files
 - You need to review recent commits and detect documentation drift
 - You are about to finish a large coding session and want a final docs/skills audit
 - You need a historical log of when audits were run and which commits were reviewed
@@ -50,7 +50,6 @@ Record FAIL and WARN items in the audit history file.
 ### 5. Verify Core Index Files
 Check and update if needed:
 - `.github/copilot-instructions.md`
-- `.claude/CLAUDE.md`
 - Any impacted `SKILL.md`, `.instructions.md`, `.prompt.md`, `.agent.md`
 
 ### 6. Apply Minimal Updates

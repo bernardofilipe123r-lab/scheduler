@@ -558,6 +558,7 @@ def _execute_content_plan(db: Session, plan, batch_id: str = None):
             user_id=plan.user_id,
             brand_id=plan.brand_id,
             topic_hint=plan.topic_bucket,
+            title_format_hint=plan.title_format,
             db=db,
         )
 
