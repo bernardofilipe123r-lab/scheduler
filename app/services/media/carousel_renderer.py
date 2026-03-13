@@ -126,13 +126,17 @@ def render_carousel_images(
             slide_urls = []
             for sp in output.get("slidePaths", []):
                 if sp and Path(sp).exists():
-                    slide_jpg = _convert_png_to_jpeg(sp)
-                    slide_name = Path(slide_jpg).name
-                    slide_remote = storage_path(user_id, brand, "posts", slide_name)
-                    slide_urls.append(upload_from_path("media", slide_remote, slide_jpg))
+                    try:
+                        slide_jpg = _convert_png_to_jpeg(sp)
+                        slide_name = Path(slide_jpg).name
+                        slide_remote = storage_path(user_id, brand, "posts", slide_name)
+                        slide_urls.append(upload_from_path("media", slide_remote, slide_jpg))
+                    except Exception as slide_err:
+                        print(f"[RENDER] Slide upload failed for {sp}: {slide_err}", flush=True)
             output["slideUrls"] = slide_urls
         except Exception as upload_err:
             print(f"[RENDER] Supabase upload warning: {upload_err}", flush=True)
+            output["slideUrls"] = output.get("slideUrls", [])  # preserve any already-set slides
 
         return output
 

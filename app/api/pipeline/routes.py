@@ -220,48 +220,66 @@ def _approve_single_job(
     scheduler = DatabaseSchedulerService()
     scheduled_results = []
 
+    variant = job.variant or "light"
+
     for brand_name in (job.brands or []):
-        brand_data = (job.brand_outputs or {}).get(brand_name, {})
-        if not brand_data or brand_data.get("status") not in ("completed", "scheduled"):
-            continue
-
-        # Pick variant for slot lookup
-        variant = job.variant or "light"
-        slot_time = scheduler.get_next_available_slot(
-            brand=brand_name,
-            variant=variant,
-            user_id=user["id"],
+        raw_brand_data = (job.brand_outputs or {}).get(brand_name, {})
+        # Multi-content jobs store brand_outputs[brand] as a list of dicts;
+        # single-content jobs store it as a plain dict.
+        brand_items: list[dict] = (
+            raw_brand_data if isinstance(raw_brand_data, list) else [raw_brand_data]
         )
 
-        caption = caption_override or job.caption or brand_data.get("caption", "")
+        for brand_data in brand_items:
+            if not isinstance(brand_data, dict):
+                continue
+            if brand_data.get("status") not in ("completed", "scheduled"):
+                continue
 
-        # Prefer per-brand slide_texts (populated by batch generation)
-        # over job-level content_lines (which may be empty for auto carousels)
-        slide_texts = brand_data.get("slide_texts") or job.content_lines
+            # Threads content uses post slots, not reel slots
+            if variant == "threads":
+                slot_time = scheduler.get_next_available_post_slot(brand=brand_name)
+            else:
+                slot_time = scheduler.get_next_available_slot(
+                    brand=brand_name,
+                    variant=variant,
+                    user_id=user["id"],
+                )
 
-        result = scheduler.schedule_reel(
-            user_id=user["id"],
-            reel_id=brand_data.get("reel_id", f"{job.job_id}_{brand_name}"),
-            scheduled_time=slot_time,
-            caption=caption,
-            platforms=job.platforms or ["instagram"],
-            video_path=brand_data.get("video_path"),
-            thumbnail_path=brand_data.get("thumbnail_path"),
-            yt_thumbnail_path=brand_data.get("yt_thumbnail_path"),
-            brand=brand_name,
-            variant=variant,
-            post_title=job.title,
-            slide_texts=slide_texts,
-            carousel_paths=brand_data.get("carousel_paths"),
-            job_id=job.job_id,
-            created_by=job.created_by or "user",
-        )
+            caption = caption_override or job.caption or brand_data.get("caption", "")
 
-        scheduled_results.append({
-            "brand": brand_name,
-            "scheduled_time": slot_time.isoformat(),
-            "schedule_id": result.get("schedule_id"),
-        })
+            # Prefer per-brand slide_texts (populated by batch generation)
+            # over job-level content_lines (which may be empty for auto carousels)
+            slide_texts = brand_data.get("slide_texts") or job.content_lines
+
+            # Build a per-item reel_id so multi-content items get unique IDs
+            item_idx = brand_data.get("content_index")
+            base_reel_id = brand_data.get("reel_id", f"{job.job_id}_{brand_name}")
+            reel_id = f"{base_reel_id}_{item_idx}" if item_idx is not None else base_reel_id
+
+            result = scheduler.schedule_reel(
+                user_id=user["id"],
+                reel_id=reel_id,
+                scheduled_time=slot_time,
+                caption=caption,
+                platforms=job.platforms or ["instagram"],
+                video_path=brand_data.get("video_path"),
+                thumbnail_path=brand_data.get("thumbnail_path"),
+                yt_thumbnail_path=brand_data.get("yt_thumbnail_path"),
+                brand=brand_name,
+                variant=variant,
+                post_title=job.title,
+                slide_texts=slide_texts,
+                carousel_paths=brand_data.get("carousel_paths"),
+                job_id=job.job_id,
+                created_by=job.created_by or "user",
+            )
+
+            scheduled_results.append({
+                "brand": brand_name,
+                "scheduled_time": slot_time.isoformat(),
+                "schedule_id": result.get("schedule_id"),
+            })
 
     return {"scheduled": scheduled_results}
 
