@@ -22,12 +22,14 @@ export function usePipelineItems(filters: PipelineFilters) {
 
   const qs = new URLSearchParams(params).toString()
   const isGenerating = filters.status === 'generating'
+  const isPending = filters.status === 'pending_review'
 
   return useQuery({
     queryKey: pipelineKeys.list(filters),
     queryFn: () => get<PipelineResponse>(`/api/pipeline?${qs}`),
     staleTime: 0,
-    refetchInterval: isGenerating ? 5_000 : false,
+    refetchInterval: isGenerating ? 5_000 : isPending ? 15_000 : false,
+    refetchOnWindowFocus: true,
   })
 }
 
