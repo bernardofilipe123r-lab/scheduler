@@ -105,18 +105,18 @@ def build_runtime_prompt(selection: PatternSelection, ctx: PromptContext = None)
     """
     Build a minimal runtime prompt based on pattern selection.
     This is what gets sent to DeepSeek every request.
-    
+
     Target: Under 500 tokens (vs 3000+ in old architecture)
     """
     if ctx is None:
         ctx = PromptContext()
     format_info = get_format_instructions(selection.format_style)
     hook_language = get_hook_language(selection.primary_hook)
-    
+
     # Build suggested title from archetype
     archetype = selection.title_archetype
     pattern_hint = archetype.get("pattern", "")
-    
+
     prompt = f"""Generate 1 viral {ctx.niche_name.lower()} reel.
 
 INSTRUCTIONS:
@@ -158,7 +158,7 @@ OUTPUT (JSON only):
         prompt += f"\n\nBRAND CONTEXT:\n{brand_desc}"
     if reels_prompt:
         prompt += f"\n\nADDITIONAL INSTRUCTIONS:\n{reels_prompt}"
-    
+
     return prompt
 
 
@@ -173,16 +173,16 @@ def build_runtime_prompt_with_history(
     Only adds history when there's recent content to avoid.
     """
     base_prompt = build_runtime_prompt(selection, ctx=ctx)
-    
+
     if not recent_titles and not recent_topics:
         return base_prompt
-    
+
     avoidance = "\n\nAVOID RECENTLY USED:"
     if recent_titles:
         avoidance += f"\nTitles: {', '.join(recent_titles[-5:])}"
     if recent_topics:
         avoidance += f"\nAngles: {', '.join(recent_topics[-3:])}"
-    
+
     return base_prompt + avoidance
 
 
@@ -196,7 +196,7 @@ def build_correction_prompt(
 ) -> str:
     """
     Build a correction prompt when QSF score is below threshold.
-    
+
     Args:
         original_output: The generated content that failed quality check
         feedback: Dict with boolean flags for what needs improvement:
@@ -207,23 +207,23 @@ def build_correction_prompt(
     """
     issues = []
     instructions = []
-    
+
     if feedback.get("low_novelty"):
         issues.append("Content is too similar to recent outputs")
         instructions.append("Increase novelty - use different phrasing and angles")
-    
+
     if feedback.get("weak_hook"):
         issues.append("Emotional hook is not strong enough")
         instructions.append("Strengthen the emotional hook - add more urgency/curiosity")
-    
+
     if feedback.get("structure_error"):
         issues.append("Format structure is inconsistent")
         instructions.append("Maintain consistent format throughout all lines")
-    
+
     if feedback.get("plausibility_issue"):
         issues.append("Some claims feel implausible or too extreme")
         instructions.append("Use more familiar, believable claims")
-    
+
     issues_text = "\n".join(f"- {issue}" for issue in issues)
     instructions_text = "\n".join(f"- {inst}" for inst in instructions)
 
@@ -252,7 +252,7 @@ OUTPUT (JSON only):
     "topic_category": "{original_output.get('topic_category', '')}",
     "hook_type": "{original_output.get('hook_type', 'curiosity')}"
 }}"""
-    
+
     return prompt
 
 
@@ -267,11 +267,11 @@ def build_style_anchor(format_style: str) -> str:
     - Quality score drops below threshold
     - Introducing a new format
     - Style drift detected
-    
+
     This is a "ghost example" - structural description, not content.
     """
     format_info = FORMAT_DEFINITIONS.get(format_style, FORMAT_DEFINITIONS["SHORT_FRAGMENT"])
-    
+
     anchor = f"""STYLE ANCHOR (DO NOT COPY CONTENT):
 The reference content uses:
 - Structure: {format_info['structure']}
@@ -289,16 +289,16 @@ def build_prompt_with_example(
     """
     Build runtime prompt with ONE sanitized example.
     Only used for Tier 2 (micro-example) or Tier 3 (full example) scenarios.
-    
+
     Example should be sanitized: no specific foods/symptoms/numbers.
     """
     base_prompt = build_runtime_prompt(selection)
-    
+
     if not example:
         # Use ghost example (style description only)
         style_anchor = build_style_anchor(selection.format_style)
         return base_prompt + "\n\n" + style_anchor
-    
+
     # Tier 3: Full example (rare, for quality reset)
     example_section = f"""
 REFERENCE EXAMPLE (ABSTRACTED - DO NOT COPY DIRECTLY):
