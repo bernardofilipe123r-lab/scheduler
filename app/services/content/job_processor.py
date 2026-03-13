@@ -148,20 +148,15 @@ class JobProcessor:
         brand: str,
         title: Optional[str] = None,
         content_lines: Optional[List[str]] = None,
-        content_index: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Regenerate images/video for a single brand.
         Uses existing AI background if available (no new API call for dark mode).
-
-        Args:
-            content_index: For multi-content jobs, which content item to generate.
-                When None, operates on the single (legacy) dict output.
         """
         import sys
         print(f"\n{'='*60}", flush=True)
         print(f"🎨 regenerate_brand() called", flush=True)
-        print(f"   Brand: {brand}, content_index: {content_index}", flush=True)
+        print(f"   Brand: {brand}", flush=True)
         print(f"   Job ID: {job_id}", flush=True)
         print(f"{'='*60}", flush=True)
         sys.stdout.flush()
@@ -172,12 +167,12 @@ class JobProcessor:
             print(f"❌ ERROR: {error_msg}", flush=True)
             return {"success": False, "error": error_msg}
 
-        # Helper to thread content_index through all update_brand_output calls
+        # Helper to thread through all update_brand_output calls
         def _update_output(data: dict):
-            self._manager.update_brand_output(job_id, brand, data, content_index=content_index)
+            self._manager.update_brand_output(job_id, brand, data)
 
         # Use provided values or fall back to per-brand title in brand_outputs, then job title
-        brand_data = job.get_brand_output(brand, content_index or 0)
+        brand_data = job.get_brand_output(brand)
         use_title = title if title is not None else (brand_data.get("title") or job.title)
         use_lines = content_lines if content_lines is not None else job.content_lines
 
@@ -215,9 +210,8 @@ class JobProcessor:
         })
 
         try:
-            # For multi-content, each content item gets a unique reel_id
-            ci_suffix = f"_{content_index}" if content_index is not None else ""
-            reel_id = brand_data.get("reel_id", f"{job_id}_{brand}{ci_suffix}")
+            # For each brand, generate a unique reel_id
+            reel_id = brand_data.get("reel_id", f"{job_id}_{brand}")
             brand_slug = brand
             user_id = job.user_id
 
@@ -518,25 +512,25 @@ class JobProcessor:
 
             return {"success": False, "error": error_msg}
 
-    def process_post_brand(self, job_id: str, brand: str, content_index: Optional[int] = None) -> Dict[str, Any]:
+    def process_post_brand(self, job_id: str, brand: str) -> Dict[str, Any]:
         """
         Process a single brand for a POST job.
         Only generates the AI background image — composite rendering happens client-side.
         Uses per-brand content stored in brand_outputs (title, ai_prompt).
         """
         import sys
-        print(f"\n📸 process_post_brand() — {brand}, content_index: {content_index}", flush=True)
+        print(f"\n📸 process_post_brand() — {brand}", flush=True)
 
         job = self._manager.get_job(job_id)
         if not job:
             return {"success": False, "error": f"Job not found: {job_id}"}
 
-        # Helper to thread content_index through all update_brand_output calls
+        # Helper to thread through all update_brand_output calls
         def _update_output(data: dict):
-            self._manager.update_brand_output(job_id, brand, data, content_index=content_index)
+            self._manager.update_brand_output(job_id, brand, data)
 
         # Get per-brand content from brand_outputs
-        brand_data = job.get_brand_output(brand, content_index or 0)
+        brand_data = job.get_brand_output(brand)
 
         _update_output({
             "status": "generating",
@@ -547,8 +541,7 @@ class JobProcessor:
         try:
             from app.services.media.ai_background import AIBackgroundGenerator
 
-            ci_suffix = f"_{content_index}" if content_index is not None else ""
-            reel_id = f"{job_id}_{brand}{ci_suffix}"
+            reel_id = f"{job_id}_{brand}"
             brand_slug = brand
             user_id = job.user_id
 
@@ -683,31 +676,24 @@ class JobProcessor:
             })
             return {"success": False, "error": error_msg}
 
-    def process_format_b_brand(self, job_id: str, brand: str, content_index: Optional[int] = None) -> Dict[str, Any]:
+    def process_format_b_brand(self, job_id: str, brand: str) -> Dict[str, Any]:
         """
         Process a Format B reel for a single brand.
         Sources images, composes thumbnail, composes slideshow video, uploads to Supabase.
         """
-        print(f"\n📹 process_format_b_brand() — {brand}, content_index: {content_index}", flush=True)
+        print(f"\n📹 process_format_b_brand() — {brand}", flush=True)
 
         job = self._manager.get_job(job_id)
         if not job:
             return {"success": False, "error": f"Job not found: {job_id}"}
 
-        # Helper to thread content_index through all update_brand_output calls
+        # Helper to thread through all update_brand_output calls
         def _update_output(data: dict):
-            self._manager.update_brand_output(job_id, brand, data, content_index=content_index)
+            self._manager.update_brand_output(job_id, brand, data)
 
         tv_data = job.format_b_data or {}
-        # For multi-content jobs, each content_index has its own polished data
-        if content_index is not None and "content_items" in tv_data:
-            items = tv_data["content_items"]
-            if 0 <= content_index < len(items):
-                tv_data = items[content_index]
-                print(f"   📄 Using content_items[{content_index}] — title: {tv_data.get('thumbnail_title', '?')[:50]}", flush=True)
-        brand_data = job.get_brand_output(brand, content_index or 0)
-        ci_suffix = f"_{content_index}" if content_index is not None else ""
-        reel_id = f"{job_id}_{brand}{ci_suffix}"
+        brand_data = job.get_brand_output(brand)
+        reel_id = f"{job_id}_{brand}"
         user_id = job.user_id
 
         _update_output({
@@ -825,17 +811,8 @@ class JobProcessor:
             image_service = sourcer.last_service_used
             if job.format_b_data and isinstance(job.format_b_data, dict):
                 updated_format_b_data = dict(job.format_b_data)
-                if content_index is not None and isinstance(updated_format_b_data.get("content_items"), list):
-                    items = list(updated_format_b_data["content_items"])
-                    if 0 <= content_index < len(items) and isinstance(items[content_index], dict):
-                        item = dict(items[content_index])
-                        item["image_service"] = image_service
-                        item["image_source_mode"] = image_source_mode
-                        items[content_index] = item
-                        updated_format_b_data["content_items"] = items
-                else:
-                    updated_format_b_data["image_service"] = image_service
-                    updated_format_b_data["image_source_mode"] = image_source_mode
+                updated_format_b_data["image_service"] = image_service
+                updated_format_b_data["image_source_mode"] = image_source_mode
 
                 job.format_b_data = updated_format_b_data
                 from sqlalchemy.orm.attributes import flag_modified
@@ -950,7 +927,7 @@ class JobProcessor:
             cache_bust = int(_time.time())
 
             caption = tv_data.get("caption", "")
-            # Store per-content title from the polished data (different per content_index)
+            # Store title from the polished data
             content_title = " ".join(
                 tv_data.get("thumbnail_title", job.title or "").replace("\n", " ").split()
             ).title()
@@ -991,18 +968,14 @@ class JobProcessor:
         self,
         job_id: str,
         brand: str,
-        content_index: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Generate thread text content for a single brand.
 
         Text-only — no media rendering. Uses ThreadsGenerator to produce
         single posts or thread chains via DeepSeek.
-
-        Args:
-            content_index: For multi-content jobs, which content item to generate.
         """
         import sys
-        print(f"\n🧵 process_threads_brand() — brand={brand}, ci={content_index}", flush=True)
+        print(f"\n🧵 process_threads_brand() — brand={brand}", flush=True)
         sys.stdout.flush()
 
         job = self._manager.get_job(job_id)
@@ -1010,7 +983,7 @@ class JobProcessor:
             return {"success": False, "error": f"Job not found: {job_id}"}
 
         def _update_output(data: dict):
-            self._manager.update_brand_output(job_id, brand, data, content_index=content_index)
+            self._manager.update_brand_output(job_id, brand, data)
 
         _update_output({"status": "generating", "progress_message": "Generating thread content..."})
 
@@ -1122,10 +1095,9 @@ class JobProcessor:
         except Exception:
             pass
 
-        content_count = getattr(job, 'content_count', 1) or 1
-        is_multi = content_count > 1
+        content_count = 1
 
-        print(f"   Job found - brands: {job.brands}, variant: {job.variant}, content_count: {content_count}", flush=True)
+        print(f"   Job found - brands: {job.brands}, variant: {job.variant}", flush=True)
         print(f"   Title: {job.title[:50] if job.title else 'None'}...", flush=True)
         print(f"   Content lines: {len(job.content_lines or [])}", flush=True)
         sys.stdout.flush()
@@ -1148,29 +1120,24 @@ class JobProcessor:
 
         # ── THREADS variant: text-only generation ──────────────────────
         if job.variant == "threads":
-            print(f"🧵 THREADS variant — generating text per brand (x{content_count})", flush=True)
+            print(f"🧵 THREADS variant — generating text per brand", flush=True)
             results = {}
-            work_items = [
-                (brand, ci)
-                for brand in job.brands
-                for ci in range(content_count)
-            ]
-            total_work = len(work_items)
+            total_work = len(job.brands)
             try:
-                for wi, (brand, ci) in enumerate(work_items):
+                for wi, brand in enumerate(job.brands):
                     job = self._manager.get_job(job_id)
                     if job.status == "cancelled":
                         return {"success": False, "error": "Job was cancelled", "results": results}
 
                     progress = int((wi / max(total_work, 1)) * 100)
-                    step_msg = f"Generating thread for {brand}..." if not is_multi else f"Generating {brand} ({ci+1}/{content_count})..."
+                    step_msg = f"Generating thread for {brand}..."
                     self._manager.update_job_status(job_id, "generating", step_msg, progress)
 
                     thread_result = {"success": False, "error": "Timeout"}
-                    def _run_thread_brand(b=brand, c=ci):
+                    def _run_thread_brand(b=brand):
                         nonlocal thread_result
                         try:
-                            thread_result = self.process_threads_brand(job_id, b, content_index=c if is_multi else None)
+                            thread_result = self.process_threads_brand(job_id, b)
                         except Exception as ex:
                             thread_result = {"success": False, "error": f"{type(ex).__name__}: {str(ex)}"}
 
@@ -1179,12 +1146,12 @@ class JobProcessor:
                     t.join(timeout=BRAND_GENERATION_TIMEOUT)
 
                     if t.is_alive():
-                        timeout_msg = f"BRAND_TIMEOUT: {brand}[{ci}] thread generation exceeded {BRAND_GENERATION_TIMEOUT}s"
+                        timeout_msg = f"BRAND_TIMEOUT: {brand} thread generation exceeded {BRAND_GENERATION_TIMEOUT}s"
                         print(f"⏱️  {timeout_msg}", flush=True)
-                        self._manager.update_brand_output(job_id, brand, {"status": "failed", "error": timeout_msg}, content_index=ci if is_multi else None)
+                        self._manager.update_brand_output(job_id, brand, {"status": "failed", "error": timeout_msg})
                         thread_result = {"success": False, "error": timeout_msg}
 
-                    results[f"{brand}_{ci}" if is_multi else brand] = thread_result
+                    results[brand] = thread_result
 
                 all_ok = all(r.get("success") for r in results.values())
                 any_ok = any(r.get("success") for r in results.values())
@@ -1199,94 +1166,83 @@ class JobProcessor:
 
         # ── POST variant: only generate backgrounds ──────────────────
         if job.variant == "post":
-            print(f"📸 POST variant — generating posts per brand (x{content_count})", flush=True)
+            print(f"📸 POST variant — generating posts per brand", flush=True)
             results = {}
             total_brands = len(job.brands)
             try:
                 from app.services.content.generator import ContentGenerator
                 cg = ContentGenerator()
 
-                # Generate content for each (brand, content_index) pair
-                for ci in range(content_count):
-                    if getattr(job, 'fixed_title', False):
-                        # ── MANUAL MODE: Use the user's title as-is ──────────
-                        print(f"   📌 Fixed title mode — content {ci}: {job.title[:80]}", flush=True)
-                        self._manager.update_job_status(job_id, "generating", "Using provided title...", 5)
+                if getattr(job, 'fixed_title', False):
+                    # ── MANUAL MODE: Use the user's title as-is ──────────
+                    print(f"   📌 Fixed title mode: {job.title[:80]}", flush=True)
+                    self._manager.update_job_status(job_id, "generating", "Using provided title...", 5)
 
-                        image_prompt = job.ai_prompt
-                        if not image_prompt:
-                            prompt_result = cg.generate_image_prompt(job.title)
-                            image_prompt = prompt_result.get("image_prompt", "")
+                    image_prompt = job.ai_prompt
+                    if not image_prompt:
+                        prompt_result = cg.generate_image_prompt(job.title)
+                        image_prompt = prompt_result.get("image_prompt", "")
 
-                        for brand in job.brands:
-                            existing = job.get_brand_output(brand, ci)
+                    for brand in job.brands:
+                        existing = job.get_brand_output(brand)
+                        self._manager.update_brand_output(job_id, brand, {
+                            "title": job.title,
+                            "caption": existing.get("caption", ""),
+                            "ai_prompt": image_prompt,
+                            "slide_texts": existing.get("slide_texts", job.content_lines or []),
+                            "status": "pending",
+                        })
+                        print(f"   📝 {brand}: {job.title[:60]}...", flush=True)
+                else:
+                    # ── AUTO MODE: AI generates unique posts per brand ───
+                    topic_hint = job.ai_prompt or None
+                    needed = total_brands
+                    print(f"   🧠 Generating {needed} unique posts...", flush=True)
+                    self._manager.update_job_status(job_id, "generating", "Generating content...", 5)
+
+                    # Build PromptContext for niche-aware CTA
+                    first_brand = job.brands[0] if job.brands else None
+                    batch_ctx = None
+                    if first_brand:
+                        from app.services.content.niche_config_service import NicheConfigService
+                        batch_ctx = NicheConfigService().get_context(brand_id=first_brand, user_id=job.user_id)
+
+                    batch_posts = cg.generate_post_titles_batch(needed, topic_hint, ctx=batch_ctx)
+                    print(f"   ✓ Got {len(batch_posts)} unique posts", flush=True)
+
+                    for i, brand in enumerate(job.brands):
+                        if i >= len(batch_posts):
                             self._manager.update_brand_output(job_id, brand, {
-                                "title": job.title,
-                                "caption": existing.get("caption", ""),
-                                "ai_prompt": image_prompt,
-                                "slide_texts": existing.get("slide_texts", job.content_lines or []),
-                                "status": "pending",
-                            }, content_index=ci if is_multi else None)
-                            print(f"   📝 {brand}[{ci}]: {job.title[:60]}...", flush=True)
-                    else:
-                        # ── AUTO MODE: AI generates unique posts per brand ───
-                        topic_hint = job.ai_prompt or None
-                        needed = total_brands
-                        print(f"   🧠 Generating {needed} unique posts (content {ci})...", flush=True)
-                        step_msg = f"Generating content {ci+1}/{content_count}..."
-                        self._manager.update_job_status(job_id, "generating", step_msg, 5)
+                                "status": "failed", "error": "Content generation produced fewer results than brands"
+                            })
+                            continue
+                        post_data = batch_posts[i]
+                        # Ensure CTA on last slide has paragraph break
+                        raw_slides = post_data.get("slide_texts", [])
+                        if raw_slides:
+                            raw_slides = [self._ensure_cta_paragraph_break(s) for s in raw_slides]
+                        self._manager.update_brand_output(job_id, brand, {
+                            "title": post_data.get("title", job.title),
+                            "caption": post_data.get("caption", ""),
+                            "ai_prompt": post_data.get("image_prompt", ""),
+                            "slide_texts": raw_slides,
+                            "status": "pending",
+                        })
+                        print(f"   📝 {brand}: {post_data.get('title', '?')[:60]}...", flush=True)
 
-                        # Build PromptContext for niche-aware CTA
-                        first_brand = job.brands[0] if job.brands else None
-                        batch_ctx = None
-                        if first_brand:
-                            from app.services.content.niche_config_service import NicheConfigService
-                            batch_ctx = NicheConfigService().get_context(brand_id=first_brand, user_id=job.user_id)
-
-                        batch_posts = cg.generate_post_titles_batch(needed, topic_hint, ctx=batch_ctx)
-                        print(f"   ✓ Got {len(batch_posts)} unique posts", flush=True)
-
-                        for i, brand in enumerate(job.brands):
-                            if i >= len(batch_posts):
-                                self._manager.update_brand_output(job_id, brand, {
-                                    "status": "failed", "error": "Content generation produced fewer results than brands"
-                                }, content_index=ci if is_multi else None)
-                                continue
-                            post_data = batch_posts[i]
-                            # Ensure CTA on last slide has paragraph break
-                            raw_slides = post_data.get("slide_texts", [])
-                            if raw_slides:
-                                raw_slides = [self._ensure_cta_paragraph_break(s) for s in raw_slides]
-                            self._manager.update_brand_output(job_id, brand, {
-                                "title": post_data.get("title", job.title),
-                                "caption": post_data.get("caption", ""),
-                                "ai_prompt": post_data.get("image_prompt", ""),
-                                "slide_texts": raw_slides,
-                                "status": "pending",
-                            }, content_index=ci if is_multi else None)
-                            print(f"   📝 {brand}[{ci}]: {post_data.get('title', '?')[:60]}...", flush=True)
-
-                # Now generate images for each (brand, content_index) pair
-                work_items = [
-                    (brand, ci)
-                    for brand in job.brands
-                    for ci in range(content_count)
-                ]
-                total_work = len(work_items)
-
-                for wi, (brand, ci) in enumerate(work_items):
+                # Now generate images for each brand
+                for wi, brand in enumerate(job.brands):
                     job = self._manager.get_job(job_id)
                     if job.status == "cancelled":
                         return {"success": False, "error": "Job was cancelled", "results": results}
-                    progress = int(((wi + 1) / (total_work + 1)) * 100)
-                    img_msg = f"Generating image for {brand}..." if not is_multi else f"Generating {brand} ({ci+1}/{content_count})..."
-                    self._manager.update_job_status(job_id, "generating", img_msg, progress)
+                    progress = int(((wi + 1) / (total_brands + 1)) * 100)
+                    self._manager.update_job_status(job_id, "generating", f"Generating image for {brand}...", progress)
 
                     post_result = {"success": False, "error": "Timeout"}
-                    def _run_post_brand(b=brand, c=ci):
+                    def _run_post_brand(b=brand):
                         nonlocal post_result
                         try:
-                            post_result = self.process_post_brand(job_id, b, content_index=c if is_multi else None)
+                            post_result = self.process_post_brand(job_id, b)
                         except Exception as ex:
                             post_result = {"success": False, "error": f"{type(ex).__name__}: {str(ex)}"}
 
@@ -1295,12 +1251,12 @@ class JobProcessor:
                     pt.join(timeout=BRAND_GENERATION_TIMEOUT)
 
                     if pt.is_alive():
-                        timeout_msg = f"BRAND_TIMEOUT: {brand}[{ci}] post generation exceeded {BRAND_GENERATION_TIMEOUT}s"
-                        print(f"⏱️  POST BRAND TIMEOUT: {brand}[{ci}]", flush=True)
-                        self._manager.update_brand_output(job_id, brand, {"status": "failed", "error": timeout_msg}, content_index=ci if is_multi else None)
+                        timeout_msg = f"BRAND_TIMEOUT: {brand} post generation exceeded {BRAND_GENERATION_TIMEOUT}s"
+                        print(f"⏱️  POST BRAND TIMEOUT: {brand}", flush=True)
+                        self._manager.update_brand_output(job_id, brand, {"status": "failed", "error": timeout_msg})
                         post_result = {"success": False, "error": timeout_msg}
 
-                    results[f"{brand}_{ci}" if is_multi else brand] = post_result
+                    results[brand] = post_result
 
                 all_ok = all(r.get("success") for r in results.values())
                 any_ok = any(r.get("success") for r in results.values())
@@ -1315,29 +1271,23 @@ class JobProcessor:
 
         # ── Format B variant: source images + compose slideshow ──
         if job.variant == "format_b":
-            print(f"📹 Format B variant — processing per brand (x{content_count})", flush=True)
+            print(f"📹 Format B variant — processing per brand", flush=True)
             results = {}
-            work_items = [
-                (brand, ci)
-                for brand in job.brands
-                for ci in range(content_count)
-            ]
-            total_work = len(work_items)
+            total_brands = len(job.brands)
             try:
-                for wi, (brand, ci) in enumerate(work_items):
+                for wi, brand in enumerate(job.brands):
                     job = self._manager.get_job(job_id)
                     if job.status == "cancelled":
                         return {"success": False, "error": "Job was cancelled", "results": results}
 
-                    progress = int((wi / max(total_work, 1)) * 100)
-                    step_msg = f"Processing format-b for {brand}..." if not is_multi else f"Processing {brand} ({ci+1}/{content_count})..."
-                    self._manager.update_job_status(job_id, "generating", step_msg, progress)
+                    progress = int((wi / max(total_brands, 1)) * 100)
+                    self._manager.update_job_status(job_id, "generating", f"Processing format-b for {brand}...", progress)
 
                     tv_result = {"success": False, "error": "Timeout"}
-                    def _run_tv_brand(b=brand, c=ci):
+                    def _run_tv_brand(b=brand):
                         nonlocal tv_result
                         try:
-                            tv_result = self.process_format_b_brand(job_id, b, content_index=c if is_multi else None)
+                            tv_result = self.process_format_b_brand(job_id, b)
                         except Exception as ex:
                             tv_result = {"success": False, "error": f"{type(ex).__name__}: {str(ex)}"}
 
@@ -1346,12 +1296,12 @@ class JobProcessor:
                     tv_thread.join(timeout=BRAND_GENERATION_TIMEOUT)
 
                     if tv_thread.is_alive():
-                        timeout_msg = f"BRAND_TIMEOUT: {brand}[{ci}] format-b exceeded {BRAND_GENERATION_TIMEOUT}s"
-                        print(f"⏱️  Format B BRAND TIMEOUT: {brand}[{ci}]", flush=True)
-                        self._manager.update_brand_output(job_id, brand, {"status": "failed", "error": timeout_msg}, content_index=ci if is_multi else None)
+                        timeout_msg = f"BRAND_TIMEOUT: {brand} format-b exceeded {BRAND_GENERATION_TIMEOUT}s"
+                        print(f"⏱️  Format B BRAND TIMEOUT: {brand}", flush=True)
+                        self._manager.update_brand_output(job_id, brand, {"status": "failed", "error": timeout_msg})
                         tv_result = {"success": False, "error": timeout_msg}
 
-                    results[f"{brand}_{ci}" if is_multi else brand] = tv_result
+                    results[brand] = tv_result
 
                 all_ok = all(r.get("success") for r in results.values())
                 any_ok = any(r.get("success") for r in results.values())
@@ -1368,44 +1318,43 @@ class JobProcessor:
         results = {}
         total_brands = len(job.brands)
 
-        print(f"   Processing {total_brands} brands (x{content_count}): {job.brands}", flush=True)
+        print(f"   Processing {total_brands} brands: {job.brands}", flush=True)
         sys.stdout.flush()
 
-        # When auto-generated (fixed_title=False), generate AI content per brand per content_index.
+        # When auto-generated (fixed_title=False), generate AI content per brand.
         if not getattr(job, 'fixed_title', False):
-            print(f"\n🧠 Auto mode — generating AI content for {total_brands} brand(s) x{content_count}...", flush=True)
+            print(f"\n🧠 Auto mode — generating AI content for {total_brands} brand(s)...", flush=True)
             try:
                 from app.services.content.generator import ContentGenerator
                 cg = ContentGenerator()
                 step_msg = "Generating viral content..." if total_brands == 1 else f"Generating content for {total_brands} brands..."
                 self._manager.update_job_status(job_id, "generating", step_msg, 5)
                 first_title = None
-                for ci in range(content_count):
-                    for i, brand in enumerate(job.brands):
-                        viral = cg.generate_viral_content()
-                        brand_title = viral.get("title", job.title)
-                        brand_lines = viral.get("content_lines", job.content_lines or [])
-                        brand_image_prompt = viral.get("image_prompt", job.ai_prompt or "")
-                        self._manager.update_brand_output(job_id, brand, {
-                            "title": brand_title,
-                            "content_lines": brand_lines,
-                            "ai_prompt": brand_image_prompt,
-                            "status": "pending",
-                        }, content_index=ci if is_multi else None)
-                        if first_title is None:
-                            first_title = brand_title
-                        print(f"   📝 {brand}[{ci}]: {brand_title[:60]}...", flush=True)
+                for i, brand in enumerate(job.brands):
+                    viral = cg.generate_viral_content()
+                    brand_title = viral.get("title", job.title)
+                    brand_lines = viral.get("content_lines", job.content_lines or [])
+                    brand_image_prompt = viral.get("image_prompt", job.ai_prompt or "")
+                    self._manager.update_brand_output(job_id, brand, {
+                        "title": brand_title,
+                        "content_lines": brand_lines,
+                        "ai_prompt": brand_image_prompt,
+                        "status": "pending",
+                    })
+                    if first_title is None:
+                        first_title = brand_title
+                    print(f"   📝 {brand}: {brand_title[:60]}...", flush=True)
                 if first_title:
                     self._manager.update_job_inputs(job_id, title=first_title)
                     job = self._manager.get_job(job_id)
-                print(f"   ✓ Generated content for {total_brands} brand(s) x{content_count}", flush=True)
+                print(f"   ✓ Generated content for {total_brands} brand(s)", flush=True)
             except Exception as e:
                 print(f"   ⚠️ AI content generation failed: {e}", flush=True)
                 print(f"   Falling back to shared title + content differentiation", flush=True)
 
-        # Pre-generate content variations (only for single-content, multi-brand)
+        # Pre-generate content variations (only for multi-brand)
         brand_content_map = {}
-        if not is_multi and job.content_lines and len(job.content_lines) >= 3 and len(job.brands) > 1:
+        if job.content_lines and len(job.content_lines) >= 3 and len(job.brands) > 1:
             print(f"\n🔄 Generating content variations for all {total_brands} brands...", flush=True)
             try:
                 differentiator = ContentDifferentiator()
@@ -1419,18 +1368,10 @@ class JobProcessor:
                 print(f"   ⚠️ Content differentiation failed: {e}", flush=True)
                 print(f"   Using original content for all brands", flush=True)
 
-        # Build work items: (brand, content_index) pairs
-        work_items = [
-            (brand, ci)
-            for brand in job.brands
-            for ci in range(content_count)
-        ]
-        total_work = len(work_items)
-
         try:
-            for wi, (brand, ci) in enumerate(work_items):
+            for wi, brand in enumerate(job.brands):
                 print(f"\n{'='*40}", flush=True)
-                print(f"🔄 Processing {brand}[{ci}] ({wi+1}/{total_work})", flush=True)
+                print(f"🔄 Processing {brand} ({wi+1}/{total_brands})", flush=True)
                 print(f"{'='*40}", flush=True)
                 sys.stdout.flush()
 
@@ -1439,13 +1380,13 @@ class JobProcessor:
                     print(f"   ⚠️ Job cancelled, stopping", flush=True)
                     return {"success": False, "error": "Job was cancelled", "results": results}
 
-                progress = int((wi / total_work) * 100)
-                reel_msg = "Generating reel..." if total_work == 1 else f"Generating {brand}..." if not is_multi else f"Generating {brand} ({ci+1}/{content_count})..."
+                progress = int((wi / total_brands) * 100)
+                reel_msg = "Generating reel..." if total_brands == 1 else f"Generating {brand}..."
                 self._manager.update_job_status(job_id, "generating", reel_msg, progress)
 
                 # Get per-brand content from the correct slot
                 job = self._manager.get_job(job_id)
-                brand_output_data = job.get_brand_output(brand, ci)
+                brand_output_data = job.get_brand_output(brand)
                 brand_content = brand_output_data.get("content_lines") or brand_content_map.get(brand.lower())
 
                 if brand_content:
@@ -1455,14 +1396,13 @@ class JobProcessor:
                 result = {"success": False, "error": "Timeout"}
                 brand_error = [None]
 
-                def _run_brand(b=brand, c=ci, bc=brand_content):
+                def _run_brand(b=brand, bc=brand_content):
                     nonlocal result
                     try:
                         result = self.regenerate_brand(
                             job_id,
                             b,
                             content_lines=bc,
-                            content_index=c if is_multi else None,
                         )
                     except Exception as ex:
                         brand_error[0] = ex
@@ -1474,19 +1414,19 @@ class JobProcessor:
 
                 if brand_thread.is_alive():
                     timeout_msg = (
-                        f"BRAND_TIMEOUT: {brand}[{ci}] generation exceeded {BRAND_GENERATION_TIMEOUT}s timeout. "
+                        f"BRAND_TIMEOUT: {brand} generation exceeded {BRAND_GENERATION_TIMEOUT}s timeout. "
                         f"Step: {(self._manager.get_job(job_id) or type('', (), {'current_step': 'unknown'})).current_step}"
                     )
-                    print(f"\n⏱️  BRAND TIMEOUT: {brand}[{ci}] exceeded {BRAND_GENERATION_TIMEOUT}s", flush=True)
+                    print(f"\n⏱️  BRAND TIMEOUT: {brand} exceeded {BRAND_GENERATION_TIMEOUT}s", flush=True)
                     sys.stdout.flush()
 
                     self._manager.update_brand_output(job_id, brand, {
                         "status": "failed",
                         "error": timeout_msg,
-                    }, content_index=ci if is_multi else None)
+                    })
                     result = {"success": False, "error": timeout_msg}
 
-                results[f"{brand}_{ci}" if is_multi else brand] = result
+                results[brand] = result
 
                 print(f"   📋 Result: {result.get('success', False)}", flush=True)
                 if not result.get('success'):

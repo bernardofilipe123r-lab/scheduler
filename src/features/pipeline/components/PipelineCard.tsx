@@ -132,11 +132,6 @@ export function PipelineCard({ item, onApprove, onReject, onEdit, onDelete, onOp
             <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">
               {variantLabel(item)}
             </span>
-            {(item.content_count ?? 1) > 1 && (
-              <span className="text-[9px] font-bold bg-[#006d8f]/10 text-[#006d8f] px-1 py-0.5 rounded">
-                ×{item.content_count}
-              </span>
-            )}
           </div>
           {item.quality_score != null && (
             <div className={clsx('flex items-center gap-1 px-1.5 py-0.5 rounded-md', scoreColor(item.quality_score))}>

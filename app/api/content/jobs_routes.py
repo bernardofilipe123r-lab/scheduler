@@ -60,7 +60,7 @@ def process_job_async(job_id: str):
     """Background task to process a job (with concurrency control)."""
     import traceback
     import sys
-    
+
     # Force flush ALL print statements
     print(f"\n{'='*60}", flush=True)
     print(f"🚀 BACKGROUND TASK STARTED", flush=True)
@@ -68,29 +68,29 @@ def process_job_async(job_id: str):
     print(f"   Timestamp: {datetime.now().isoformat()}", flush=True)
     print(f"{'='*60}", flush=True)
     sys.stdout.flush()
-    
+
     _job_semaphore.acquire()
     try:
         print(f"📂 Opening database session...", flush=True)
         with get_db_session() as db:
             print(f"   ✓ Database session opened", flush=True)
-            
+
             print(f"🔧 Creating JobProcessor...", flush=True)
             processor = JobProcessor(db)
             print(f"   ✓ JobProcessor created", flush=True)
-            
+
             print(f"🎬 Calling process_job({job_id})...", flush=True)
             sys.stdout.flush()
-            
+
             result = processor.process_job(job_id)
-            
+
             print(f"\n{'='*60}", flush=True)
             print(f"✅ JOB PROCESSING COMPLETED", flush=True)
             print(f"   Job ID: {job_id}", flush=True)
             print(f"   Result: {result}", flush=True)
             print(f"{'='*60}\n", flush=True)
             sys.stdout.flush()
-            
+
     except Exception as e:
         error_msg = f"{type(e).__name__}: {str(e)}"
         print(f"\n{'='*60}", flush=True)
@@ -101,7 +101,7 @@ def process_job_async(job_id: str):
         traceback.print_exc()
         sys.stdout.flush()
         print(f"{'='*60}\n", flush=True)
-        
+
         # Try to update job status to failed
         try:
             print(f"📝 Updating job status to failed...", flush=True)
@@ -124,43 +124,46 @@ def process_job_async(job_id: str):
 async def create_job(request: JobCreateRequest, background_tasks: BackgroundTasks, user: dict = Depends(get_current_user)):
     """
     Create a new generation job.
-    
+
     Returns the job ID immediately - generation happens in background.
-    Use /jobs/{job_id}/status to track progress.
+    When content_count > 1, creates N separate jobs (1 per item).
     """
     try:
+        content_count = max(1, min(3, request.content_count))
+        jobs_created = []
+
         with get_db_session() as db:
             manager = JobManager(db)
-            
-            job = manager.create_job(
-                user_id=user["id"],
-                title=request.title,
-                content_lines=request.content_lines or [],
-                brands=request.brands,
-                variant=request.variant,
-                ai_prompt=request.ai_prompt,
-                cta_type=request.cta_type,
-                platforms=request.platforms,
-                fixed_title=request.fixed_title,
-                image_model=request.image_model,
-                music_track_id=request.music_track_id,
-                music_source=request.music_source,
-                content_count=request.content_count,
-            )
-            
-            job_id = job.job_id
-            job_dict = job.to_dict()
-        
-        # Start processing in background
-        background_tasks.add_task(process_job_async, job_id)
-        
+
+            for _ in range(content_count):
+                job = manager.create_job(
+                    user_id=user["id"],
+                    title=request.title,
+                    content_lines=request.content_lines or [],
+                    brands=request.brands,
+                    variant=request.variant,
+                    ai_prompt=request.ai_prompt,
+                    cta_type=request.cta_type,
+                    platforms=request.platforms,
+                    fixed_title=request.fixed_title,
+                    image_model=request.image_model,
+                    music_track_id=request.music_track_id,
+                    music_source=request.music_source,
+                )
+                jobs_created.append((job.job_id, job.to_dict()))
+
+        # Start processing each job in background
+        for job_id, _ in jobs_created:
+            background_tasks.add_task(process_job_async, job_id)
+
+        first_id, first_dict = jobs_created[0]
         return {
             "status": "created",
-            "job_id": job_id,
-            "message": "Job created and queued for processing",
-            "job": job_dict
+            "job_id": first_id,
+            "message": f"{content_count} job(s) created and queued for processing",
+            "job": first_dict,
         }
-        
+
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -175,22 +178,22 @@ async def create_job(request: JobCreateRequest, background_tasks: BackgroundTask
 async def get_job(job_id: str, user: dict = Depends(get_current_user)):
     """
     Get full job details including status, progress, and outputs.
-    
+
     Returns all brand outputs with their thumbnail/video paths.
     """
     try:
         with get_db_session() as db:
             manager = JobManager(db)
             job = manager.get_job(job_id, user_id=user["id"])
-            
+
             if not job:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Job not found: {job_id}"
                 )
-            
+
             return job.to_dict()
-            
+
     except HTTPException:
         raise
     except Exception as e:
@@ -212,13 +215,13 @@ async def get_job_status(job_id: str, user: dict = Depends(get_current_user)):
         with get_db_session() as db:
             manager = JobManager(db)
             job = manager.get_job(job_id, user_id=user["id"])
-            
+
             if not job:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Job not found: {job_id}"
                 )
-            
+
             return {
                 "job_id": job.job_id,
                 "status": job.status,
@@ -226,7 +229,7 @@ async def get_job_status(job_id: str, user: dict = Depends(get_current_user)):
                 "progress_percent": job.progress_percent,
                 "error_message": job.error_message
             }
-            
+
     except HTTPException:
         raise
     except Exception as e:
@@ -244,13 +247,13 @@ async def get_job_status(job_id: str, user: dict = Depends(get_current_user)):
 async def update_job(job_id: str, request: JobUpdateRequest, user: dict = Depends(get_current_user)):
     """
     Update job inputs (title, content, CTA).
-    
+
     This only updates the stored values - call regenerate endpoint to apply.
     """
     try:
         with get_db_session() as db:
             manager = JobManager(db)
-            
+
             job = manager.update_job_inputs(
                 job_id=job_id,
                 user_id=user["id"],
@@ -259,20 +262,20 @@ async def update_job(job_id: str, request: JobUpdateRequest, user: dict = Depend
                 ai_prompt=request.ai_prompt,
                 cta_type=request.cta_type
             )
-            
+
             if not job:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Job not found: {job_id}"
                 )
-            
+
             return {
                 "status": "updated",
                 "job_id": job_id,
                 "message": "Job inputs updated. Use regenerate endpoint to apply changes.",
                 "job": job.to_dict()
             }
-            
+
     except HTTPException:
         raise
     except Exception as e:
@@ -296,7 +299,7 @@ async def regenerate_brand(
 ):
     """
     Regenerate just one brand's outputs.
-    
+
     - Uses the job's stored title/content unless overridden
     - For dark mode, reuses the AI background (no new API call!)
     - Optionally override title/content just for this regeneration
@@ -316,7 +319,7 @@ async def regenerate_brand(
                         title=request.title if request else None,
                         content_lines=request.content_lines if request else None
                     )
-        
+
         # Validate brand
         valid_brands = brand_resolver.get_all_brand_ids()
         if brand.lower() not in valid_brands:
@@ -324,7 +327,7 @@ async def regenerate_brand(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid brand: {brand}. Must be one of: {valid_brands}"
             )
-        
+
         # Check job exists
         with get_db_session() as db:
             manager = JobManager(db)
@@ -334,16 +337,16 @@ async def regenerate_brand(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Job not found: {job_id}"
                 )
-            
+
             if brand.lower() not in [b.lower() for b in job.brands]:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Brand {brand} not in job's brands: {job.brands}"
                 )
-            
+
             # Update status
             manager.update_brand_output(job_id, brand.lower(), {"status": "queued"})
-        
+
         # Run in background
         if background_tasks:
             background_tasks.add_task(regenerate_async)
@@ -362,7 +365,7 @@ async def regenerate_brand(
                 "brand": brand.lower(),
                 "message": f"Regeneration completed for {brand}"
             }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -385,14 +388,14 @@ async def regenerate_all(
 ):
     """
     Regenerate all brand outputs.
-    
+
     Optionally update inputs first, then regenerate all.
     """
     try:
         # Update inputs if provided
         with get_db_session() as db:
             manager = JobManager(db)
-            
+
             if request:
                 manager.update_job_inputs(
                     job_id=job_id,
@@ -402,17 +405,17 @@ async def regenerate_all(
                     ai_prompt=request.ai_prompt,
                     cta_type=request.cta_type
                 )
-            
+
             job = manager.get_job(job_id, user_id=user["id"])
             if not job:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Job not found: {job_id}"
                 )
-            
+
             # Reset status
             manager.update_job_status(job_id, "pending", "Queued for regeneration", 0)
-        
+
         # Run in background
         if background_tasks:
             background_tasks.add_task(process_job_async, job_id)
@@ -428,7 +431,7 @@ async def regenerate_all(
                 "job_id": job_id,
                 "message": "Full regeneration completed"
             }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -591,7 +594,7 @@ async def list_jobs(
                 "jobs": results,
                 "total": len(results)
             }
-            
+
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -782,7 +785,7 @@ async def delete_job(job_id: str, user: dict = Depends(get_current_user)):
 async def cancel_job(job_id: str, user: dict = Depends(get_current_user)):
     """
     Cancel a job that's pending or generating.
-    
+
     - Marks job as 'cancelled'
     - Stops further processing
     - Deletes partial outputs
@@ -790,20 +793,20 @@ async def cancel_job(job_id: str, user: dict = Depends(get_current_user)):
     try:
         with get_db_session() as db:
             manager = JobManager(db)
-            
+
             job = manager.get_job(job_id, user_id=user["id"])
             if not job:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Job not found: {job_id}"
                 )
-            
+
             if job.status in ("completed", "cancelled"):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Cannot cancel job with status: {job.status}"
                 )
-            
+
             # Mark as cancelled
             manager.update_job_status(
                 job_id=job_id,
@@ -811,16 +814,16 @@ async def cancel_job(job_id: str, user: dict = Depends(get_current_user)):
                 current_step="Cancelled by user",
                 error_message="Job cancelled by user"
             )
-            
+
             # Clean up any partial files
             manager.cleanup_job_files(job_id)
-            
+
             return {
                 "status": "cancelled",
                 "job_id": job_id,
                 "message": "Job cancelled successfully"
             }
-            
+
     except HTTPException:
         raise
     except Exception as e:
@@ -837,7 +840,7 @@ async def cancel_job(job_id: str, user: dict = Depends(get_current_user)):
 async def get_next_slots(job_id: str, user: dict = Depends(get_current_user)):
     """
     Get the next available scheduling slots for all brands in a job.
-    
+
     Uses the magic scheduling system:
     - Each brand has 6 daily slots (every 4 hours)
     - Slots alternate Light → Dark → Light → Dark → Light → Dark
@@ -847,23 +850,23 @@ async def get_next_slots(job_id: str, user: dict = Depends(get_current_user)):
     try:
         with get_db_session() as db:
             manager = JobManager(db)
-            
+
             job = manager.get_job(job_id, user_id=user["id"])
             if not job:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Job not found: {job_id}"
                 )
-            
+
             from app.services.publishing.scheduler import DatabaseSchedulerService
             scheduler = DatabaseSchedulerService()
-            
+
             # Get next slots for all brands
             slots = scheduler.get_next_slots_for_job(
                 brands=job.brands,
                 variant=job.variant
             )
-            
+
             # Convert to format expected by frontend
             result = {}
             for brand, slot in slots.items():
@@ -872,7 +875,7 @@ async def get_next_slots(job_id: str, user: dict = Depends(get_current_user)):
                     "formatted": slot.strftime("%b %d, %Y at %I:%M %p")
                 }
             return result
-            
+
     except HTTPException:
         raise
     except Exception as e:
@@ -900,37 +903,37 @@ async def update_brand_status(job_id: str, brand: str, request: BrandStatusUpdat
     try:
         with get_db_session() as db:
             manager = JobManager(db)
-            
+
             job = manager.get_job(job_id, user_id=user["id"])
             if not job:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Job not found: {job_id}"
                 )
-            
+
             # Check brand exists
             if brand not in job.brands:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Brand '{brand}' not in job"
                 )
-            
+
             # Update the brand output status
             brand_outputs = job.brand_outputs or {}
             if brand not in brand_outputs:
                 brand_outputs[brand] = {}
-            
+
             brand_outputs[brand]["status"] = request.status
             if request.scheduled_time:
                 brand_outputs[brand]["scheduled_time"] = request.scheduled_time
-            
+
             # Save updated brand outputs
             manager.update_brand_output(
                 job_id=job_id,
                 brand=brand,
                 output_data=brand_outputs[brand]
             )
-            
+
             return {
                 "success": True,
                 "job_id": job_id,
@@ -938,7 +941,7 @@ async def update_brand_status(job_id: str, brand: str, request: BrandStatusUpdat
                 "status": request.status,
                 "message": f"Brand {brand} status updated to {request.status}"
             }
-            
+
     except HTTPException:
         raise
     except Exception as e:

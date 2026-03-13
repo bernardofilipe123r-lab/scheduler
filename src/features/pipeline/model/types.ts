@@ -34,7 +34,6 @@ export interface PipelineItem {
   pipeline_batch_id: string | null
   quality_score: number | null
   created_by: 'user' | 'toby'
-  content_count: number
   created_at: string
   status: string
   lifecycle: LifecycleStage

@@ -197,39 +197,42 @@ async def generate_format_b_reel(
     polished_data = None
 
     if request.mode == "full_auto":
-        # full_auto: create job immediately with placeholder, do everything in background
+        # full_auto: create job(s) immediately with placeholder, do everything in background
+        content_count = max(1, min(3, request.content_count))
         manager = JobManager(db)
-        job = manager.create_job(
-            user_id=user_id,
-            title="Generating content...",
-            content_lines=[],
-            brands=request.brands,
-            variant="format_b",
-            platforms=request.platforms,
-            fixed_title=False,
-            created_by="user",
-            music_source=request.music_source,
-            content_format="format_b",
-            format_b_data={},
-            content_count=request.content_count,
-        )
+        jobs_created = []
 
-        job_id = job.job_id
-        job_dict = job.to_dict()
+        for _ in range(content_count):
+            job = manager.create_job(
+                user_id=user_id,
+                title="Generating content...",
+                content_lines=[],
+                brands=request.brands,
+                variant="format_b",
+                platforms=request.platforms,
+                fixed_title=False,
+                created_by="user",
+                music_source=request.music_source,
+                content_format="format_b",
+                format_b_data={},
+            )
+            jobs_created.append((job.job_id, job.to_dict()))
 
-        # Everything happens in background — generate content, generate images, compose
-        background_tasks.add_task(
-            _process_full_auto_format_b_async,
-            job_id,
-            request.niche or "business",
-            request.category or "power_moves",
-        )
+        # Everything happens in background
+        for job_id, _ in jobs_created:
+            background_tasks.add_task(
+                _process_full_auto_format_b_async,
+                job_id,
+                request.niche or "business",
+                request.category or "power_moves",
+            )
 
+        first_id, first_dict = jobs_created[0]
         return {
             "status": "created",
-            "job_id": job_id,
-            "message": "Format B job created — generating content in background",
-            "job": job_dict,
+            "job_id": first_id,
+            "message": f"{content_count} Format B job(s) created — generating in background",
+            "job": first_dict,
         }
 
     elif request.mode == "semi_auto":
@@ -257,37 +260,40 @@ async def generate_format_b_reel(
         if request.image_paths:
             polished_data["uploaded_image_paths"] = request.image_paths
 
-    # Create job via JobManager (same as Format A reels)
+    # Create job(s) via JobManager — N separate jobs when content_count > 1
+    content_count = max(1, min(3, request.content_count))
     manager = JobManager(db)
     # Clean title for display (single line, title case)
     raw_title = polished_data.get("thumbnail_title", "Format B Reel")
     clean_title = " ".join(raw_title.replace("\n", " ").split()).title()
-    job = manager.create_job(
-        user_id=user_id,
-        title=clean_title,
-        content_lines=polished_data.get("reel_lines", []),
-        brands=request.brands,
-        variant="format_b",
-        platforms=request.platforms,
-        fixed_title=True,
-        created_by="user",
-        music_source=request.music_source,
-        content_format="format_b",
-        format_b_data=polished_data,
-        content_count=request.content_count,
-    )
 
-    job_id = job.job_id
-    job_dict = job.to_dict()
+    jobs_created = []
+    for _ in range(content_count):
+        job = manager.create_job(
+            user_id=user_id,
+            title=clean_title,
+            content_lines=polished_data.get("reel_lines", []),
+            brands=request.brands,
+            variant="format_b",
+            platforms=request.platforms,
+            fixed_title=True,
+            created_by="user",
+            music_source=request.music_source,
+            content_format="format_b",
+            format_b_data=polished_data,
+        )
+        jobs_created.append((job.job_id, job.to_dict()))
 
-    # Process in background (same pattern as Format A reels)
-    background_tasks.add_task(_process_format_b_job_async, job_id)
+    # Process each job in background
+    for job_id, _ in jobs_created:
+        background_tasks.add_task(_process_format_b_job_async, job_id)
 
+    first_id, first_dict = jobs_created[0]
     return {
         "status": "created",
-        "job_id": job_id,
-        "message": "Format B job created and queued for processing",
-        "job": job_dict,
+        "job_id": first_id,
+        "message": f"{content_count} Format B job(s) created and queued for processing",
+        "job": first_dict,
     }
 
 
@@ -319,28 +325,18 @@ def _process_full_auto_format_b_async(job_id: str, niche: str, category: str):
             from app.services.discovery.story_polisher import StoryPolisher
 
             polisher = StoryPolisher()
-            job = manager.get_job(job_id)
-            content_count = getattr(job, 'content_count', 1) or 1
 
-            # Generate unique content for each content item
-            polished_items = []
-            for ci in range(content_count):
-                print(f"   🧠 Generating Format B content {ci+1}/{content_count}...", flush=True)
+            print(f"   🧠 Generating Format B content...", flush=True)
+            polished = polisher.generate_content(niche=niche)
+            if not polished:
+                print(f"   ⚠️ Content generation failed, retrying...", flush=True)
                 polished = polisher.generate_content(niche=niche)
-                if polished:
-                    polished_items.append(polished.to_dict())
-                else:
-                    print(f"   ⚠️ Content generation {ci+1} failed, retrying...", flush=True)
-                    polished = polisher.generate_content(niche=niche)
-                    if polished:
-                        polished_items.append(polished.to_dict())
 
-            if not polished_items:
+            if not polished:
                 manager.update_job_status(job_id, "failed", error_message="Failed to generate content")
                 return
 
-            # Use first item as the primary, store all in format_b_data
-            primary = polished_items[0]
+            primary = polished.to_dict()
 
             # Step 2: Update job with real data (title, content, format_b_data)
             job = manager.get_job(job_id)
@@ -350,16 +346,11 @@ def _process_full_auto_format_b_async(job_id: str, niche: str, category: str):
                 clean_title = " ".join(raw_title.replace("\n", " ").split()).title()
                 job.title = clean_title
                 job.content_lines = primary.get("reel_lines", [])
-                # Store all content items when multi-content
-                # NOTE: Build a NEW dict to avoid circular reference (primary IS polished_items[0])
-                if content_count > 1:
-                    job.format_b_data = {**primary, "content_items": polished_items}
-                else:
-                    job.format_b_data = primary
+                job.format_b_data = primary
                 job.fixed_title = True
                 db.commit()
 
-            print(f"   ✓ Generated {len(polished_items)} unique Format B content items", flush=True)
+            print(f"   ✓ Generated Format B content", flush=True)
 
             # Step 3: Process (generate images via DeAPI, compose video, upload)
             processor = JobProcessor(db)

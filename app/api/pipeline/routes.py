@@ -87,7 +87,6 @@ def _serialize_pipeline_item(job: GenerationJob) -> dict:
         "pipeline_batch_id": job.pipeline_batch_id,
         "quality_score": job.quality_score,
         "created_by": job.created_by or "user",
-        "content_count": getattr(job, 'content_count', 1) or 1,
         "created_at": job.created_at.isoformat() if job.created_at else None,
         "status": job.status,
         "lifecycle": _compute_lifecycle(job),

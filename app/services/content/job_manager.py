@@ -52,12 +52,7 @@ class JobManager:
         format_b_data: Optional[dict] = None,
         content_count: int = 1,
     ) -> GenerationJob:
-        """Create a new generation job.
-
-        Args:
-            content_count: Number of content items per brand (1-3). When >1,
-                brand_outputs values are arrays of pending dicts.
-        """
+        """Create a new generation job (always 1 content item per job)."""
         job_id = generate_job_id() if created_by != "toby" else generate_toby_job_id()
 
         # Ensure unique job_id
@@ -68,21 +63,10 @@ class JobManager:
         if platforms is None:
             platforms = list(LEGACY_DEFAULT_PLATFORMS)
 
-        # Clamp content_count: threads allows up to 10, others 1-3
-        max_count = 10 if variant == "threads" else 3
-        content_count = max(1, min(max_count, content_count))
+        # Always 1 content item per job (N jobs created at the route layer)
+        content_count = 1
 
-        # Initialize brand_outputs: array for multi-content, dict for single
-        if content_count > 1:
-            brand_outputs = {
-                brand: [
-                    {"status": "pending", "content_index": i}
-                    for i in range(content_count)
-                ]
-                for brand in brands
-            }
-        else:
-            brand_outputs = {brand: {"status": "pending"} for brand in brands}
+        brand_outputs = {brand: {"status": "pending"} for brand in brands}
 
         job = GenerationJob(
             job_id=job_id,
@@ -177,21 +161,13 @@ class JobManager:
         job_id: str,
         brand: str,
         output_data: Dict[str, Any],
-        content_index: Optional[int] = None,
     ) -> Optional[GenerationJob]:
-        """Update output data for a specific brand.
-
-        Args:
-            content_index: For multi-content jobs (content_count > 1), the index
-                of the content item to update within the brand's array. When None
-                and brand_outputs[brand] is a list, updates ALL items in the array.
-                For single-content jobs (dict), this parameter is ignored.
-        """
+        """Update output data for a specific brand (single dict per brand)."""
         import sys
         from sqlalchemy.orm.attributes import flag_modified
 
         print(f"\n📝 update_brand_output called:", flush=True)
-        print(f"   job_id: {job_id}, brand: {brand}, content_index: {content_index}", flush=True)
+        print(f"   job_id: {job_id}, brand: {brand}", flush=True)
         print(f"   output_data: {output_data}", flush=True)
         sys.stdout.flush()
 
@@ -205,20 +181,11 @@ class JobManager:
         existing = brand_outputs.get(brand, {})
 
         if isinstance(existing, list):
-            # Multi-content: brand_outputs[brand] is an array of dicts
-            if content_index is not None:
-                # Update a specific content item
-                if 0 <= content_index < len(existing):
-                    existing[content_index] = {**existing[content_index], **output_data}
-                else:
-                    print(f"   ⚠️ content_index {content_index} out of range (len={len(existing)})", flush=True)
-            else:
-                # No index specified — apply update to ALL items (e.g. status changes)
-                for item in existing:
-                    item.update(output_data)
+            # Legacy multi-content fallback — update first item
+            if existing:
+                existing[0] = {**existing[0], **output_data}
             brand_outputs[brand] = existing
         else:
-            # Single-content: brand_outputs[brand] is a dict (legacy / content_count=1)
             brand_outputs[brand] = {**existing, **output_data}
 
         job.brand_outputs = brand_outputs

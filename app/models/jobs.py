@@ -88,17 +88,14 @@ class GenerationJob(Base):
         return (getattr(self, 'content_count', 1) or 1) > 1
 
     def get_brand_output(self, brand: str, content_index: int = 0) -> Dict[str, Any]:
-        """Get output for a specific brand and content index.
+        """Get output for a specific brand.
 
-        For single-content jobs (content_count=1), content_index is ignored
-        and the dict is returned as-is. For multi-content jobs, returns the
-        item at the given index from the array.
+        Returns the dict for the brand. Handles legacy array format gracefully.
         """
         data = (self.brand_outputs or {}).get(brand, {})
         if isinstance(data, list):
-            return data[content_index] if content_index < len(data) else {}
-        # Legacy single-content format
-        return data if content_index == 0 else {}
+            return data[0] if data else {}
+        return data
 
     def get_brand_outputs_list(self, brand: str) -> List[Dict[str, Any]]:
         """Get all outputs for a brand as a list (always returns a list)."""
