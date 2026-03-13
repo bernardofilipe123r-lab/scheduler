@@ -191,21 +191,54 @@ def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
     # Pipeline: count pending/approved GenerationJobs as "virtually filling" slots.
     # These items haven't been scheduled yet but DO represent content that will fill
     # slots once approved. Without this, Toby would keep generating duplicates.
+    # CRITICAL: Count per-brand to avoid one brand's pipeline items
+    # masking another brand's empty slots (2026-03-13 fix).
     from app.models.jobs import GenerationJob
-    pipeline_pending_count = (
-        db.query(GenerationJob)
+    pipeline_jobs = (
+        db.query(GenerationJob.brands)
         .filter(
             GenerationJob.user_id == user_id,
             GenerationJob.pipeline_status.in_(["pending", "approved"]),
         )
-        .count()
+        .all()
     )
+    # Build per-brand pipeline count from the JSON brands array
+    pipeline_per_brand: dict[str, int] = {}
+    for (job_brands,) in pipeline_jobs:
+        if isinstance(job_brands, list):
+            for bid in job_brands:
+                pipeline_per_brand[bid] = pipeline_per_brand.get(bid, 0) + 1
+    pipeline_pending_count = sum(pipeline_per_brand.values())
 
     # Effective filled = actually scheduled + pending in pipeline
     effective_filled = filled + pipeline_pending_count
     empty = max(0, total - effective_filled)
 
-    # Determine health
+    # Per-brand health: a brand's pipeline items only count for that brand's slots
+    any_brand_has_empty = False
+    for brand in brands:
+        brand_slots = [s for s in all_slots if s["brand_id"] == brand.id]
+        brand_filled_count = sum(1 for s in brand_slots if s["filled"])
+        brand_pipeline = pipeline_per_brand.get(brand.id, 0)
+        brand_total = len(brand_slots)
+        brand_effective = brand_filled_count + brand_pipeline
+        if brand_effective < brand_total:
+            any_brand_has_empty = True
+            break
+
+    # Determine health — use per-brand awareness
+    if any_brand_has_empty:
+        # Recalculate empty using per-brand pipeline counts
+        total_effective_filled = 0
+        for brand in brands:
+            brand_slots = [s for s in all_slots if s["brand_id"] == brand.id]
+            brand_filled_count = sum(1 for s in brand_slots if s["filled"])
+            brand_pipeline = pipeline_per_brand.get(brand.id, 0)
+            brand_total = len(brand_slots)
+            total_effective_filled += min(brand_total, brand_filled_count + brand_pipeline)
+        effective_filled = total_effective_filled
+        empty = max(0, total - effective_filled)
+
     if empty == 0:
         health = "healthy"
     elif empty <= 3:
