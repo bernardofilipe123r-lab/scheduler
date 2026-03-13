@@ -47,6 +47,7 @@ class DesignUpdate(BaseModel):
     reel_text_font_bold: Optional[bool] = None
     reel_text_color: Optional[str] = Field(None, max_length=20)
     reel_music_enabled: Optional[bool] = None
+    image_source_mode: Optional[str] = Field(None, pattern="^(ai|web)$")
 
     # Thumbnail settings
     thumbnail_title_color: Optional[str] = Field(None, max_length=20)
