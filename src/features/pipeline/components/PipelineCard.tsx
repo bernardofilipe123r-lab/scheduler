@@ -109,8 +109,8 @@ export function PipelineCard({ item, onApprove, onReject, onEdit, onDelete, onOp
 
         {/* Content preview */}
         <div
-          className="aspect-[4/5] overflow-hidden cursor-pointer"
-          onClick={() => onOpenReview(item)}
+          className={clsx('aspect-[4/5] overflow-hidden', !isGenerating && 'cursor-pointer')}
+          onClick={() => !isGenerating && onOpenReview(item)}
         >
           {isGenerating ? (
             <div className="w-full h-full bg-gray-50 flex flex-col items-center justify-center">
@@ -124,7 +124,7 @@ export function PipelineCard({ item, onApprove, onReject, onEdit, onDelete, onOp
       </div>
 
       {/* Card body */}
-      <div className="p-3.5 space-y-2.5 cursor-pointer" onClick={() => onOpenReview(item)}>
+      <div className={clsx('p-3.5 space-y-2.5', !isGenerating && 'cursor-pointer')} onClick={() => !isGenerating && onOpenReview(item)}>
         {/* Type dot + label + quality score + count */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
