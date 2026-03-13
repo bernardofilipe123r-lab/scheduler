@@ -63,7 +63,7 @@ export async function get<T>(endpoint: string, options?: RequestOptions): Promis
   const auth = await authHeaders()
   const response = await fetchWithTimeout(`${BASE_URL}${endpoint}`, {
     headers: { ...auth, ...options?.headers },
-  })
+  }, options?.timeout)
   return handleResponse<T>(response)
 }
 
@@ -93,7 +93,7 @@ export async function put<T>(endpoint: string, data?: unknown, options?: Request
       ...options?.headers,
     },
     body: isFormData ? data : data ? JSON.stringify(data) : undefined,
-  })
+  }, options?.timeout)
   return handleResponse<T>(response)
 }
 
@@ -102,7 +102,7 @@ export async function del<T>(endpoint: string, options?: RequestOptions): Promis
   const response = await fetchWithTimeout(`${BASE_URL}${endpoint}`, {
     method: 'DELETE',
     headers: { ...auth, ...options?.headers },
-  })
+  }, options?.timeout)
   return handleResponse<T>(response)
 }
 
@@ -117,7 +117,7 @@ export async function patch<T>(endpoint: string, data?: unknown, options?: Reque
       ...options?.headers,
     },
     body: isFormData ? data : data ? JSON.stringify(data) : undefined,
-  })
+  }, options?.timeout)
   return handleResponse<T>(response)
 }
 

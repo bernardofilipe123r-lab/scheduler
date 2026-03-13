@@ -2,8 +2,8 @@
  * React Query hooks for brand connections
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { 
-  fetchBrandConnections, 
+import {
+  fetchBrandConnections,
   fetchBrandsList,
   disconnectYouTube,
   type BrandConnectionsResponse,
@@ -41,7 +41,7 @@ export function useBrandsList() {
  */
 export function useDisconnectYouTube() {
   const queryClient = useQueryClient()
-  
+
   return useMutation({
     mutationFn: (brand: BrandName) => disconnectYouTube(brand),
     onSuccess: () => {

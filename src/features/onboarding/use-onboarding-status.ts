@@ -26,7 +26,7 @@ export function useOnboardingStatus() {
   // Check if at least one platform is connected across all brands
   const hasConnection = Boolean(
     connections?.brands?.some(
-      (b) => b.instagram.connected || b.youtube.connected
+      (b) => b.instagram.connected || b.facebook.connected || b.youtube.connected || b.threads.connected || b.tiktok.connected || b.bluesky.connected
     )
   )
 
