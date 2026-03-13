@@ -764,14 +764,14 @@ function Calendar() {
 
         {/* Calendar Cells */}
         <div className="grid grid-cols-7 gap-2">
-          {(view === 'month' 
-            ? eachDayOfInterval({ 
-                start: startOfWeek(startOfMonth(currentMonth)), 
-                end: endOfWeek(endOfMonth(currentMonth)) 
+          {(view === 'month'
+            ? eachDayOfInterval({
+                start: startOfWeek(startOfMonth(currentMonth)),
+                end: endOfWeek(endOfMonth(currentMonth))
               })
-            : eachDayOfInterval({ 
-                start: startOfWeek(currentMonth), 
-                end: addDays(startOfWeek(currentMonth), 6) 
+            : eachDayOfInterval({
+                start: startOfWeek(currentMonth),
+                end: addDays(startOfWeek(currentMonth), 6)
               })
           ).map(day => {
             const dayContent = getContentForDate(day)

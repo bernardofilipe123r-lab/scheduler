@@ -165,26 +165,26 @@ export function PipelineCard({ item, onApprove, onReject, onEdit, onDelete, onOp
           <>
             <button
               onClick={() => autoSchedule ? onApprove(item.job_id) : handleDownload()}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-emerald-500 hover:bg-emerald-50 transition-all rounded-bl-2xl"
+              title={autoSchedule ? 'Accept' : 'Download'}
+              className="flex-1 flex items-center justify-center py-2.5 text-emerald-500 hover:bg-emerald-50 transition-all rounded-bl-2xl"
             >
-              {autoSchedule ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Download className="w-3.5 h-3.5" />}
-              {autoSchedule ? 'Accept' : 'Download'}
+              {autoSchedule ? <CheckCircle2 className="w-4 h-4" /> : <Download className="w-4 h-4" />}
             </button>
             <div className="w-px bg-gray-50" />
             <button
               onClick={() => onReject(item.job_id)}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-red-400 hover:bg-red-50 transition-all"
+              title="Decline"
+              className="flex-1 flex items-center justify-center py-2.5 text-red-400 hover:bg-red-50 transition-all"
             >
-              <X className="w-3.5 h-3.5" />
-              Decline
+              <X className="w-4 h-4" />
             </button>
             <div className="w-px bg-gray-50" />
             <button
               onClick={() => onEdit(item)}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-gray-400 hover:bg-gray-50 transition-all rounded-br-2xl"
+              title="Edit"
+              className="flex-1 flex items-center justify-center py-2.5 text-gray-400 hover:bg-gray-50 transition-all rounded-br-2xl"
             >
-              <Pencil className="w-3.5 h-3.5" />
-              Edit
+              <Pencil className="w-4 h-4" />
             </button>
           </>
         )}
@@ -195,10 +195,10 @@ export function PipelineCard({ item, onApprove, onReject, onEdit, onDelete, onOp
               <>
                 <button
                   onClick={() => onOpenReview(item)}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-[#00435c] hover:bg-[#f0f7fa] transition-all rounded-bl-2xl"
+                  title="View"
+                  className="flex-1 flex items-center justify-center py-2.5 text-[#00435c] hover:bg-[#f0f7fa] transition-all rounded-bl-2xl"
                 >
-                  <Eye className="w-3.5 h-3.5" />
-                  View
+                  <Eye className="w-4 h-4" />
                 </button>
                 {onDelete && <div className="w-px bg-gray-50" />}
               </>
@@ -206,10 +206,10 @@ export function PipelineCard({ item, onApprove, onReject, onEdit, onDelete, onOp
             {onDelete && (
               <button
                 onClick={() => onDelete(item.job_id)}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-gray-400 hover:bg-red-50 hover:text-red-400 transition-all ${isGenerating ? 'rounded-bl-2xl ' : ''}rounded-br-2xl`}
+                title="Delete"
+                className={`flex-1 flex items-center justify-center py-2.5 text-gray-400 hover:bg-red-50 hover:text-red-400 transition-all ${isGenerating ? 'rounded-bl-2xl ' : ''}rounded-br-2xl`}
               >
-                <Trash2 className="w-3.5 h-3.5" />
-                Delete
+                <Trash2 className="w-4 h-4" />
               </button>
             )}
           </>
