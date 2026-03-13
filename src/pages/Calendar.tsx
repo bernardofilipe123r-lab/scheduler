@@ -380,10 +380,68 @@ function Calendar() {
 
   if (postsLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin text-emerald-600 mx-auto mb-4" />
-          <p className="text-gray-700">Loading calendar...</p>
+      <div className="min-h-screen bg-gray-50">
+        {/* Header skeleton */}
+        <div className="border-b border-gray-200 bg-white/80 backdrop-blur-lg sticky top-0 z-10">
+          <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="h-8 w-8 rounded-lg bg-gray-200 animate-pulse" />
+                <div className="space-y-1.5">
+                  <div className="h-6 w-24 rounded bg-gray-200 animate-pulse" />
+                  <div className="h-3.5 w-40 rounded bg-gray-200 animate-pulse" />
+                </div>
+              </div>
+              <div className="h-9 w-32 rounded-lg bg-gray-200 animate-pulse" />
+            </div>
+          </div>
+        </div>
+
+        {/* Month nav + view toggle skeleton */}
+        <div className="border-b border-gray-200 bg-gray-50">
+          <div className="max-w-7xl mx-auto px-4 py-3 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="h-9 w-9 rounded-lg bg-gray-200 animate-pulse" />
+                <div className="h-6 w-36 rounded bg-gray-200 animate-pulse mx-4" />
+                <div className="h-9 w-9 rounded-lg bg-gray-200 animate-pulse" />
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="h-9 w-20 rounded-lg bg-gray-200 animate-pulse" />
+                <div className="h-9 w-20 rounded-lg bg-gray-200 animate-pulse" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Filter bar skeleton */}
+        <div className="border-b border-gray-200 bg-white">
+          <div className="max-w-7xl mx-auto px-4 py-2 sm:px-6 lg:px-8">
+            <div className="h-8 w-24 rounded-lg bg-gray-200 animate-pulse" />
+          </div>
+        </div>
+
+        {/* Calendar grid skeleton */}
+        <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
+          {/* Day-of-week headers */}
+          <div className="grid grid-cols-7 gap-px mb-px">
+            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
+              <div key={d} className="bg-white py-2 flex justify-center">
+                <div className="h-4 w-8 rounded bg-gray-200 animate-pulse" />
+              </div>
+            ))}
+          </div>
+          {/* 5 rows × 7 cells */}
+          <div className="grid grid-cols-7 gap-px bg-gray-200">
+            {Array.from({ length: 35 }).map((_, i) => (
+              <div key={i} className="bg-white min-h-[100px] p-2 space-y-1.5">
+                <div className="h-4 w-6 rounded bg-gray-100 animate-pulse" />
+                {i % 5 === 0 && <div className="h-6 w-full rounded bg-gray-100 animate-pulse" />}
+                {i % 7 === 2 && <div className="h-6 w-4/5 rounded bg-gray-100 animate-pulse" />}
+                {i % 9 === 1 && <div className="h-6 w-3/5 rounded bg-gray-100 animate-pulse" />}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     )
