@@ -37,18 +37,36 @@ export function usePipelineStats() {
   })
 }
 
+function findItemLifecycle(queryClient: ReturnType<typeof useQueryClient>, jobId: string): string | undefined {
+  const cached = queryClient.getQueriesData<PipelineResponse>({ queryKey: [...pipelineKeys.all, 'list'] })
+  for (const [, data] of cached) {
+    const item = data?.items?.find(i => i.job_id === jobId)
+    if (item) return item.lifecycle
+  }
+  return undefined
+}
+
 export function useApprovePipelineItem() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ jobId, caption }: { jobId: string; caption?: string }) =>
       post(`/api/pipeline/${jobId}/approve`, { caption }),
     onMutate: async ({ jobId }) => {
-      // Optimistically remove item from all cached pipeline lists
       await queryClient.cancelQueries({ queryKey: pipelineKeys.all })
+      const lifecycle = findItemLifecycle(queryClient, jobId)
+      // Remove from all cached lists
       queryClient.setQueriesData<PipelineResponse>(
         { queryKey: pipelineKeys.all },
         (old) => old && Array.isArray(old.items) ? { ...old, items: old.items.filter(i => i.job_id !== jobId) } : old,
       )
+      // Optimistically update stats immediately
+      queryClient.setQueryData<PipelineStats>(pipelineKeys.stats(), (old) => {
+        if (!old) return old
+        const next = { ...old }
+        if (lifecycle === 'pending_review') next.pending_review = Math.max(0, next.pending_review - 1)
+        next.scheduled = (next.scheduled ?? 0) + 1
+        return next
+      })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: pipelineKeys.all })
@@ -69,10 +87,18 @@ export function useRejectPipelineItem() {
       post(`/api/pipeline/${jobId}/reject`, { reason }),
     onMutate: async ({ jobId }) => {
       await queryClient.cancelQueries({ queryKey: pipelineKeys.all })
+      const lifecycle = findItemLifecycle(queryClient, jobId)
       queryClient.setQueriesData<PipelineResponse>(
         { queryKey: pipelineKeys.all },
         (old) => old && Array.isArray(old.items) ? { ...old, items: old.items.filter(i => i.job_id !== jobId) } : old,
       )
+      queryClient.setQueryData<PipelineStats>(pipelineKeys.stats(), (old) => {
+        if (!old) return old
+        const next = { ...old }
+        if (lifecycle === 'pending_review') next.pending_review = Math.max(0, next.pending_review - 1)
+        next.rejected = (next.rejected ?? 0) + 1
+        return next
+      })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: pipelineKeys.all })
@@ -91,11 +117,24 @@ export function useBulkApprovePipeline() {
   return useMutation({
     mutationFn: (jobIds: string[]) =>
       post('/api/pipeline/bulk-approve', { job_ids: jobIds }),
+    onMutate: async (jobIds: string[]) => {
+      await queryClient.cancelQueries({ queryKey: pipelineKeys.all })
+      const idSet = new Set(jobIds)
+      queryClient.setQueriesData<PipelineResponse>(
+        { queryKey: pipelineKeys.all },
+        (old) => old && Array.isArray(old.items) ? { ...old, items: old.items.filter(i => !idSet.has(i.job_id)) } : old,
+      )
+      queryClient.setQueryData<PipelineStats>(pipelineKeys.stats(), (old) => {
+        if (!old) return old
+        return { ...old, pending_review: Math.max(0, old.pending_review - jobIds.length), scheduled: (old.scheduled ?? 0) + jobIds.length }
+      })
+    },
     onSuccess: (_: unknown, jobIds: string[]) => {
       queryClient.invalidateQueries({ queryKey: pipelineKeys.all })
       toast.success(`${jobIds.length} items approved and scheduled!`)
     },
     onError: () => {
+      queryClient.invalidateQueries({ queryKey: pipelineKeys.all })
       toast.error('Bulk approve failed — please try again')
     },
   })
@@ -106,9 +145,24 @@ export function useBulkRejectPipeline() {
   return useMutation({
     mutationFn: (jobIds: string[]) =>
       post('/api/pipeline/bulk-reject', { job_ids: jobIds }),
+    onMutate: async (jobIds: string[]) => {
+      await queryClient.cancelQueries({ queryKey: pipelineKeys.all })
+      const idSet = new Set(jobIds)
+      queryClient.setQueriesData<PipelineResponse>(
+        { queryKey: pipelineKeys.all },
+        (old) => old && Array.isArray(old.items) ? { ...old, items: old.items.filter(i => !idSet.has(i.job_id)) } : old,
+      )
+      queryClient.setQueryData<PipelineStats>(pipelineKeys.stats(), (old) => {
+        if (!old) return old
+        return { ...old, pending_review: Math.max(0, old.pending_review - jobIds.length), rejected: (old.rejected ?? 0) + jobIds.length }
+      })
+    },
     onSuccess: (_: unknown, jobIds: string[]) => {
       queryClient.invalidateQueries({ queryKey: pipelineKeys.all })
       toast(`${jobIds.length} items rejected`, { icon: '🗑️' })
+    },
+    onError: () => {
+      queryClient.invalidateQueries({ queryKey: pipelineKeys.all })
     },
   })
 }
@@ -144,10 +198,20 @@ export function useDeletePipelineItem() {
       del(`/api/pipeline/${jobId}`),
     onMutate: async (jobId) => {
       await queryClient.cancelQueries({ queryKey: pipelineKeys.all })
+      const lifecycle = findItemLifecycle(queryClient, jobId)
       queryClient.setQueriesData<PipelineResponse>(
         { queryKey: pipelineKeys.all },
         (old) => old && Array.isArray(old.items) ? { ...old, items: old.items.filter(i => i.job_id !== jobId) } : old,
       )
+      queryClient.setQueryData<PipelineStats>(pipelineKeys.stats(), (old) => {
+        if (!old) return old
+        const next = { ...old }
+        if (lifecycle === 'pending_review') next.pending_review = Math.max(0, next.pending_review - 1)
+        else if (lifecycle === 'scheduled') next.scheduled = Math.max(0, (next.scheduled ?? 1) - 1)
+        else if (lifecycle === 'published') next.published = Math.max(0, (next.published ?? 1) - 1)
+        else if (lifecycle === 'rejected') next.rejected = Math.max(0, (next.rejected ?? 1) - 1)
+        return next
+      })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: pipelineKeys.all })
