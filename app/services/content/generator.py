@@ -210,7 +210,13 @@ class ContentGeneratorV2:
             # Build appropriate prompt
             if attempt == 1:
                 # First attempt: use tracker DB history for avoidance
-                tracker_titles = self.content_tracker.get_recent_titles("reel", limit=10)
+                # Brand-scoped avoidance: get this brand's + cross-brand titles
+                _brand = getattr(self, '_current_brand', None)
+                if _brand:
+                    # Get ALL recent titles (cross-brand) so this brand doesn't repeat others
+                    tracker_titles = self.content_tracker.get_recent_titles("reel", limit=20)
+                else:
+                    tracker_titles = self.content_tracker.get_recent_titles("reel", limit=10)
                 tracker_topics = self.content_tracker.get_recent_topic_buckets("reel", limit=5)
                 # Merge with in-memory for maximum coverage
                 all_titles = list(dict.fromkeys(tracker_titles + self._recent_titles))
@@ -853,7 +859,7 @@ Generate now:"""
         # Return whatever was successfully generated (no fallback padding)
         return processed[:count]
 
-    def generate_post_titles_batch(self, count: int, topic_hint: str = None, ctx: PromptContext = None) -> List[Dict]:
+    def generate_post_titles_batch(self, count: int, topic_hint: str = None, ctx: PromptContext = None, brand_avoidance_context: str = None) -> List[Dict]:
         """
         Generate N completely unique posts with a 3-attempt quality loop.
         Each post has a different topic, title, caption, and image prompt.
@@ -863,6 +869,7 @@ Generate now:"""
             count: Number of unique posts to generate
             topic_hint: Optional hint to guide topic selection
             ctx: Optional PromptContext for niche-aware prompts
+            brand_avoidance_context: Optional brand-scoped + cross-brand title avoidance block
 
         Returns:
             List of dicts, each with 'title', 'caption', 'image_prompt', 'is_fallback'
@@ -873,7 +880,8 @@ Generate now:"""
         if not self.api_key or count <= 0:
             raise ContentGenerationError("DEEPSEEK_API_KEY not configured or invalid count — cannot generate posts")
 
-        history_context = self.content_tracker.build_history_context("post")
+        # Use brand-scoped avoidance if provided, otherwise fall back to global history
+        history_context = brand_avoidance_context or self.content_tracker.build_history_context("post")
 
         best_results = None
         best_avg_score = 0.0

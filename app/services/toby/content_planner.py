@@ -114,6 +114,9 @@ def create_plans_for_empty_slots(
     topics_picked_this_batch: dict[str, list[str]] = {}
     # Fix 3: similarity context = scheduled + already-planned, per brand
     brand_similarity_ctx: dict[str, list[dict]] = {}
+    # Fix 4: CROSS-BRAND similarity — strategies picked by OTHER brands in this batch
+    # Prevents identical topic+hook combos across brands in the same tick
+    cross_brand_batch_ctx: list[dict] = []
 
     plans = []
     for slot in interleaved:
@@ -149,6 +152,18 @@ def create_plans_for_empty_slots(
         remaining = [t for t in available if t not in batch_picked]
         topics_for_slot = remaining if remaining else available
 
+        # Fix 4: also exclude topics picked by OTHER brands in this batch
+        cross_brand_topics = [c["topic_bucket"] for c in cross_brand_batch_ctx
+                              if c.get("brand_id") != brand_id]
+        if cross_brand_topics:
+            remaining_cross = [t for t in topics_for_slot if t not in cross_brand_topics]
+            topics_for_slot = remaining_cross if remaining_cross else topics_for_slot
+
+        # Fix 3+4: merge per-brand + cross-brand similarity for the retry loop
+        combined_similarity_ctx = similarity_ctx + [
+            c for c in cross_brand_batch_ctx if c.get("brand_id") != brand_id
+        ]
+
         # Fix 3: similarity-aware retry loop
         strategy = _pick_diverse_strategy(
             db=db,
@@ -158,7 +173,7 @@ def create_plans_for_empty_slots(
             state=state,
             topics_for_slot=topics_for_slot,
             all_topics=available,
-            similarity_ctx=similarity_ctx,
+            similarity_ctx=combined_similarity_ctx,
             content_dna_id=content_dna_id,
         )
 
@@ -186,11 +201,17 @@ def create_plans_for_empty_slots(
         # Fix 1: mark topic as used in this batch
         batch_picked.append(strategy.topic_bucket)
         # Fix 3: add this plan to similarity context so future slots account for it
-        similarity_ctx.append({
+        strategy_record = {
             "topic_bucket": strategy.topic_bucket,
             "hook_strategy": strategy.hook_strategy,
             "title_format": strategy.title_format,
             "personality": strategy.personality,
+        }
+        similarity_ctx.append(strategy_record)
+        # Fix 4: add to cross-brand context so other brands avoid the same combo
+        cross_brand_batch_ctx.append({
+            **strategy_record,
+            "brand_id": brand_id,
         })
 
     return plans

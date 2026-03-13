@@ -192,12 +192,16 @@ def generate_carousel_content(
         db=db,
     )
 
-    # 3. Generate with full context
+    # 3. Build brand-scoped + cross-brand avoidance context
+    avoidance = _get_brand_avoidance_context(brand_id, "post")
+
+    # 4. Generate with full context
     generator = ContentGeneratorV2()
     results = generator.generate_post_titles_batch(
         count=1,
         topic_hint=strategy["topic_bucket"],
         ctx=ctx,
+        brand_avoidance_context=avoidance,
     )
     if not results:
         from app.services.content.generator import ContentGenerationError
@@ -261,6 +265,20 @@ def generate_format_b_content(
 # ═══════════════════════════════════════════════════════════════
 # HELPERS
 # ═══════════════════════════════════════════════════════════════
+
+def _get_brand_avoidance_context(brand_id: str, content_type: str) -> str:
+    """Get brand-specific + cross-brand title avoidance context for prompt injection."""
+    try:
+        from app.services.content.tracker import ContentTracker
+        tracker = ContentTracker()
+        return tracker.get_brand_avoidance_prompt(
+            brand=brand_id,
+            content_type=content_type,
+            cross_brand_days=7,
+        )
+    except Exception:
+        return ""
+
 
 def _get_recent_format_b_titles(brand_id: str, limit: int = 10, db=None) -> List[str]:
     """Get recent Format B titles for a brand to avoid repetition."""
