@@ -1,4 +1,6 @@
+import React from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { get, post, patch, del } from '@/shared/api/client'
 import toast from 'react-hot-toast'
 import { jobKeys } from '@/features/jobs/hooks/use-jobs'
@@ -48,6 +50,7 @@ function findItemLifecycle(queryClient: ReturnType<typeof useQueryClient>, jobId
 
 export function useApprovePipelineItem() {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   return useMutation({
     mutationFn: ({ jobId, caption }: { jobId: string; caption?: string }) =>
       post(`/api/pipeline/${jobId}/approve`, { caption }),
@@ -68,10 +71,40 @@ export function useApprovePipelineItem() {
         return next
       })
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: pipelineKeys.all })
       queryClient.invalidateQueries({ queryKey: jobKeys.all })
-      toast.success('Content approved and scheduled!')
+      const first = data?.scheduled?.[0]
+      if (first?.scheduled_time && first?.schedule_id) {
+        const d = new Date(first.scheduled_time)
+        const formatted = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+          + ' at '
+          + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+        const scheduleId = first.schedule_id
+        toast(
+          (t) => React.createElement(
+            'div',
+            { style: { display: 'flex', flexDirection: 'column' as const, gap: '4px' } },
+            React.createElement(
+              'div',
+              { style: { display: 'flex', alignItems: 'center', gap: '6px' } },
+              React.createElement('span', { style: { fontSize: '20px' } }, '📅'),
+              React.createElement('span', { style: { fontWeight: 600, fontSize: '14px', color: '#111827' } }, 'Approved & scheduled!'),
+            ),
+            React.createElement(
+              'button',
+              {
+                style: { fontSize: '12px', color: '#16a34a', background: 'none', border: 'none', padding: '2px 0 0 26px', cursor: 'pointer', textAlign: 'left' as const, textDecoration: 'underline' },
+                onClick: () => { navigate(`/calendar?open_schedule=${scheduleId}`); toast.dismiss(t.id) },
+              },
+              `${formatted} — View in Calendar →`,
+            ),
+          ),
+          { duration: 6000, style: { background: '#f0fdf4', border: '1px solid #86efac' } }
+        )
+      } else {
+        toast.success('Content approved and scheduled!')
+      }
     },
     onError: () => {
       queryClient.invalidateQueries({ queryKey: pipelineKeys.all })

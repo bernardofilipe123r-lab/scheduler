@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import {
   ChevronLeft,
   ChevronRight,
@@ -37,7 +37,7 @@ type StatusFilter = 'all' | 'scheduled' | 'published' | 'partial' | 'failed'
 type PlatformFilter = string | null
 
 function Calendar() {
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const { user: currentUser } = useAuth()
   const adminUserId = currentUser?.isSuperAdmin ? searchParams.get('user_id') : null
@@ -105,6 +105,22 @@ function Calendar() {
   const [contentType, setContentType] = useState<'reel' | 'carousel' | 'text' | null>(null)
   const [scheduledTime, setScheduledTime] = useState<string>('')
   const [mediaDimensionWarning, setMediaDimensionWarning] = useState<string | null>(null)
+
+  // Auto-open a post modal when ?open_schedule=<id> is in the URL
+  const openScheduleParam = searchParams.get('open_schedule')
+  const openScheduleHandled = useRef(false)
+  useEffect(() => {
+    if (!openScheduleParam || postsLoading || openScheduleHandled.current) return
+    const post = scheduledPosts.find(p => p.id === openScheduleParam)
+    if (!post) return
+    openScheduleHandled.current = true
+    // Navigate calendar to the month containing the post
+    const postDate = parseISO(post.scheduled_time)
+    setCurrentMonth(startOfMonth(postDate))
+    setSelectedPost(post)
+    // Clean the URL param without re-render loop
+    setSearchParams(prev => { prev.delete('open_schedule'); return prev }, { replace: true })
+  }, [openScheduleParam, postsLoading, scheduledPosts])
 
   // Platform dimension specs
   const PLATFORM_DIMENSIONS: Record<string, { label: string; specs: { w: number; h: number; ratio: string }[] }> = {
