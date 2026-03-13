@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pipeline Redesign — ViralToby</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+      colors: {
+        brand: { 50: '#f0f7fa', 100: '#d9ecf2', 500: '#006d8f', 600: '#00435c', 700: '#002d3f' },
+      }
+    }
+  }
+}
+</script>
+<style>
+  * { -webkit-font-smoothing: antialiased; }
+  .stat-glow { position: relative; }
+  .stat-glow::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    opacity: 0;
+    transition: opacity 0.2s;
+    background: radial-gradient(circle at center, currentColor, transparent 70%);
+  }
+  .stat-glow:hover::after { opacity: 0.04; }
+  .card-enter { animation: cardFadeIn 0.3s ease both; }
+  @keyframes cardFadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .tab-active {
+    color: #00435c;
+    background: white;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .card-hover { transition: all 0.2s ease; }
+  .card-hover:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.08); }
+  .action-btn { transition: all 0.15s ease; }
+  .action-btn:hover { transform: scale(1.02); }
+  .badge-pulse { animation: softPulse 2s ease-in-out infinite; }
+  @keyframes softPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+  .progress-ring { transition: stroke-dashoffset 0.5s ease; }
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
+  .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+</style>
+</head>
+<body class="bg-gray-50/80 font-sans text-gray-800" style="font-size: 14px;">
+
+<!-- Main Content (no sidebar) -->
+<div class="flex-1 min-w-0 flex flex-col min-h-screen ml-52">
+  <main class="max-w-7xl mx-auto w-full px-6 lg:px-8 py-8 flex-1">
+
+    <!-- ============================================ -->
+    <!-- HEADER — Minimal with inline stat summary    -->
+    <!-- ============================================ -->
+    <div class="flex items-start justify-between mb-8">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-900 tracking-tight">Pipeline</h1>
+        <p class="text-sm text-gray-400 mt-1">Review, schedule, and track your content</p>
+      </div>
+      <!-- Quick action -->
+      <button class="inline-flex items-center gap-2 px-4 py-2.5 bg-brand-600 text-white text-sm font-medium rounded-xl hover:bg-brand-700 transition-colors shadow-sm">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+        Review All
+        <span class="bg-white/20 text-white text-xs font-semibold px-1.5 py-0.5 rounded-md ml-0.5">2</span>
+      </button>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- STATS STRIP — Horizontal, compact, elegant  -->
+    <!-- ============================================ -->
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-1.5 mb-6">
+      <div class="grid grid-cols-6 divide-x divide-gray-100">
+        <!-- Generating -->
+        <div class="stat-glow text-blue-500 flex items-center gap-3 px-5 py-3.5 rounded-xl cursor-default">
+          <div class="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center shrink-0">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-blue-500"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+          </div>
+          <div>
+            <p class="text-2xl font-bold text-gray-900 leading-none">0</p>
+            <p class="text-[11px] text-gray-400 font-medium mt-0.5">Generating</p>
+          </div>
+        </div>
+
+        <!-- Pending Review -->
+        <div class="stat-glow text-amber-500 flex items-center gap-3 px-5 py-3.5 rounded-xl cursor-default bg-amber-50/40">
+          <div class="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-amber-600"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <div>
+            <p class="text-2xl font-bold text-gray-900 leading-none">2</p>
+            <p class="text-[11px] text-amber-600 font-semibold mt-0.5">Pending Review</p>
+          </div>
+        </div>
+
+        <!-- Scheduled -->
+        <div class="stat-glow text-indigo-500 flex items-center gap-3 px-5 py-3.5 rounded-xl cursor-default">
+          <div class="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center shrink-0">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-indigo-500"><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/><path d="m9 16 2 2 4-4"/></svg>
+          </div>
+          <div>
+            <p class="text-2xl font-bold text-gray-900 leading-none">314</p>
+            <p class="text-[11px] text-gray-400 font-medium mt-0.5">Scheduled</p>
+          </div>
+        </div>
+
+        <!-- Published -->
+        <div class="stat-glow text-emerald-500 flex items-center gap-3 px-5 py-3.5 rounded-xl cursor-default">
+          <div class="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center shrink-0">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-emerald-500"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+          </div>
+          <div>
+            <p class="text-2xl font-bold text-gray-900 leading-none">13</p>
+            <p class="text-[11px] text-gray-400 font-medium mt-0.5">Published</p>
+          </div>
+        </div>
+
+        <!-- Rejected -->
+        <div class="stat-glow text-red-500 flex items-center gap-3 px-5 py-3.5 rounded-xl cursor-default">
+          <div class="w-9 h-9 rounded-xl bg-red-50 flex items-center justify-center shrink-0">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-red-400"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>
+          </div>
+          <div>
+            <p class="text-2xl font-bold text-gray-900 leading-none">6</p>
+            <p class="text-[11px] text-gray-400 font-medium mt-0.5">Rejected</p>
+          </div>
+        </div>
+
+        <!-- Approval Rate -->
+        <div class="stat-glow text-brand-500 flex items-center gap-3 px-5 py-3.5 rounded-xl cursor-default">
+          <div class="w-9 h-9 rounded-xl bg-brand-50 flex items-center justify-center shrink-0">
+            <!-- Mini circular progress -->
+            <svg width="22" height="22" viewBox="0 0 36 36" class="text-brand-500">
+              <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#e5e7eb" stroke-width="3"/>
+              <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" stroke-width="3" stroke-dasharray="98, 100" stroke-linecap="round" class="progress-ring"/>
+            </svg>
+          </div>
+          <div>
+            <p class="text-2xl font-bold text-gray-900 leading-none">98<span class="text-base text-gray-400 font-medium">%</span></p>
+            <p class="text-[11px] text-gray-400 font-medium mt-0.5">Approval</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- TOOLBAR — Tabs + Filters unified             -->
+    <!-- ============================================ -->
+    <div class="flex items-center justify-between gap-4 mb-6">
+      <!-- Tab Pills -->
+      <div class="flex bg-gray-100/80 rounded-xl p-1 gap-0.5">
+        <button class="px-3.5 py-2 text-xs font-medium rounded-lg transition-all text-gray-400 hover:text-gray-600">Generating</button>
+        <button class="px-3.5 py-2 text-xs font-medium rounded-lg transition-all tab-active">
+          Pending
+          <span class="ml-1 bg-amber-100 text-amber-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">2</span>
+        </button>
+        <button class="px-3.5 py-2 text-xs font-medium rounded-lg transition-all text-gray-400 hover:text-gray-600">Scheduled</button>
+        <button class="px-3.5 py-2 text-xs font-medium rounded-lg transition-all text-gray-400 hover:text-gray-600">Published</button>
+        <button class="px-3.5 py-2 text-xs font-medium rounded-lg transition-all text-gray-400 hover:text-gray-600">Rejected</button>
+        <button class="px-3.5 py-2 text-xs font-medium rounded-lg transition-all text-gray-400 hover:text-gray-600">Failed</button>
+        <button class="px-3.5 py-2 text-xs font-medium rounded-lg transition-all text-gray-400 hover:text-gray-600">All</button>
+      </div>
+
+      <!-- Filters -->
+      <div class="flex items-center gap-2">
+        <!-- Search -->
+        <div class="relative">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-300"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <input type="text" placeholder="Search content..." class="text-xs pl-8 pr-3 py-2 w-40 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-none transition-all placeholder:text-gray-300">
+        </div>
+
+        <!-- Brand filter -->
+        <select class="text-xs border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-600 focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-none transition-all cursor-pointer appearance-none pr-7" style="background-image: url('data:image/svg+xml;charset=utf-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%239ca3af%22 stroke-width=%222%22%3E%3Cpolyline points=%226 9 12 15 18 9%22/%3E%3C/svg%3E'); background-position: right 8px center; background-repeat: no-repeat;">
+          <option value="">All Brands</option>
+          <option>Healthy College</option>
+          <option>Holistic College</option>
+          <option>Longevity College</option>
+        </select>
+
+        <!-- Type filter -->
+        <select class="text-xs border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-600 focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-none transition-all cursor-pointer appearance-none pr-7" style="background-image: url('data:image/svg+xml;charset=utf-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%239ca3af%22 stroke-width=%222%22%3E%3Cpolyline points=%226 9 12 15 18 9%22/%3E%3C/svg%3E'); background-position: right 8px center; background-repeat: no-repeat;">
+          <option value="all">All Types</option>
+          <option>Reels</option>
+          <option>Carousels</option>
+          <option>Threads</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- SELECT BAR — Contextual, only on pending     -->
+    <!-- ============================================ -->
+    <div class="flex items-center justify-between bg-white rounded-xl border border-gray-100 px-4 py-2.5 mb-5 shadow-sm">
+      <label class="flex items-center gap-2.5 cursor-pointer select-none group">
+        <input type="checkbox" class="w-4 h-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500 transition-colors">
+        <span class="text-xs font-medium text-gray-500 group-hover:text-gray-700 transition-colors">Select all</span>
+      </label>
+      <div class="flex items-center gap-1.5 opacity-40 pointer-events-none">
+        <button class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors action-btn">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          Approve Selected
+        </button>
+        <button class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-red-50 text-red-500 hover:bg-red-100 transition-colors action-btn">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          Reject Selected
+        </button>
+      </div>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- CONTENT GRID — Cards with refined design     -->
+    <!-- ============================================ -->
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5">
+
+      <!-- ======= CARD 1: Post (Image) ======= -->
+      <div class="card-enter card-hover bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm group" style="animation-delay: 0.05s">
+        <!-- Checkbox + Badge layer -->
+        <div class="relative">
+          <label class="absolute top-3 left-3 z-10">
+            <input type="checkbox" class="w-4 h-4 rounded-md border-gray-300/80 text-brand-600 focus:ring-brand-500 bg-white/80 backdrop-blur-sm shadow-sm">
+          </label>
+          <span class="absolute top-3 right-3 z-10 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-400/90 text-white backdrop-blur-sm shadow-sm">
+            Pending
+          </span>
+
+          <!-- Image Preview -->
+          <div class="aspect-[4/5] bg-gradient-to-br from-gray-100 to-gray-50 overflow-hidden cursor-pointer">
+            <img
+              src="https://kzsbyzroknbradzyjvrc.supabase.co/storage/v1/object/public/media/7c7bdcc7-ad79-4554-8d32-e5ef02608e84/holisticcollege/posts/post_holisticcollege_TOBY-135.jpg"
+              alt="Content preview"
+              class="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
+            >
+          </div>
+        </div>
+
+        <!-- Card Body -->
+        <div class="p-3.5 space-y-2.5">
+          <!-- Type + Score -->
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-1.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
+              <span class="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Post</span>
+            </div>
+            <div class="flex items-center gap-1 bg-amber-50 px-1.5 py-0.5 rounded-md">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" class="text-amber-400"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              <span class="text-[10px] font-bold text-amber-600">90</span>
+            </div>
+          </div>
+
+          <!-- Title -->
+          <p class="text-[13px] font-semibold text-gray-800 line-clamp-2 leading-snug">
+            Study Reveals Your Body's Quietest Signal for Magnesium Deficiency
+          </p>
+
+          <!-- Brand + Time -->
+          <div class="flex items-center justify-between pt-0.5">
+            <span class="text-[10px] font-medium bg-gray-50 text-gray-500 px-2 py-0.5 rounded-md border border-gray-100">
+              holisticcollege
+            </span>
+            <span class="text-[10px] text-gray-300">2:03 PM</span>
+          </div>
+        </div>
+
+        <!-- Actions — Clean, separated -->
+        <div class="flex border-t border-gray-50">
+          <button class="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-emerald-500 hover:bg-emerald-50 transition-all action-btn rounded-bl-2xl">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Accept
+          </button>
+          <div class="w-px bg-gray-50"></div>
+          <button class="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-red-400 hover:bg-red-50 transition-all action-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            Decline
+          </button>
+          <div class="w-px bg-gray-50"></div>
+          <button class="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-gray-400 hover:bg-gray-50 transition-all action-btn rounded-br-2xl">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+            Edit
+          </button>
+        </div>
+      </div>
+
+      <!-- ======= CARD 2: Thread ======= -->
+      <div class="card-enter card-hover bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm group" style="animation-delay: 0.1s">
+        <div class="relative">
+          <label class="absolute top-3 left-3 z-10">
+            <input type="checkbox" class="w-4 h-4 rounded-md border-gray-300/80 text-brand-600 focus:ring-brand-500 bg-white/80 backdrop-blur-sm shadow-sm">
+          </label>
+          <span class="absolute top-3 right-3 z-10 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-400/90 text-white backdrop-blur-sm shadow-sm">
+            Pending
+          </span>
+
+          <!-- Thread Preview -->
+          <div class="aspect-[4/5] bg-gradient-to-b from-white to-gray-50 p-5 flex flex-col cursor-pointer">
+            <div class="flex items-center gap-2.5 mb-4">
+              <div class="w-8 h-8 rounded-full bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center text-white text-xs font-bold">H</div>
+              <div>
+                <p class="text-xs font-semibold text-gray-800">healthycollege</p>
+                <p class="text-[10px] text-gray-400">@healthycollege</p>
+              </div>
+            </div>
+            <!-- Thread lines -->
+            <div class="flex-1 space-y-3 relative">
+              <div class="absolute left-[15px] top-0 bottom-0 w-[2px] bg-gray-100 rounded-full"></div>
+              <div class="relative pl-9">
+                <div class="absolute left-[11px] top-1 w-2.5 h-2.5 rounded-full border-2 border-gray-200 bg-white"></div>
+                <p class="text-xs text-gray-600 leading-relaxed line-clamp-3">Your morning routine might be sabotaging your energy levels. Here's what science says about the first 30 minutes...</p>
+              </div>
+              <div class="relative pl-9">
+                <div class="absolute left-[11px] top-1 w-2.5 h-2.5 rounded-full border-2 border-gray-200 bg-white"></div>
+                <p class="text-xs text-gray-600 leading-relaxed line-clamp-3">Most people reach for coffee immediately, but cortisol peaks naturally within 30-45 minutes of waking...</p>
+              </div>
+              <div class="relative pl-9">
+                <div class="absolute left-[11px] top-1 w-2.5 h-2.5 rounded-full border-2 border-gray-200 bg-white"></div>
+                <p class="text-xs text-gray-400 italic">+ 3 more posts</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card Body -->
+        <div class="p-3.5 space-y-2.5">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-1.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-purple-400"></span>
+              <span class="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Thread</span>
+            </div>
+            <span class="text-[10px] text-gray-300 bg-gray-50 px-1.5 py-0.5 rounded">5 posts</span>
+          </div>
+          <p class="text-[13px] font-semibold text-gray-800 line-clamp-2 leading-snug">
+            Your Morning Routine Might Be Sabotaging Your Energy
+          </p>
+          <div class="flex items-center justify-between pt-0.5">
+            <span class="text-[10px] font-medium bg-gray-50 text-gray-500 px-2 py-0.5 rounded-md border border-gray-100">
+              healthycollege
+            </span>
+            <span class="text-[10px] text-gray-300">1:45 PM</span>
+          </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex border-t border-gray-50">
+          <button class="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-emerald-500 hover:bg-emerald-50 transition-all action-btn rounded-bl-2xl">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Accept
+          </button>
+          <div class="w-px bg-gray-50"></div>
+          <button class="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-red-400 hover:bg-red-50 transition-all action-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            Decline
+          </button>
+          <div class="w-px bg-gray-50"></div>
+          <button class="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-gray-400 hover:bg-gray-50 transition-all action-btn rounded-br-2xl">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+            Edit
+          </button>
+        </div>
+      </div>
+
+      <!-- ======= CARD 3: Carousel (Scheduled) ======= -->
+      <div class="card-enter card-hover bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm group" style="animation-delay: 0.15s">
+        <div class="relative">
+          <span class="absolute top-3 right-3 z-10 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-500/90 text-white backdrop-blur-sm shadow-sm">
+            Scheduled
+          </span>
+
+          <!-- Carousel Preview -->
+          <div class="aspect-[4/5] bg-gradient-to-br from-indigo-50 to-purple-50 overflow-hidden cursor-pointer relative">
+            <img
+              src="https://kzsbyzroknbradzyjvrc.supabase.co/storage/v1/object/public/media/7c7bdcc7-ad79-4554-8d32-e5ef02608e84/holisticcollege/posts/post_holisticcollege_TOBY-135.jpg"
+              alt="Carousel preview"
+              class="w-full h-full object-cover opacity-90 group-hover:scale-[1.02] transition-transform duration-300"
+            >
+            <!-- Carousel indicator -->
+            <div class="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-black/30 backdrop-blur-md px-2.5 py-1 rounded-full">
+              <span class="w-1.5 h-1.5 rounded-full bg-white"></span>
+              <span class="w-1.5 h-1.5 rounded-full bg-white/40"></span>
+              <span class="w-1.5 h-1.5 rounded-full bg-white/40"></span>
+              <span class="w-1.5 h-1.5 rounded-full bg-white/40"></span>
+              <span class="w-1.5 h-1.5 rounded-full bg-white/40"></span>
+              <span class="text-[9px] text-white/70 font-medium ml-0.5">1/5</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="p-3.5 space-y-2.5">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-1.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-pink-400"></span>
+              <span class="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Carousel</span>
+            </div>
+            <div class="flex items-center gap-1 bg-emerald-50 px-1.5 py-0.5 rounded-md">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" class="text-emerald-400"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              <span class="text-[10px] font-bold text-emerald-600">95</span>
+            </div>
+          </div>
+          <p class="text-[13px] font-semibold text-gray-800 line-clamp-2 leading-snug">
+            5 Signs Your Gut Health Is Improving (Most People Miss #3)
+          </p>
+          <div class="flex items-center justify-between pt-0.5">
+            <span class="text-[10px] font-medium bg-gray-50 text-gray-500 px-2 py-0.5 rounded-md border border-gray-100">
+              longevitycollege
+            </span>
+            <span class="text-[10px] text-gray-300">Mar 14, 9:00 AM</span>
+          </div>
+        </div>
+
+        <!-- Scheduled actions - just View + Delete -->
+        <div class="flex border-t border-gray-50">
+          <button class="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-brand-600 hover:bg-brand-50 transition-all action-btn rounded-bl-2xl">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+            View
+          </button>
+          <div class="w-px bg-gray-50"></div>
+          <button class="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-gray-400 hover:bg-red-50 hover:text-red-400 transition-all action-btn rounded-br-2xl">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+            Delete
+          </button>
+        </div>
+      </div>
+
+      <!-- ======= CARD 4: Reel (Published) ======= -->
+      <div class="card-enter card-hover bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm group" style="animation-delay: 0.2s">
+        <div class="relative">
+          <span class="absolute top-3 right-3 z-10 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/90 text-white backdrop-blur-sm shadow-sm">
+            Published
+          </span>
+
+          <!-- Reel Preview -->
+          <div class="aspect-[4/5] bg-gradient-to-br from-gray-800 to-gray-900 overflow-hidden cursor-pointer relative">
+            <img
+              src="https://kzsbyzroknbradzyjvrc.supabase.co/storage/v1/object/public/media/7c7bdcc7-ad79-4554-8d32-e5ef02608e84/holisticcollege/posts/post_holisticcollege_TOBY-135.jpg"
+              alt="Reel preview"
+              class="w-full h-full object-cover opacity-80 group-hover:scale-[1.02] transition-transform duration-300"
+            >
+            <!-- Play icon -->
+            <div class="absolute inset-0 flex items-center justify-center">
+              <div class="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center group-hover:bg-white/30 transition-colors">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="white" class="ml-0.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              </div>
+            </div>
+            <!-- Duration -->
+            <span class="absolute bottom-3 right-3 text-[10px] font-medium bg-black/40 text-white backdrop-blur-sm px-1.5 py-0.5 rounded-md">0:32</span>
+          </div>
+        </div>
+
+        <div class="p-3.5 space-y-2.5">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-1.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-red-400"></span>
+              <span class="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Reel</span>
+            </div>
+            <div class="flex items-center gap-1 bg-emerald-50 px-1.5 py-0.5 rounded-md">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" class="text-emerald-400"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              <span class="text-[10px] font-bold text-emerald-600">88</span>
+            </div>
+          </div>
+          <p class="text-[13px] font-semibold text-gray-800 line-clamp-2 leading-snug">
+            Why Cold Showers Are Overrated (Do This Instead)
+          </p>
+          <div class="flex items-center justify-between pt-0.5">
+            <span class="text-[10px] font-medium bg-gray-50 text-gray-500 px-2 py-0.5 rounded-md border border-gray-100">
+              vitalitycollege
+            </span>
+            <span class="text-[10px] text-gray-300">Mar 12, 10:30 AM</span>
+          </div>
+        </div>
+
+        <!-- Published actions -->
+        <div class="flex border-t border-gray-50">
+          <button class="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-brand-600 hover:bg-brand-50 transition-all action-btn rounded-bl-2xl">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+            View
+          </button>
+          <div class="w-px bg-gray-50"></div>
+          <button class="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-gray-400 hover:bg-red-50 hover:text-red-400 transition-all action-btn rounded-br-2xl">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+            Delete
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ============================================ -->
+    <!-- LOAD MORE                                    -->
+    <!-- ============================================ -->
+    <div class="flex justify-center pt-8 pb-4">
+      <button class="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-medium text-gray-500 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 13 12 18 17 13"/><polyline points="7 6 12 11 17 6"/></svg>
+        Show More
+      </button>
+    </div>
+
+  </main>
+</div>
+
+</body>
+</html>
