@@ -5,6 +5,7 @@ import { clsx } from 'clsx'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { PipelineItem } from '../model/types'
 import { getFirstBrandOutput } from '../model/types'
+import { useDynamicBrands } from '@/features/brands/hooks/use-dynamic-brands'
 
 interface Props {
   items: PipelineItem[]
@@ -203,7 +204,7 @@ function CarouselContent({ item }: { item: PipelineItem }) {
 
 function ThreadActionIcons({ className }: { className?: string }) {
   return (
-    <div className={clsx('flex items-center gap-5 text-white/25', className)}>
+    <div className={clsx('flex items-center gap-5 text-gray-300', className)}>
       {/* Heart */}
       <svg width="16" height="16" viewBox="0 0 18 18" fill="none"><path d="M16 7.53c0-2-.35-3.63-2.35-3.63-.91 0-1.63.42-2.2 1-.35.36-.65.79-.89 1.23a.65.65 0 0 1-1.13 0 6.5 6.5 0 0 0-.89-1.23c-.57-.59-1.29-1-2.2-1C4.34 3.9 2.99 5.52 2.99 7.53c0 2.24 1.63 4.41 6 8.49 4.37-4.08 7.01-6.25 7.01-8.49Z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
       {/* Comment */}
@@ -216,7 +217,7 @@ function ThreadActionIcons({ className }: { className?: string }) {
   )
 }
 
-function ThreadContent({ item }: { item: PipelineItem }) {
+function ThreadContent({ item, brandImageUrl }: { item: PipelineItem; brandImageUrl?: string }) {
   const output = getFirstBrandOutput(item)
   const brandName = item.brands[0] ?? 'Thread'
   const handle = brandName.toLowerCase().replace(/\s/g, '')
@@ -237,7 +238,7 @@ function ThreadContent({ item }: { item: PipelineItem }) {
   return (
     <div
       className="rounded-2xl overflow-hidden bg-white shadow-lg mx-auto flex flex-col"
-      style={{ maxHeight: '70vh', width: '100%', maxWidth: 480 }}
+      style={{ maxHeight: 'min(60vh, 500px)', width: '100%', maxWidth: 480 }}
     >
       {/* Threads header */}
       <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100">
@@ -252,10 +253,14 @@ function ThreadContent({ item }: { item: PipelineItem }) {
             <div key={idx} className="flex gap-3">
               {/* Avatar + connector line */}
               <div className="flex flex-col items-center flex-shrink-0">
-                <div className="w-9 h-9 rounded-full bg-gray-900 flex items-center justify-center flex-shrink-0">
-                  <span className="text-white text-xs font-bold">
-                    {brandName[0].toUpperCase()}
-                  </span>
+                <div className="w-9 h-9 rounded-full bg-gray-900 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                  {brandImageUrl ? (
+                    <img src={brandImageUrl} alt={brandName} className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-white text-xs font-bold">
+                      {brandName[0].toUpperCase()}
+                    </span>
+                  )}
                 </div>
                 {!isLast && (
                   <div className="w-0.5 flex-1 bg-gray-200 my-1 min-h-[16px]" />
@@ -310,6 +315,7 @@ function PostContent({ item }: { item: PipelineItem }) {
    ═══════════════════════════════════════════════════════ */
 
 export function ReviewModal({ items: externalItems, initialIndex, onApprove, onReject, onEdit, onDelete, onClose, autoSchedule = true }: Props) {
+  const { brands: dynamicBrands } = useDynamicBrands()
   const [queue, setQueue] = useState<PipelineItem[]>(() => externalItems.slice(initialIndex))
   const [currentIdx, setCurrentIdx] = useState(0)
   const totalOriginal = externalItems.length
@@ -519,7 +525,12 @@ export function ReviewModal({ items: externalItems, initialIndex, onApprove, onR
               <ReelContent item={item} videoRef={videoRef} muted={muted} setMuted={setMuted} />
             )}
             {contentMode === 'carousel' && <CarouselContent item={item} />}
-            {contentMode === 'thread' && <ThreadContent item={item} />}
+            {contentMode === 'thread' && (
+              <ThreadContent
+                item={item}
+                brandImageUrl={dynamicBrands.find(b => b.id === item.brands[0])?.profile_image_url}
+              />
+            )}
             {(contentMode === 'post' || contentMode === 'unknown') && <PostContent item={item} />}
 
             {/* Meta */}

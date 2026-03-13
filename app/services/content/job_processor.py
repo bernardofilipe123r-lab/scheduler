@@ -84,12 +84,6 @@ class JobProcessor:
             )
         return getattr(self, method_name)
 
-    @staticmethod
-    def _ensure_cta_paragraph_break(text: str) -> str:
-        """Ensure CTA lines like 'Follow @...' are separated by a blank line."""
-        import re
-        return re.sub(r'(?<!\n)(Follow @|If you want to learn)', r'\n\n\1', text)
-
     def _run_brands_loop(
         self,
         job_id: str,
