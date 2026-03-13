@@ -2029,7 +2029,7 @@ function MusicLibraryPanel() {
                         setPlayingId(null)
                       } else {
                         if (audioRef.current) audioRef.current.pause()
-                        const audio = new Audio(`/api/admin/music/${track.id}/stream`)
+                        const audio = new Audio(track.storage_url)
                         audio.onended = () => setPlayingId(null)
                         audio.onerror = () => setPlayingId(null)
                         audio.play()
