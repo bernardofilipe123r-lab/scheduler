@@ -14,13 +14,14 @@ import type { BrandName } from '@/shared/types'
 /**
  * Hook to fetch all brand connection statuses
  */
-export function useBrandConnections() {
+export function useBrandConnections(options?: { enabled?: boolean }) {
   return useQuery<BrandConnectionsResponse>({
     queryKey: ['brand-connections'],
     queryFn: fetchBrandConnections,
     refetchInterval: 120_000,
     staleTime: 30_000,
     refetchOnWindowFocus: true, // Keep true — needed to detect returning from OAuth tab
+    enabled: options?.enabled,
   })
 }
 

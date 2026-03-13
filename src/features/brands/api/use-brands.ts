@@ -147,11 +147,12 @@ async function reactivateBrand(id: string): Promise<Brand> {
 /**
  * Fetch all active brands
  */
-export function useBrands() {
+export function useBrands(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: brandKeys.list(),
     queryFn: fetchBrands,
     staleTime: 5 * 60 * 1000, // 5 minutes
+    enabled: options?.enabled,
   })
 }
 

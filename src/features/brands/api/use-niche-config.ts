@@ -12,11 +12,12 @@ async function updateNicheConfig(data: Partial<NicheConfig>): Promise<NicheConfi
   return apiClient.put<NicheConfig>('/api/v2/brands/niche-config', data)
 }
 
-export function useNicheConfig() {
+export function useNicheConfig(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: [...NICHE_CONFIG_KEY],
     queryFn: () => fetchNicheConfig(),
     staleTime: 5 * 60 * 1000,
+    enabled: options?.enabled,
   })
 }
 

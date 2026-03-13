@@ -22,7 +22,7 @@ function fetchWithTimeout(url: string, init?: RequestInit, timeoutMs = REQUEST_T
   return fetch(url, { ...init, signal: controller.signal })
     .catch((err) => {
       if (err.name === 'AbortError') {
-        throw { message: `Request timed out after ${REQUEST_TIMEOUT_MS / 1000}s`, status: 408 } as ApiError
+        throw { message: `Request timed out after ${timeoutMs / 1000}s`, status: 408 } as ApiError
       }
       throw err
     })
@@ -52,6 +52,9 @@ async function handleResponse<T>(response: Response): Promise<T> {
       supabase.auth.signOut().catch(() => {})
     }
     throw error
+  }
+  if (response.status === 204 || response.headers.get('content-length') === '0') {
+    return undefined as T
   }
   return response.json()
 }

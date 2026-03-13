@@ -27,11 +27,12 @@ interface BrandCacheItem {
 }
 
 /** List all DNA profiles for the current user. */
-export function useContentDNAProfiles() {
+export function useContentDNAProfiles(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: [...CONTENT_DNA_KEY],
     queryFn: fetchDNAProfiles,
     staleTime: 5 * 60 * 1000,
+    enabled: options?.enabled,
   })
 }
 

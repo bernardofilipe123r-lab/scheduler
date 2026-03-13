@@ -7,10 +7,10 @@ import { useContentDNAProfiles } from '@/features/content-dna'
 
 export function useOnboardingStatus() {
   const { isAuthenticated, user } = useAuth()
-  const { data: brands, isLoading: brandsLoading } = useBrands()
-  const { data: config, isLoading: configLoading } = useNicheConfig()
-  const { data: dnaData, isLoading: dnaLoading } = useContentDNAProfiles()
-  const { data: connections, isLoading: connectionsLoading } = useBrandConnections()
+  const { data: brands, isLoading: brandsLoading } = useBrands({ enabled: isAuthenticated })
+  const { data: config, isLoading: configLoading } = useNicheConfig({ enabled: isAuthenticated })
+  const { data: dnaData, isLoading: dnaLoading } = useContentDNAProfiles({ enabled: isAuthenticated })
+  const { data: connections, isLoading: connectionsLoading } = useBrandConnections({ enabled: isAuthenticated })
 
   const hasBrand = (brands?.length ?? 0) > 0
 
