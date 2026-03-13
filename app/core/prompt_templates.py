@@ -632,6 +632,30 @@ def build_post_content_prompt(count: int, history_context: str = "", topic_hint:
     avoid_suffix = ("\n" + avoid_block) if avoid_block else ""
     caption_source_suffix = "\\n\\nSource:\\n[citation]" if citation_block else ""
 
+    # Title format constraint — selected algorithmically, injected as a HARD rule
+    # so DeepSeek fills in the template rather than freely inventing structure
+    title_format_constraint = ""
+    if title_format:
+        try:
+            from app.services.toby.learning_engine import CAROUSEL_TITLE_TEMPLATES
+            tmpl = CAROUSEL_TITLE_TEMPLATES.get(title_format)
+            if tmpl:
+                title_format_constraint = (
+                    f"- MANDATORY TITLE STRUCTURE: Your title MUST follow this exact pattern:\n"
+                    f"  TEMPLATE: {tmpl['template']}\n"
+                    f"  HOW TO FILL IT IN: {tmpl['instruction']}\n"
+                    f"  Do NOT deviate from this structural pattern. Fill in the [SLOTS] with "
+                    f"niche-specific, topic-relevant content."
+                )
+        except Exception:
+            pass
+    if not title_format_constraint:
+        title_format_constraint = (
+            "- IMPORTANT: Vary the title structure. Avoid starting every title with the same word. "
+            "Use diverse patterns: STUDY REVEALS, NEW RESEARCH SHOWS, THE HIDDEN REASON, "
+            "WHY [X] IS, WHAT HAPPENS WHEN, THIS SPECIFIC [X], MOST PEOPLE DON'T KNOW, etc."
+        )
+
     prompt = f"""You are a {niche_label} content creator for {ctx.parent_brand_name or 'the brand'}, targeting {audience_label}.
 {brief_block}
 Generate EXACTLY {count} COMPLETELY DIFFERENT {niche_label}-focused posts. Each post MUST cover a DIFFERENT topic category.
