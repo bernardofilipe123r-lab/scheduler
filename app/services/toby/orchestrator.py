@@ -509,43 +509,29 @@ def _execute_content_plan(db: Session, plan, batch_id: str = None):
     if plan.content_type == "threads_post":
         return _execute_threads_plan(db, plan)
 
-    from app.services.content.generator import ContentGeneratorV2
     from app.services.content.job_manager import JobManager
     from app.services.content.job_processor import JobProcessor
     from app.services.publishing.scheduler import DatabaseSchedulerService
     from app.services.toby.content_planner import record_content_tag
-    from app.core.prompt_context import PromptContext
-    from app.services.content.niche_config_service import NicheConfigService
+    from app.services.content.unified_generator import (
+        generate_reel_content,
+        generate_carousel_content,
+        generate_format_b_content,
+    )
 
-    # ── Step 1: Build PromptContext ──────────────────────────
-    niche_svc = NicheConfigService()
-    ctx = niche_svc.get_context(user_id=plan.user_id, brand_id=plan.brand_id)
-    if not ctx:
-        ctx = PromptContext()
-
-    # Inject Toby personality into context
-    if plan.personality_prompt:
-        ctx.personality_modifier = plan.personality_prompt
-
-    # ── Step 2: Generate text content ────────────────────────
-    generator = ContentGeneratorV2()
+    # ── Steps 1+2: Generate text content via unified generator ──
+    # The content plan's topic/hook/personality become overrides —
+    # the unified generator handles PromptContext + learning engine.
 
     if plan.content_type == "format_b_reel":
-        # Format B pipeline: generate content + image prompts via DeepSeek
-        from app.services.discovery.story_polisher import StoryPolisher
-        from dataclasses import asdict
-
-        # Gather recent Format B titles for this brand to avoid repetition
-        recent_titles = _get_recent_format_b_titles(db, plan.brand_id, limit=10)
-
-        polisher = StoryPolisher()
-        polished = polisher.generate_content(
-            niche=ctx.niche_name or "business",
+        polished = generate_format_b_content(
+            user_id=plan.user_id,
+            brand_id=plan.brand_id,
             topic_hint=plan.topic_bucket,
             hook_hint=plan.hook_strategy,
             personality_prompt=plan.personality_prompt,
             story_category=plan.story_category or "",
-            recent_titles=recent_titles,
+            db=db,
         )
         if not polished:
             raise ValueError("StoryPolisher failed to generate content")
@@ -559,19 +545,21 @@ def _execute_content_plan(db: Session, plan, batch_id: str = None):
             "format_b_data": polished.to_dict(),
         }
     elif plan.content_type == "reel":
-        result = generator.generate_viral_content(
+        result = generate_reel_content(
+            user_id=plan.user_id,
+            brand_id=plan.brand_id,
             topic_hint=plan.topic_bucket,
             hook_hint=plan.hook_strategy,
-            ctx=ctx,
+            personality_prompt=plan.personality_prompt,
+            db=db,
         )
     else:
-        # Batch generation with built-in 3-attempt quality loop
-        results = generator.generate_post_titles_batch(
-            count=1,
+        result = generate_carousel_content(
+            user_id=plan.user_id,
+            brand_id=plan.brand_id,
             topic_hint=plan.topic_bucket,
-            ctx=ctx,
+            db=db,
         )
-        result = results[0] if results else None
 
     # D2: Detect fallback content and REJECT it — never schedule placeholder content.
     # CRITICAL FIX (2026-03-08): Fallback content like "CONTENT GENERATION TEMPORARILY

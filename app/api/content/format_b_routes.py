@@ -303,8 +303,9 @@ _tv_job_semaphore = threading.Semaphore(2)
 
 def _process_full_auto_format_b_async(job_id: str, niche: str, category: str):
     """
-    Background task for full_auto format-b: generate content via DeepSeek → update job → compose.
+    Background task for full_auto format-b: generate content via unified generator → update job → compose.
     The job was already created with a placeholder title so the user sees it instantly.
+    Uses unified_generator which leverages Toby's learning engine for diversity.
     """
     import traceback
     import sys
@@ -320,17 +321,35 @@ def _process_full_auto_format_b_async(job_id: str, niche: str, category: str):
         with get_db_session() as db:
             manager = JobManager(db)
 
-            # Step 1: Generate content + image prompts via DeepSeek
+            # Step 1: Generate content via unified generator (Toby-aware diversity)
             manager.update_job_status(job_id, "generating")
-            from app.services.discovery.story_polisher import StoryPolisher
+            job = manager.get_job(job_id)
+            if not job:
+                return
 
-            polisher = StoryPolisher()
+            # Use the first brand for content generation — each brand gets
+            # the same text but different visual rendering at pipeline stage
+            brand_id = job.brands[0] if job.brands else None
 
-            print(f"   🧠 Generating Format B content...", flush=True)
-            polished = polisher.generate_content(niche=niche)
+            from app.services.content.unified_generator import generate_format_b_content
+
+            print(f"   🧠 Generating Format B content (Toby-aware)...", flush=True)
+            polished = generate_format_b_content(
+                user_id=job.user_id,
+                brand_id=brand_id,
+                niche=niche,
+                story_category=category,
+                db=db,
+            )
             if not polished:
                 print(f"   ⚠️ Content generation failed, retrying...", flush=True)
-                polished = polisher.generate_content(niche=niche)
+                polished = generate_format_b_content(
+                    user_id=job.user_id,
+                    brand_id=brand_id,
+                    niche=niche,
+                    story_category=category,
+                    db=db,
+                )
 
             if not polished:
                 manager.update_job_status(job_id, "failed", error_message="Failed to generate content")

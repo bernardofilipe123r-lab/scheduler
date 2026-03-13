@@ -593,15 +593,17 @@ def build_post_content_prompt(count: int, history_context: str = "", topic_hint:
         title_style_note = "focused on a compelling insight or truth about the topic"
         title_type_note = f"A bold, impactful {niche_label} statement written in ALL CAPS"
 
-    # Slide 4: conclusion + CTA (randomly selected from carousel CTA options)
-    from app.core.cta import get_carousel_cta_line
-    slide4_cta_line = get_carousel_cta_line(ctx)
-    # Ensure @{{brandhandle}} placeholder uses prompt-safe double braces
-    slide4_cta_line = slide4_cta_line.replace("@{brandhandle}", "@{{{{brandhandle}}}}")
+    # Slide 4: conclusion + CTA — AI writes a content-specific CTA referencing this post's topic.
+    # @BRANDHANDLE is a safe render-time token (no braces) that won't confuse the model.
     slide4_instruction = (
         f"A concluding takeaway paragraph (2-3 sentences summarizing the key insight or actionable advice for {audience_label}). "
-        f"Then on a NEW paragraph (separated by a blank line): \"{slide4_cta_line}\""
+        f"Then on a NEW paragraph (separated by a blank line): write a short, specific CTA that directly references "
+        f"what THIS post covers — not a generic phrase. "
+        f"Examples: 'If you want to learn more about how circadian lighting affects metabolism, follow @BRANDHANDLE!', "
+        f"'Want more evidence-based tips on sleep and energy? Follow @BRANDHANDLE!'. "
+        f"Keep the literal token @BRANDHANDLE — it will be replaced with the real account handle at render time."
     )
+    slide4_cta_line = "If you want more on [this post's topic], follow @BRANDHANDLE!"
 
     # Caption mechanism instruction — uses niche description, not body/health
     niche_mechanism = ctx.niche_description if ctx.niche_description else f"the key concepts in {niche_label}"

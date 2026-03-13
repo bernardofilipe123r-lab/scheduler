@@ -1194,41 +1194,39 @@ class JobProcessor:
                         })
                         print(f"   📝 {brand}: {job.title[:60]}...", flush=True)
                 else:
-                    # ── AUTO MODE: AI generates unique posts per brand ───
+                    # ── AUTO MODE: AI generates unique posts PER BRAND ───
+                    # Each brand gets its own DeepSeek call with brand-specific
+                    # Content DNA (topics, tone, examples, citations).
                     topic_hint = job.ai_prompt or None
-                    needed = total_brands
-                    print(f"   🧠 Generating {needed} unique posts...", flush=True)
+                    print(f"   🧠 Generating {total_brands} unique posts (per-brand)...", flush=True)
                     self._manager.update_job_status(job_id, "generating", "Generating content...", 5)
 
-                    # Build PromptContext for niche-aware CTA
-                    first_brand = job.brands[0] if job.brands else None
-                    batch_ctx = None
-                    if first_brand:
-                        from app.services.content.niche_config_service import NicheConfigService
-                        batch_ctx = NicheConfigService().get_context(brand_id=first_brand, user_id=job.user_id)
-
-                    batch_posts = cg.generate_post_titles_batch(needed, topic_hint, ctx=batch_ctx)
-                    print(f"   ✓ Got {len(batch_posts)} unique posts", flush=True)
-
+                    from app.services.content.unified_generator import generate_carousel_content
                     for i, brand in enumerate(job.brands):
-                        if i >= len(batch_posts):
+                        try:
+                            post_data = generate_carousel_content(
+                                user_id=job.user_id,
+                                brand_id=brand,
+                                topic_hint=topic_hint,
+                            )
+                            # Ensure CTA on last slide has paragraph break
+                            raw_slides = post_data.get("slide_texts", [])
+                            if raw_slides:
+                                raw_slides = [self._ensure_cta_paragraph_break(s) for s in raw_slides]
                             self._manager.update_brand_output(job_id, brand, {
-                                "status": "failed", "error": "Content generation produced fewer results than brands"
+                                "title": post_data.get("title", job.title),
+                                "caption": post_data.get("caption", ""),
+                                "ai_prompt": post_data.get("image_prompt", ""),
+                                "slide_texts": raw_slides,
+                                "status": "pending",
                             })
-                            continue
-                        post_data = batch_posts[i]
-                        # Ensure CTA on last slide has paragraph break
-                        raw_slides = post_data.get("slide_texts", [])
-                        if raw_slides:
-                            raw_slides = [self._ensure_cta_paragraph_break(s) for s in raw_slides]
-                        self._manager.update_brand_output(job_id, brand, {
-                            "title": post_data.get("title", job.title),
-                            "caption": post_data.get("caption", ""),
-                            "ai_prompt": post_data.get("image_prompt", ""),
-                            "slide_texts": raw_slides,
-                            "status": "pending",
-                        })
-                        print(f"   📝 {brand}: {post_data.get('title', '?')[:60]}...", flush=True)
+                            print(f"   📝 {brand}: {post_data.get('title', '?')[:60]}...", flush=True)
+                        except Exception as brand_err:
+                            print(f"   ⚠️ Post generation failed for {brand}: {brand_err}", flush=True)
+                            self._manager.update_brand_output(job_id, brand, {
+                                "status": "failed", "error": str(brand_err)
+                            })
+                    print(f"   ✓ Generated posts for {total_brands} brand(s)", flush=True)
 
                 # Now generate images for each brand
                 for wi, brand in enumerate(job.brands):
@@ -1325,13 +1323,15 @@ class JobProcessor:
         if not getattr(job, 'fixed_title', False):
             print(f"\n🧠 Auto mode — generating AI content for {total_brands} brand(s)...", flush=True)
             try:
-                from app.services.content.generator import ContentGenerator
-                cg = ContentGenerator()
+                from app.services.content.unified_generator import generate_reel_content
                 step_msg = "Generating viral content..." if total_brands == 1 else f"Generating content for {total_brands} brands..."
                 self._manager.update_job_status(job_id, "generating", step_msg, 5)
                 first_title = None
                 for i, brand in enumerate(job.brands):
-                    viral = cg.generate_viral_content()
+                    viral = generate_reel_content(
+                        user_id=job.user_id,
+                        brand_id=brand,
+                    )
                     brand_title = viral.get("title", job.title)
                     brand_lines = viral.get("content_lines", job.content_lines or [])
                     brand_image_prompt = viral.get("image_prompt", job.ai_prompt or "")

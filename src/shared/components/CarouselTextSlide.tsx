@@ -121,6 +121,7 @@ export function CarouselTextSlide({
 
   // Replace placeholder handle in text
   const displayText = text
+    .replace(/@BRANDHANDLE/g, handle)
     .replace(/@\{\{brandhandle\}\}/g, handle)
     .replace(/\{\{brandhandle\}\}/g, handle)
     .replace(/@\{brandhandle\}/g, handle)
@@ -132,6 +133,7 @@ export function CarouselTextSlide({
       // Replace handles in all texts for accurate measurement
       const cleaned = allSlideTexts.map((t) =>
         t
+          .replace(/@BRANDHANDLE/g, handle)
           .replace(/@\{\{brandhandle\}\}/g, handle)
           .replace(/\{\{brandhandle\}\}/g, handle)
           .replace(/@\{brandhandle\}/g, handle)

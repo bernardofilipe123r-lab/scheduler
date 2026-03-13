@@ -164,6 +164,7 @@ function computeStableContentY(allTexts) {
 
 function replaceHandles(text, handle) {
   return text
+    .replace(/@BRANDHANDLE/g, handle)
     .replace(/@\{\{brandhandle\}\}/g, handle)
     .replace(/\{\{brandhandle\}\}/g, handle)
     .replace(/@\{brandhandle\}/g, handle)
