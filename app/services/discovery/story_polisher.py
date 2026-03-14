@@ -142,7 +142,17 @@ AI PROMPT
 A prompt for generating the image with an AI image generator.
 
 SEARCH QUERY
-A precise Google Images search query to find a real photo matching this visual. Be specific to avoid ambiguity — e.g., "U.S. Pentagon building aerial view" not just "pentagon", "Apple iPhone 16 Pro" not just "apple", "Donald Trump speech podium" not just "Trump". Include context keywords (location, brand, object type) so the search returns exactly the right subject.
+A short, simple stock photo search query (2–5 words) to find a real photo on a stock photography site like Pexels. Stock sites have generic, high-quality photos — NOT scientific imagery, microscope views, abstract concepts, or futuristic scenes. Write queries that match what stock photographers actually shoot.
+
+GOOD stock queries: "scientist in laboratory", "woman working laptop", "medical research team", "fertility clinic doctor", "pharmaceutical lab equipment", "business handshake deal", "DNA test kit"
+BAD stock queries (too specific/abstract, will return irrelevant results): "human oocyte egg cell microscopic view glowing", "futuristic data crystal with swirling bio data", "abstract biological clock DNA helix timeline", "woman holding glowing data storage device"
+
+Rules:
+• 2–5 words maximum
+• Describe a real, photographable scene or subject
+• Use everyday language, not scientific or AI-prompt jargon
+• Focus on the STORY THEME (the human angle, the setting, the industry) rather than trying to literally illustrate abstract concepts
+• Disambiguate only when needed — e.g., "Pentagon building aerial" not just "pentagon", "Apple iPhone" not just "apple"
 
 IMAGE RULES
 
