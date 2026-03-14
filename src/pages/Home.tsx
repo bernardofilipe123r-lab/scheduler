@@ -156,8 +156,12 @@ export function HomePage() {
     return dynamicBrands.filter(b => b.active).map(brand => {
       const brandToday = todayPosts.filter(p => p.brand === brand.id)
       // Map of hour → actual variant from scheduled post metadata
+      // Only count actual reels (light/dark/format_b) — NOT threads
       const reelsByHour = new Map<number, string>()
-      brandToday.filter(p => p.metadata?.variant !== 'post').forEach(p => {
+      brandToday.filter(p => {
+        const v = p.metadata?.variant
+        return v && v !== 'post' && v !== 'threads'
+      }).forEach(p => {
         reelsByHour.set(new Date(p.scheduled_time).getHours(), p.metadata?.variant || 'light')
       })
       const postHours = new Set(

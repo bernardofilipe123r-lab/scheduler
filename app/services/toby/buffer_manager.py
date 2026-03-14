@@ -71,17 +71,40 @@ def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
         .all()
     )
 
-    # Build slot map: B4 fuzzy matching ±15 minutes
+    # ── Content-type-aware slot matching ──────────────────────
+    # Map variant (stored in extra_data) → category for matching.
+    # This prevents cross-masking: a thread at 4 AM must NOT mark
+    # a reel slot at 4 AM as filled (or vice versa).
+    def _variant_to_category(variant: str) -> str:
+        if variant in ("light", "dark", "format_b"):
+            return "reel"
+        if variant == "post":
+            return "post"
+        if variant == "threads":
+            return "threads"
+        return "reel"  # fallback
+
+    def _content_type_to_category(content_type: str) -> str:
+        if content_type in ("reel", "format_b_reel"):
+            return "reel"
+        if content_type == "post":
+            return "post"
+        if content_type == "threads_post":
+            return "threads"
+        return content_type
+
+    # Build slot map: B4 fuzzy matching ±15 minutes (content-type aware)
     filled_set = set()
     for s in scheduled:
         ed = s.extra_data or {}
         brand_id = ed.get("brand", "")
-        # Store the actual minute-rounded time for exact matching
-        filled_set.add((brand_id, s.scheduled_time.strftime("%Y-%m-%d %H:%M")))
+        cat = _variant_to_category(ed.get("variant", "light"))
+        filled_set.add((brand_id, s.scheduled_time.strftime("%Y-%m-%d %H:%M"), cat))
 
-    def _slot_is_filled(brand_id: str, slot_time: datetime) -> bool:
-        """B4: Check if a slot is filled using fuzzy ±15min matching."""
-        key = (brand_id, slot_time.strftime("%Y-%m-%d %H:%M"))
+    def _slot_is_filled(brand_id: str, slot_time: datetime, content_type: str) -> bool:
+        """B4: Check if a slot is filled using fuzzy ±15min matching (content-type aware)."""
+        cat = _content_type_to_category(content_type)
+        key = (brand_id, slot_time.strftime("%Y-%m-%d %H:%M"), cat)
         if key in filled_set:
             return True
         # Fuzzy check: look for any scheduled item within ±SLOT_FUZZY_MINUTES
@@ -89,6 +112,9 @@ def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
             ed = s.extra_data or {}
             s_brand = ed.get("brand", "")
             if s_brand != brand_id:
+                continue
+            s_cat = _variant_to_category(ed.get("variant", "light"))
+            if s_cat != cat:
                 continue
             diff = abs((s.scheduled_time - slot_time).total_seconds())
             if diff <= SLOT_FUZZY_MINUTES * 60:
@@ -156,7 +182,7 @@ def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
                     "brand_id": brand.id,
                     "time": slot_time.isoformat(),
                     "content_type": reel_content_type,
-                    "filled": _slot_is_filled(brand.id, slot_time),
+                    "filled": _slot_is_filled(brand.id, slot_time, reel_content_type),
                 })
 
             # Post slots: use per-brand count, pick first N from base hours
@@ -169,7 +195,7 @@ def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
                     "brand_id": brand.id,
                     "time": slot_time.isoformat(),
                     "content_type": "post",
-                    "filled": _slot_is_filled(brand.id, slot_time),
+                    "filled": _slot_is_filled(brand.id, slot_time, "post"),
                 })
 
             # Thread slots: use per-brand count, pick first N from base hours
@@ -182,7 +208,7 @@ def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
                     "brand_id": brand.id,
                     "time": slot_time.isoformat(),
                     "content_type": "threads_post",
-                    "filled": _slot_is_filled(brand.id, slot_time),
+                    "filled": _slot_is_filled(brand.id, slot_time, "threads_post"),
                 })
 
     total = len(all_slots)
@@ -191,22 +217,37 @@ def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
     # Pipeline: count pending/approved GenerationJobs as "virtually filling" slots.
     # These items haven't been scheduled yet but DO represent content that will fill
     # slots once approved. Without this, Toby would keep generating duplicates.
-    # CRITICAL: Count per-brand to avoid one brand's pipeline items
-    # masking another brand's empty slots (2026-03-13 fix).
+    # CRITICAL: Count per (brand, content-type category) to avoid cross-type masking
+    # (2026-03-14 fix: reel pipeline items must not mask thread/post empty slots).
     from app.models.jobs import GenerationJob
     pipeline_jobs = (
-        db.query(GenerationJob.brands)
+        db.query(GenerationJob.brands, GenerationJob.variant, GenerationJob.content_format)
         .filter(
             GenerationJob.user_id == user_id,
             GenerationJob.pipeline_status.in_(["pending", "approved"]),
         )
         .all()
     )
-    # Build per-brand pipeline count from the JSON brands array
-    pipeline_per_brand: dict[str, int] = {}
-    for (job_brands,) in pipeline_jobs:
+
+    def _job_to_category(variant: str, content_format: str) -> str:
+        """Map a GenerationJob's variant+format to a slot category."""
+        if variant == "post":
+            return "post"
+        # Threads bypass pipeline, but handle defensively
+        if variant == "threads":
+            return "threads"
+        # Reels (light/dark) — format_a or format_b both count as "reel"
+        return "reel"
+
+    # Build per-(brand, category) pipeline count
+    pipeline_per_brand_cat: dict[tuple[str, str], int] = {}
+    pipeline_per_brand: dict[str, int] = {}  # total per brand (for backward compat)
+    for (job_brands, job_variant, job_format) in pipeline_jobs:
+        cat = _job_to_category(job_variant or "light", job_format or "format_a")
         if isinstance(job_brands, list):
             for bid in job_brands:
+                key = (bid, cat)
+                pipeline_per_brand_cat[key] = pipeline_per_brand_cat.get(key, 0) + 1
                 pipeline_per_brand[bid] = pipeline_per_brand.get(bid, 0) + 1
     pipeline_pending_count = sum(pipeline_per_brand.values())
 
@@ -214,26 +255,39 @@ def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
     effective_filled = filled + pipeline_pending_count
     empty = max(0, total - effective_filled)
 
-    # Per-brand health: a brand's pipeline items only count for that brand's slots
+    # Per-brand health: pipeline items only count for matching content-type slots
     any_brand_has_empty = False
     for brand in brands:
         brand_slots = [s for s in all_slots if s["brand_id"] == brand.id]
         brand_filled_count = sum(1 for s in brand_slots if s["filled"])
-        brand_pipeline = pipeline_per_brand.get(brand.id, 0)
+        # Sum pipeline items only for categories that have empty slots for this brand
+        brand_pipeline = 0
+        for cat in ("reel", "post", "threads"):
+            cat_slots = [s for s in brand_slots if _content_type_to_category(s["content_type"]) == cat]
+            cat_filled = sum(1 for s in cat_slots if s["filled"])
+            cat_pipeline = pipeline_per_brand_cat.get((brand.id, cat), 0)
+            cat_total = len(cat_slots)
+            # Only count pipeline items up to the number of empty slots for this category
+            brand_pipeline += min(cat_pipeline, max(0, cat_total - cat_filled))
         brand_total = len(brand_slots)
         brand_effective = brand_filled_count + brand_pipeline
         if brand_effective < brand_total:
             any_brand_has_empty = True
             break
 
-    # Determine health — use per-brand awareness
+    # Determine health — use per-brand + per-category awareness
     if any_brand_has_empty:
-        # Recalculate empty using per-brand pipeline counts
         total_effective_filled = 0
         for brand in brands:
             brand_slots = [s for s in all_slots if s["brand_id"] == brand.id]
             brand_filled_count = sum(1 for s in brand_slots if s["filled"])
-            brand_pipeline = pipeline_per_brand.get(brand.id, 0)
+            brand_pipeline = 0
+            for cat in ("reel", "post", "threads"):
+                cat_slots = [s for s in brand_slots if _content_type_to_category(s["content_type"]) == cat]
+                cat_filled = sum(1 for s in cat_slots if s["filled"])
+                cat_pipeline = pipeline_per_brand_cat.get((brand.id, cat), 0)
+                cat_total = len(cat_slots)
+                brand_pipeline += min(cat_pipeline, max(0, cat_total - cat_filled))
             brand_total = len(brand_slots)
             total_effective_filled += min(brand_total, brand_filled_count + brand_pipeline)
         effective_filled = total_effective_filled
