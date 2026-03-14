@@ -958,13 +958,18 @@ def check_platform_publisher_methods():
         fail("Could not parse SUPPORTED_PLATFORMS from platforms.py")
         return
 
-    # Read social_publisher.py and find all method names
+    # Read social_publisher.py and publishers/ mixin files
     pub_file = ROOT / "app" / "services" / "publishing" / "social_publisher.py"
     if not pub_file.exists():
         fail("social_publisher.py not found")
         return
 
     pub_source = pub_file.read_text()
+    # Also scan platform-specific mixin files in publishers/
+    publishers_dir = ROOT / "app" / "services" / "publishing" / "publishers"
+    if publishers_dir.is_dir():
+        for py_file in publishers_dir.glob("*.py"):
+            pub_source += "\n" + py_file.read_text()
 
     # Expected methods per platform
     PLATFORM_METHODS = {

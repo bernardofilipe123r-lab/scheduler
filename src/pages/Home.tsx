@@ -1,12 +1,13 @@
 import { useMemo, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Sparkles, TrendingUp, TrendingDown } from 'lucide-react'
+import { Sparkles } from 'lucide-react'
 import { useAnalytics, useSnapshots, type AnalyticsSnapshot } from '@/features/analytics'
 import { useJobs } from '@/features/jobs'
 import { useScheduledPosts } from '@/features/scheduling'
 import { useDynamicBrands } from '@/features/brands'
 import { apiClient } from '@/shared/api/client'
 import { HomeSkeleton } from '@/shared/components'
+import { StatsCard, SlotChip, JobStatusBadge } from '@/features/dashboard'
 
 function formatNum(n: number): string {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M'
@@ -39,12 +40,6 @@ const BASE_REEL_SLOTS: Array<{ hour: number; variant: 'light' | 'dark' }> = [
   { hour: 20, variant: 'dark' },
 ]
 const BASE_POST_HOURS_DAY = [8, 14]                    // 2 posts/day: 8 AM + 2 PM (+ brand offset)
-
-function fmtSlotHour(h: number): string {
-  if (h === 0) return '12AM'
-  if (h === 12) return '12PM'
-  return h < 12 ? `${h}AM` : `${h - 12}PM`
-}
 
 export function HomePage() {
   const navigate = useNavigate()
@@ -642,111 +637,5 @@ export function HomePage() {
         </div>
       </div>
     </div>
-  )
-}
-
-/* ----- Sub-components ----- */
-
-function StatsCard({ label, value, sub, change }: { label: string; value: string; sub?: string; change?: number | null }) {
-  const hasChange = change !== undefined
-  const isPositive = change != null && change >= 0
-  return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-      <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1">{label}</div>
-      <div className="text-2xl font-bold tabular-nums text-gray-900">{value}</div>
-      {hasChange ? (
-        change != null ? (
-          <div className={`flex items-center gap-0.5 mt-1 text-[11px] font-semibold ${isPositive ? 'text-green-600' : 'text-red-500'}`}>
-            {isPositive
-              ? <TrendingUp className="w-3 h-3 shrink-0" />
-              : <TrendingDown className="w-3 h-3 shrink-0" />}
-            <span>{isPositive ? '+' : ''}{change}% vs last week</span>
-          </div>
-        ) : (
-          <div className="flex items-center gap-0.5 mt-1 text-[11px] font-semibold text-gray-400">
-            <span>0% vs last week</span>
-          </div>
-        )
-      ) : sub ? (
-        <div className="text-[11px] text-gray-400 mt-1">{sub}</div>
-      ) : null}
-    </div>
-  )
-}
-
-function SlotChip({ hour, filled, isPast, isSoon, kind, variant }: { hour: number; filled: boolean; isPast: boolean; isSoon: boolean; kind: 'reel' | 'post'; variant?: 'light' | 'dark' }) {
-  const label = fmtSlotHour(hour)
-  const variantLabel = kind === 'reel' && variant ? (variant === 'dark' ? 'Dark' : 'Light') : ''
-  const typeLabel = kind === 'reel' ? 'Reel' : 'Carousel'
-  const stateLabel = filled ? 'Filled' : isPast ? 'Missed' : isSoon ? 'Up next' : 'Open'
-  const tipText = [typeLabel, variantLabel, stateLabel, label].filter(Boolean).join(' · ')
-
-  // Variant letter colors (independent of state)
-  const variantLetterColor = kind === 'reel'
-    ? (variant === 'dark' ? '#6366f1' : '#f59e0b')
-    : undefined
-
-  // Background & text based on state
-  const lightAccent = '#f59e0b'
-  const darkAccent = '#6366f1'
-  let bg: string, textCls: string, border: string, iconColor: string
-  if (filled) {
-    bg = 'bg-green-100'; textCls = 'text-green-700'; border = 'border-green-200'
-    iconColor = kind === 'reel' ? (variant === 'dark' ? darkAccent : lightAccent) : '#16a34a'
-  } else if (isPast) {
-    bg = 'bg-rose-50'; textCls = 'text-rose-400'; border = 'border-rose-200'
-    iconColor = kind === 'reel' ? (variant === 'dark' ? '#a5b4fc' : '#fcd34d') : '#fb7185'
-  } else if (isSoon) {
-    bg = 'bg-amber-50'; textCls = 'text-amber-600'; border = 'border-amber-300 border-dashed'
-    iconColor = kind === 'reel' ? (variant === 'dark' ? darkAccent : lightAccent) : '#f59e0b'
-  } else {
-    bg = 'bg-gray-50'; textCls = 'text-gray-300'; border = 'border-gray-200'
-    iconColor = kind === 'reel' ? (variant === 'dark' ? '#c7d2fe' : '#fde68a') : '#d1d5db'
-  }
-
-  return (
-    <span
-      className={`inline-flex flex-col items-center gap-[3px] px-1.5 pt-1 pb-0.5 rounded border cursor-default select-none ${bg} ${border}`}
-      title={tipText}
-    >
-      {/* Type icon */}
-      {kind === 'reel' ? (
-        // Dot + L/D letter side by side
-        <span className="flex items-center gap-0.5 shrink-0">
-          <span
-            className="block rounded-full shrink-0"
-            style={{ width: 5, height: 5, backgroundColor: iconColor }}
-          />
-          <span style={{ fontSize: 7, fontWeight: 700, lineHeight: 1, color: variantLetterColor }}>
-            {variant === 'dark' ? 'D' : 'L'}
-          </span>
-        </span>
-      ) : (
-        // Carousel = horizontal line
-        <span
-          className="block rounded-full shrink-0"
-          style={{ width: 8, height: 2, backgroundColor: iconColor }}
-        />
-      )}
-      {/* Time label */}
-      <span className={`text-[9px] font-mono font-bold leading-none ${textCls}`}>{label}</span>
-    </span>
-  )
-}
-
-function JobStatusBadge({ status }: { status: string }) {
-  const map: Record<string, { bg: string; text: string; label: string }> = {
-    completed: { bg: 'bg-green-50', text: 'text-green-600', label: 'Completed' },
-    generating: { bg: 'bg-orange-50', text: 'text-orange-600', label: 'Generating' },
-    pending: { bg: 'bg-gray-100', text: 'text-gray-500', label: 'Pending' },
-    failed: { bg: 'bg-red-50', text: 'text-red-600', label: 'Failed' },
-    cancelled: { bg: 'bg-gray-100', text: 'text-gray-400', label: 'Cancelled' },
-    scheduled: { bg: 'bg-blue-50', text: 'text-blue-600', label: 'Scheduled' },
-  }
-  const s = map[status] || { bg: 'bg-gray-100', text: 'text-gray-500', label: status }
-  return (
-    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider ${s.bg} ${s.text}`}>
-      {s.label}
-    </span>
   )
 }

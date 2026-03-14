@@ -1309,7 +1309,7 @@ async def startup_event():
                       id='yt_token_validation_startup')
 
     # Billing enforcement — check grace periods and soft-lock delinquent users
-    from app.services.billing_enforcer import billing_enforcement_tick
+    from app.services.billing.enforcer import billing_enforcement_tick
     scheduler.add_job(billing_enforcement_tick, 'interval', hours=1, id='billing_enforcement')
 
     # Trending music scheduler removed — music now managed via admin panel

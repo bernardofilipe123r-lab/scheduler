@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react'
 import { Loader2, Search, Sparkles, Check } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useDynamicBrands, useNicheConfig } from '@/features/brands'
-import { useDiscoverStories, usePolishStory, useGenerateFormatB } from './api/use-format-b'
-import type { RawStory, PolishedStory } from './types'
+import { useDiscoverStories, usePolishStory, useGenerateFormatB } from '../api/use-format-b'
+import type { RawStory, PolishedStory } from '../types'
 import type { BrandName } from '@/shared/types'
 
 export function FormatBSemiAuto() {

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Loader2, Zap, AlertCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useDynamicBrands, useNicheConfig } from '@/features/brands'
-import { useGenerateFormatB } from './api/use-format-b'
+import { useGenerateFormatB } from '../api/use-format-b'
 import type { BrandName } from '@/shared/types'
 
 export function FormatBFullAuto() {

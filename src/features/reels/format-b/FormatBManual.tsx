@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { Loader2, Upload, X, ImagePlus } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useDynamicBrands } from '@/features/brands'
-import { useGenerateFormatB, useUploadImages } from './api/use-format-b'
+import { useGenerateFormatB, useUploadImages } from '../api/use-format-b'
 import type { BrandName } from '@/shared/types'
 
 const MAX_IMAGES = 10

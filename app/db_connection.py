@@ -35,7 +35,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def init_db():
     """Initialize database tables via SQLAlchemy metadata.
-    
+
     Wrapped with a timeout to prevent hanging startup if DB is unreachable.
     """
     import concurrent.futures
@@ -158,7 +158,7 @@ def run_migrations():
 def get_db() -> Session:
     """
     Dependency for FastAPI routes.
-    
+
     Usage:
         @app.get("/items")
         def get_items(db: Session = Depends(get_db)):
@@ -175,7 +175,7 @@ def get_db() -> Session:
 def get_db_session():
     """
     Context manager for database sessions.
-    
+
     Usage:
         with get_db_session() as db:
             user = db.query(User).first()

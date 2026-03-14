@@ -26,7 +26,7 @@ from app.api.auth.middleware import get_current_user
 from app.models.auth import UserProfile, EXEMPT_TAGS
 from app.models.billing import BrandSubscription
 from app.models.brands import Brand
-from app.services.billing_utils import (
+from app.services.billing.utils import (
     is_exempt,
     recalculate_user_billing_status,
     unlock_user_if_needed,
