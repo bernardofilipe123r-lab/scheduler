@@ -67,6 +67,8 @@ class WebImageSourcer:
     def __init__(self, db=None):
         self.db = db
         self._api_key = os.environ.get("PEXELS_API_KEY")
+        # Track used Pexels photo IDs within a session to avoid duplicates
+        self._used_photo_ids: set[int] = set()
 
     def is_available(self) -> bool:
         """Check if Pexels API key is configured."""
@@ -131,16 +133,22 @@ class WebImageSourcer:
                 logger.warning(f"[WebImageSourcer] No suitable Pexels candidates for: {query!r}")
                 return None
 
-            # Try downloading top candidates
-            # Use 'portrait' size for portrait orientation, 'landscape' for landscape
+            # Try downloading top candidates, skipping already-used photos
             size_key = "portrait" if orientation == "portrait" else "landscape"
             for photo in candidates[:MAX_CANDIDATES]:
+                photo_id = photo.get("id")
+                if photo_id and photo_id in self._used_photo_ids:
+                    logger.debug(f"[WebImageSourcer] Skipping duplicate photo {photo_id}")
+                    continue
+
                 url = photo.get("src", {}).get(size_key) or photo.get("src", {}).get("large")
                 if not url:
                     continue
 
                 path = self._download_image(url)
                 if path:
+                    if photo_id:
+                        self._used_photo_ids.add(photo_id)
                     photographer = photo.get("photographer", "Unknown")
                     logger.info(f"[WebImageSourcer] Downloaded Pexels {orientation} image by {photographer}: {url[:80]}...")
                     return path

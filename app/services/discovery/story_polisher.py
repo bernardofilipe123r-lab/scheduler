@@ -70,6 +70,41 @@ class PolishedStory:
         }
 
 
+# Words that produce bad stock photo results — strip from search queries
+_BAD_QUERY_WORDS = {
+    "closeup", "close-up", "close", "macro", "detail", "detailed",
+    "isolated", "overhead", "aerial", "extreme",
+}
+
+
+def _sanitize_search_query(query: str | None) -> str | None:
+    """Clean up a DeepSeek search query to improve Pexels results.
+
+    - Strips words that cause bad results (closeup, macro, etc.)
+    - Removes parenthetical notes/instructions that the LLM sometimes leaks
+    - Caps length at 5 words
+    """
+    if not query:
+        return query
+
+    # Remove parenthetical notes (LLM instruction leak)
+    query = re.sub(r'\(.*?\)', '', query).strip()
+
+    # If query starts with "Note:" or similar, it's an instruction — discard
+    if re.match(r'^(note|hint|tip|suggestion)\s*:', query, re.IGNORECASE):
+        return None
+
+    # Strip bad words
+    words = query.split()
+    words = [w for w in words if w.lower().rstrip('.,;:') not in _BAD_QUERY_WORDS]
+
+    # Cap at 5 words
+    words = words[:5]
+
+    cleaned = " ".join(words).strip()
+    return cleaned if cleaned else None
+
+
 def _compute_fingerprint(text: str, lines: list[str]) -> str:
     """Compute dedup fingerprint from reel text + first few lines."""
     content = text.lower().strip() + "|" + "|".join(
@@ -143,20 +178,24 @@ AI PROMPT
 A prompt for generating the image with an AI image generator.
 
 SEARCH QUERY
-A short 2–5 word stock-photo-friendly search query to find a real photo on a stock photo site like Pexels.
+A short 2–4 word stock-photo-friendly search query to find a real photo on Pexels.
 
-Rules for search queries:
-• Keep it SHORT: 2–5 words maximum
-• Use everyday language a photographer would tag
-• Describe real, photographable scenes — not abstract concepts
-• Stock sites do NOT have: microscopic views, futuristic devices, AI-generated art, scientific visualizations
-• Think "what would a stock photographer actually shoot?"
-• IMPORTANT: Prefer close-up and detailed compositions. Avoid queries that return product-on-solid-background shots (e.g., "hand holding vial" returns a tiny vial on a plain yellow background — bad). Instead use queries like "laboratory test tubes closeup" that return images with detail filling the whole frame.
-• Add atmosphere/mood words when the topic is serious (e.g., "dark laboratory research", "serious businesswoman office", "dramatic courtroom")
-• Avoid overly generic queries (e.g., "woman silhouette glass wall" is too vague — "woman behind frosted glass" is more specific)
+CRITICAL RULES for search queries:
+• Keep it SHORT: 2–4 simple, common words
+• Describe WIDE SCENES, environments, or people doing things — NEVER close-ups of objects
+• NEVER use the words: closeup, close-up, macro, detail, isolated, overhead, aerial
+• Use the simplest, most common words a photographer would tag
+• Think "what scene would a stock photographer shoot with a wide lens?"
+• Queries must describe scenes that THOUSANDS of stock photos exist for — not niche/specific scenarios
+• Each of the 4 queries MUST describe a COMPLETELY DIFFERENT scene (different subject, different setting) to avoid getting the same image repeated
+• The query is ONLY the search terms — never include notes, instructions, or parenthetical comments
+• Avoid disturbing imagery (dead animals, injuries, destruction)
 
-Good examples: "scientist laboratory closeup", "legal documents desk overhead", "biotech research dark lab", "serious researcher portrait", "city skyline night"
-Bad examples: "hand holding vial liquid", "woman silhouette glass wall", "human oocyte egg cell microscopic view glowing", "futuristic data crystal with swirling bio patterns"
+WHAT WORKS on stock sites: wide scenes, people in environments, rooms, landscapes, buildings, crowds, workplaces
+WHAT FAILS on stock sites: specific technical equipment, niche scientific instruments, military ranks, financial charts, microscopic views
+
+Good examples: "scientist laboratory", "woman office laptop", "city skyline night", "courtroom trial", "power plant industrial", "soldier training field", "protest crowd signs"
+Bad examples: "closeup circuit board macro", "seismograph data screen", "navy admiral portrait serious", "amortization chart", "food ingredients label closeup", "ocean sensor probe"
 
 SEARCH COLOR
 Suggest a dominant color to filter stock photo results. Use one of: red, orange, yellow, green, turquoise, blue, violet, pink, brown, black, gray, white.
@@ -361,6 +400,8 @@ class StoryPolisher:
                 sq = search_queries[i].strip() if i < len(search_queries) and search_queries[i].strip() else None
                 sc_raw = search_colors[i].strip().lower() if i < len(search_colors) and search_colors[i].strip() else None
                 sc = sc_raw if sc_raw and sc_raw != "none" else None
+                # Sanitize search query
+                sq = _sanitize_search_query(sq)
                 images.append(ImagePlan(
                     source_type="ai_generate",
                     query=prompt.strip(),
