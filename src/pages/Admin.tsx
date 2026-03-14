@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import {
   ShieldCheck, Users, Search, RefreshCw, AlertCircle,
   Ban, UserCheck, Shield,
-  Crown, Clock, Loader2, Zap, Settings, Check, Activity,
+  Crown, Clock, Loader2, Zap, Check, Activity,
   Cpu, Image, Globe,
 } from 'lucide-react'
 import { clsx } from 'clsx'
@@ -262,73 +262,6 @@ export function AdminPage() {
               </div>
             </div>
 
-            {/* Image Source Toggles */}
-            <div className="flex items-start gap-3 p-3 rounded-lg bg-gray-50 border border-gray-200 col-span-full">
-              <Settings className="w-5 h-5 text-gray-500 shrink-0 mt-0.5" />
-              <div className="min-w-0 flex-1 space-y-3">
-                <p className="text-xs font-semibold text-gray-700">Format B Image Source</p>
-
-                {/* Content slides */}
-                <div>
-                  <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide mb-1">Content Slides</p>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={async () => {
-                        try { await apiClient.put('/api/admin/image-source', { mode: 'ai', target: 'content' }); creditsQuery.refetch() } catch {}
-                      }}
-                      className={clsx('px-3 py-1.5 text-xs font-medium rounded-md border transition-colors',
-                        creditsQuery.data?.image_source_mode !== 'web' ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-                      )}
-                    >
-                      AI Generated
-                    </button>
-                    <button
-                      onClick={async () => {
-                        try { await apiClient.put('/api/admin/image-source', { mode: 'web', target: 'content' }); creditsQuery.refetch() } catch {}
-                      }}
-                      className={clsx('px-3 py-1.5 text-xs font-medium rounded-md border transition-colors',
-                        creditsQuery.data?.image_source_mode === 'web' ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-                      )}
-                    >
-                      Web (Pexels)
-                    </button>
-                    <span className="text-[10px] text-gray-400 ml-1">
-                      {creditsQuery.data?.image_source_mode === 'web' ? 'Pexels photos' : 'AI-generated'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Thumbnail */}
-                <div>
-                  <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide mb-1">Thumbnail</p>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={async () => {
-                        try { await apiClient.put('/api/admin/image-source', { mode: 'ai', target: 'thumbnail' }); creditsQuery.refetch() } catch {}
-                      }}
-                      className={clsx('px-3 py-1.5 text-xs font-medium rounded-md border transition-colors',
-                        creditsQuery.data?.thumbnail_image_source_mode !== 'web' ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-                      )}
-                    >
-                      AI Generated
-                    </button>
-                    <button
-                      onClick={async () => {
-                        try { await apiClient.put('/api/admin/image-source', { mode: 'web', target: 'thumbnail' }); creditsQuery.refetch() } catch {}
-                      }}
-                      className={clsx('px-3 py-1.5 text-xs font-medium rounded-md border transition-colors',
-                        creditsQuery.data?.thumbnail_image_source_mode === 'web' ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-                      )}
-                    >
-                      Web (Pexels)
-                    </button>
-                    <span className="text-[10px] text-gray-400 ml-1">
-                      {creditsQuery.data?.thumbnail_image_source_mode === 'web' ? 'Pexels photos' : 'AI-generated'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
         )}
       </div>
