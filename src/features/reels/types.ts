@@ -50,6 +50,7 @@ export interface DesignSettings {
   thumbnail_title_max_lines: number
   thumbnail_title_padding: number
   thumbnail_logo_size: number
+  thumbnail_logo_shape: string
   thumbnail_divider_style: string
   thumbnail_divider_thickness: number
   thumbnail_overlay_opacity: number

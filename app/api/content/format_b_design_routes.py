@@ -61,6 +61,7 @@ class DesignUpdate(BaseModel):
     thumbnail_divider_thickness: Optional[int] = Field(None, ge=1, le=10)
     thumbnail_overlay_opacity: Optional[int] = Field(None, ge=80, le=100)
     thumbnail_logo_size: Optional[int] = Field(None, ge=80, le=120)
+    thumbnail_logo_shape: Optional[str] = Field(None, pattern="^(square|circular)$")
 
 
 @router.get("")

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { Loader2, Save, Image, Film, RotateCcw, Music, ArrowLeft, Upload } from 'lucide-react'
+import { Loader2, Save, Image, Film, RotateCcw, Music, ArrowLeft, Upload, Copy } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useDesignSettings, useUpdateDesign } from './api/use-format-b'
 import type { DesignSettings } from './types'
@@ -34,6 +34,7 @@ const DEFAULTS: Partial<DesignSettings> = {
   thumbnail_title_size: 120,
   thumbnail_title_padding: 150,
   thumbnail_logo_size: 100,
+  thumbnail_logo_shape: 'square',
   thumbnail_overlay_opacity: 80,
   thumbnail_divider_style: 'line_with_logo',
   thumbnail_divider_thickness: 4,
@@ -218,6 +219,7 @@ function ThumbnailPreview({ form, brandDividerLogoUrl, brandDividerLogoText }: {
   const overlayOpacity = ((form.thumbnail_overlay_opacity ?? 80) + 20) / 100
   const titleFont = form.thumbnail_title_font || 'Anton'
   const logoSize = form.thumbnail_logo_size ?? 100
+  const logoShape = form.thumbnail_logo_shape || 'square'
   const dividerThickness = form.thumbnail_divider_thickness ?? 4
 
   const s = SCALE
@@ -262,22 +264,62 @@ function ThumbnailPreview({ form, brandDividerLogoUrl, brandDividerLogoText }: {
             }} />
             <div style={{ paddingLeft: `${lineLogoGap}px`, paddingRight: `${lineLogoGap}px` }}>
               {brandDividerLogoText ? (
-                <span style={{
-                  fontSize: `${scaledLogo * 0.45}px`,
-                  fontWeight: 800,
-                  color: '#FFFFFF',
-                  letterSpacing: `${2 * s}px`,
-                  lineHeight: 1,
-                  fontFamily: 'Inter, sans-serif',
-                  textShadow: '0 1px 6px rgba(0,0,0,0.6)',
-                }}>{brandDividerLogoText}</span>
+                logoShape === 'circular' ? (
+                  <div style={{
+                    width: scaledLogo,
+                    height: scaledLogo,
+                    borderRadius: '50%',
+                    border: `${Math.max(1, scaledLogo / 40)}px solid rgba(255,255,255,0.9)`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: 'rgba(0,0,0,0.4)',
+                  }}>
+                    <span style={{
+                      fontSize: `${scaledLogo * 0.38}px`,
+                      fontWeight: 800,
+                      color: '#FFFFFF',
+                      letterSpacing: `${1.5 * s}px`,
+                      lineHeight: 1,
+                      fontFamily: 'Inter, sans-serif',
+                    }}>{brandDividerLogoText}</span>
+                  </div>
+                ) : (
+                  <span style={{
+                    fontSize: `${scaledLogo * 0.45}px`,
+                    fontWeight: 800,
+                    color: '#FFFFFF',
+                    letterSpacing: `${2 * s}px`,
+                    lineHeight: 1,
+                    fontFamily: 'Inter, sans-serif',
+                    textShadow: '0 1px 6px rgba(0,0,0,0.6)',
+                    position: 'relative',
+                    top: `${scaledLogo * 0.04}px`,
+                  }}>{brandDividerLogoText}</span>
+                )
               ) : (
-                <img src={brandDividerLogoUrl || vaLogo} alt="Logo" style={{
-                  width: scaledLogo,
-                  height: scaledLogo,
-                  borderRadius: `${4 * s}px`,
-                  objectFit: 'contain',
-                }} />
+                logoShape === 'circular' ? (
+                  <div style={{
+                    width: scaledLogo,
+                    height: scaledLogo,
+                    borderRadius: '50%',
+                    border: `${Math.max(1, scaledLogo / 40)}px solid rgba(255,255,255,0.9)`,
+                    overflow: 'hidden',
+                  }}>
+                    <img src={brandDividerLogoUrl || vaLogo} alt="Logo" style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                    }} />
+                  </div>
+                ) : (
+                  <img src={brandDividerLogoUrl || vaLogo} alt="Logo" style={{
+                    width: scaledLogo,
+                    height: scaledLogo,
+                    borderRadius: `${4 * s}px`,
+                    objectFit: 'contain',
+                  }} />
+                )
               )}
             </div>
             <div className="flex-1" style={{
@@ -434,6 +476,10 @@ export function DesignEditorTab({ onBack }: { onBack?: () => void }) {
   const [, forceUpdate] = useState(0)
   const handleForceUpdate = useCallback(() => forceUpdate(n => n + 1), [])
 
+  // Apply to all brands modal
+  const [showApplyAllModal, setShowApplyAllModal] = useState(false)
+  const [applyingAll, setApplyingAll] = useState(false)
+  const qc = useQueryClient()
   // Brand selector (shared between both previews + settings)
   const { brands } = useDynamicBrands()
   const [selectedBrandId, setSelectedBrandId] = useState<string>('')
@@ -513,6 +559,13 @@ export function DesignEditorTab({ onBack }: { onBack?: () => void }) {
                 {formatBRef.current?.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                 Save
               </button>
+              {brands.length > 1 && (
+                <button onClick={() => setShowApplyAllModal(true)} disabled={applyingAll}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 text-gray-600 rounded-lg text-xs font-medium hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                  <Copy className="w-3.5 h-3.5" />
+                  Apply to all brands
+                </button>
+              )}
             </div>
           </>
         )}
@@ -520,6 +573,57 @@ export function DesignEditorTab({ onBack }: { onBack?: () => void }) {
 
       {topTab === 'format-a' && <TextReelsDesign />}
       {topTab === 'format-b' && <FormatBDesign tab={formatBTab} setTab={setFormatBTab} actionsRef={formatBRef} onStateChange={handleForceUpdate} selectedBrand={selectedBrand} />}
+
+      {/* Apply to All Brands confirmation modal */}
+      {showApplyAllModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowApplyAllModal(false)}>
+          <div className="bg-white rounded-xl shadow-xl p-6 max-w-md mx-4 space-y-4" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-gray-900">Apply to all brands?</h3>
+            <p className="text-sm text-gray-600">
+              This will copy the logo settings from <strong>{selectedBrand?.label || 'this brand'}</strong> to all your other brands. This includes the thumbnail logo, content logo, and logo text.
+            </p>
+            <p className="text-sm text-gray-500">
+              Design settings (fonts, colors, sizes) are already shared across all brands. This action only affects per-brand logo images and text.
+            </p>
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                onClick={() => setShowApplyAllModal(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+              >Cancel</button>
+              <button
+                onClick={async () => {
+                  if (!selectedBrandId) return
+                  setApplyingAll(true)
+                  try {
+                    const { data: sessionData } = await supabase.auth.getSession()
+                    const token = sessionData.session?.access_token
+                    const resp = await fetch(
+                      `${import.meta.env.VITE_API_URL || ''}/api/brands/${selectedBrandId}/apply-design-to-all`,
+                      {
+                        method: 'POST',
+                        headers: token ? { Authorization: `Bearer ${token}` } : {},
+                      }
+                    )
+                    if (!resp.ok) throw new Error('Failed')
+                    const result = await resp.json()
+                    qc.invalidateQueries({ queryKey: ['brands'] })
+                    toast.success(`Settings applied to ${result.updated_brands} brand${result.updated_brands !== 1 ? 's' : ''}`)
+                  } catch {
+                    toast.error('Failed to apply settings to all brands')
+                  }
+                  setApplyingAll(false)
+                  setShowApplyAllModal(false)
+                }}
+                disabled={applyingAll}
+                className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50 transition-colors"
+              >
+                {applyingAll ? <Loader2 className="w-4 h-4 animate-spin inline mr-1" /> : null}
+                Yes, apply to all
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -875,6 +979,23 @@ function ThumbnailSettings({ form, update, selectedBrandId, brandDividerLogoUrl,
           </>
         )}
         <SliderRow label="Logo Size" value={form.thumbnail_logo_size ?? 100} min={80} max={120} onChange={v => update('thumbnail_logo_size', v)} />
+        {/* Logo shape: square or circular */}
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-gray-500 w-28 flex-shrink-0">Shape</span>
+          <div className="flex gap-1 bg-gray-100 rounded-lg p-0.5">
+            {(['square', 'circular'] as const).map(shape => (
+              <button
+                key={shape}
+                onClick={() => update('thumbnail_logo_shape', shape)}
+                className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors capitalize ${
+                  (form.thumbnail_logo_shape || 'square') === shape
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >{shape}</button>
+            ))}
+          </div>
+        </div>
       </section>
 
       <section className="space-y-2">

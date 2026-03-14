@@ -56,6 +56,7 @@ class FormatBDesign(Base):
     thumbnail_divider_thickness = Column(Integer, default=4)
     thumbnail_overlay_opacity = Column(Integer, default=90)
     thumbnail_logo_size = Column(Integer, default=100)
+    thumbnail_logo_shape = Column(String(20), default="square", nullable=False, server_default="square")
 
     # Image source mode: 'ai' (Freepik/DeAPI) or 'web' (Pexels)
     # content = video slides, thumbnail = thumbnail image
@@ -109,6 +110,7 @@ class FormatBDesign(Base):
             "thumbnail_divider_thickness": self.thumbnail_divider_thickness,
             "thumbnail_overlay_opacity": self.thumbnail_overlay_opacity,
             "thumbnail_logo_size": self.thumbnail_logo_size,
+            "thumbnail_logo_shape": self.thumbnail_logo_shape or "square",
             "image_source_mode": self.image_source_mode or "web",
             "thumbnail_image_source_mode": self.thumbnail_image_source_mode or "ai",
         }

@@ -1020,3 +1020,35 @@ async def set_divider_logo_text(
     )
 
     return {"success": True, "reel_divider_logo_text": text if text else None}
+
+
+@router.post("/{brand_id}/apply-design-to-all")
+async def apply_design_to_all_brands(
+    brand_id: str,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Copy the selected brand's reel logo settings to all other brands owned by the user."""
+    manager = get_brand_manager(db)
+    source_brand = manager.get_brand(brand_id, user_id=user["id"])
+    if not source_brand:
+        raise HTTPException(status_code=404, detail=f"Brand '{brand_id}' not found")
+
+    all_brands = manager.get_brands(user_id=user["id"])
+    updated = 0
+    for brand in all_brands:
+        bid = brand.get("id") or (brand.id if hasattr(brand, "id") else None)
+        if str(bid) == str(brand_id):
+            continue
+        manager.update_brand(
+            str(bid),
+            {
+                "reel_divider_logo_path": source_brand.get("reel_divider_logo_path") if isinstance(source_brand, dict) else getattr(source_brand, "reel_divider_logo_path", None),
+                "reel_divider_logo_text": source_brand.get("reel_divider_logo_text") if isinstance(source_brand, dict) else getattr(source_brand, "reel_divider_logo_text", None),
+                "reel_content_logo_path": source_brand.get("reel_content_logo_path") if isinstance(source_brand, dict) else getattr(source_brand, "reel_content_logo_path", None),
+            },
+            user_id=user["id"],
+        )
+        updated += 1
+
+    return {"success": True, "updated_brands": updated}

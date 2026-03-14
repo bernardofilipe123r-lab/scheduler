@@ -31,6 +31,7 @@ DEFAULTS = {
     "thumbnail_divider_thickness": 4,
     "thumbnail_overlay_opacity": 80,
     "thumbnail_logo_size": 100,
+    "thumbnail_logo_shape": "square",
 }
 
 # Font display name → TTF file mapping
@@ -132,10 +133,11 @@ class ThumbnailCompositor:
         divider_center_y = title_top_y - DIVIDER_TITLE_GAP - divider_height // 2
 
         # 4. Divider line + logo
+        logo_shape = self._get(design, "thumbnail_logo_shape")
         if divider_style != "none":
             self._draw_divider(
                 canvas, draw, divider_center_y, divider_style,
-                divider_thickness, logo_path, logo_size
+                divider_thickness, logo_path, logo_size, logo_shape
             )
 
         # 5. Title text (centered, ALL CAPS)
@@ -158,6 +160,7 @@ class ThumbnailCompositor:
         self, canvas: Image.Image, draw: ImageDraw.ImageDraw,
         center_y: int, style: str, thickness: int,
         logo_path: Optional[Path], logo_size: int,
+        logo_shape: str = "square",
     ):
         """Draw divider line with centered logo."""
         has_logo = logo_path and Path(logo_path).exists()
@@ -186,9 +189,22 @@ class ThumbnailCompositor:
                 draw.line([(SIDE_PADDING, line_y), (left_end, line_y)], fill=(255, 255, 255), width=thickness)
                 draw.line([(right_start, line_y), (W - SIDE_PADDING, line_y)], fill=(255, 255, 255), width=thickness)
 
-            # Paste logo
+            # Paste logo — apply circular mask if shape is circular
             canvas_rgba = canvas.convert("RGBA")
-            canvas_rgba.paste(logo_img, (logo_x, logo_y), logo_img)
+            if logo_shape == "circular":
+                mask = Image.new("L", (logo_size, logo_size), 0)
+                mask_draw = ImageDraw.Draw(mask)
+                mask_draw.ellipse((0, 0, logo_size, logo_size), fill=255)
+                # White circle border
+                border_w = max(1, logo_size // 40)
+                draw.ellipse(
+                    (logo_x - border_w, logo_y - border_w,
+                     logo_x + logo_size + border_w, logo_y + logo_size + border_w),
+                    outline=(255, 255, 255), width=border_w
+                )
+                canvas_rgba.paste(logo_img, (logo_x, logo_y), mask)
+            else:
+                canvas_rgba.paste(logo_img, (logo_x, logo_y), logo_img)
             canvas.paste(canvas_rgba.convert("RGB"))
         else:
             # No logo — just draw full-width line
