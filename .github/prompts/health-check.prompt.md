@@ -1,7 +1,7 @@
 ---
-mode: "agent"
+agent: "agent"
 description: "Run health check, diagnose failures, and fix them. Use after any pipeline, rendering, or import change."
-tools: ["codebase", "terminal", "editFiles"]
+tools: ["search/codebase", "edit/editFiles"]
 ---
 
 # Health Check — Diagnose & Fix

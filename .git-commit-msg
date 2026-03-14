@@ -1,0 +1,11 @@
+refactor: componentize Admin page + backend improvements
+
+Backend:
+- Add DNA change detector (dna_change_detector.py) — resets Toby learning when Content DNA identity fields change
+- Integrate DNA change detection into content_dna_routes.py (update + brand reassignment)
+- Remove orchestrator dead code (-115 lines)
+- Extract _download_logo_safe() utility in job_processor.py, dedup 3 identical blocks
+
+Frontend:
+- Extract Admin.tsx (3272 lines) into modular components
+- Admin.tsx reduced to 517 lines (imports + AdminPage function only)

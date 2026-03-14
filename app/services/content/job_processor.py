@@ -51,6 +51,25 @@ def _get_brand_type(brand_name: str) -> str:
     return brand_resolver.resolve_brand_name(brand_name) or brand_name
 
 
+def _download_logo_safe(url: str, label: str) -> Optional[Path]:
+    """Download a logo URL to a temp file. Returns Path on success, None on failure."""
+    if not url or not url.startswith("http"):
+        return None
+    try:
+        import httpx
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+        tmp.close()
+        resp = httpx.get(url, timeout=15, follow_redirects=True)
+        if resp.status_code == 200:
+            with open(tmp.name, 'wb') as f:
+                f.write(resp.content)
+            print(f"   ✓ {label} downloaded: {tmp.name}", flush=True)
+            return Path(tmp.name)
+    except Exception as e:
+        print(f"   ⚠️ {label} download failed: {e}", flush=True)
+    return None
+
+
 class JobProcessor:
     """Processing pipeline — generates images, videos, and captions for jobs."""
 
@@ -732,53 +751,18 @@ class JobProcessor:
             # Prefer the dedicated content logo for reel header; fall back to main logo
             brand_content_logo_url = (brand_obj.reel_content_logo_path if brand_obj else None) or brand_logo_url
 
-            # Download brand logo to temp file if it's a URL
-            brand_logo_local = None
-            if brand_logo_url and brand_logo_url.startswith("http"):
-                try:
-                    import httpx
-                    tmp_logo = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
-                    tmp_logo.close()
-                    resp = httpx.get(brand_logo_url, timeout=15, follow_redirects=True)
-                    if resp.status_code == 200:
-                        with open(tmp_logo.name, 'wb') as f:
-                            f.write(resp.content)
-                        brand_logo_local = Path(tmp_logo.name)
-                        print(f"   ✓ Brand logo downloaded: {brand_logo_local}", flush=True)
-                except Exception as e:
-                    print(f"   ⚠️ Brand logo download failed: {e}", flush=True)
+            # Download brand logos to temp files
+            brand_logo_local = _download_logo_safe(brand_logo_url, "Brand logo")
 
             # Download divider logo (for thumbnail) if different from main logo
             brand_divider_logo_local = brand_logo_local
-            if brand_divider_logo_url and brand_divider_logo_url != brand_logo_url and brand_divider_logo_url.startswith("http"):
-                try:
-                    import httpx
-                    tmp_div_logo = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
-                    tmp_div_logo.close()
-                    resp = httpx.get(brand_divider_logo_url, timeout=15, follow_redirects=True)
-                    if resp.status_code == 200:
-                        with open(tmp_div_logo.name, 'wb') as f:
-                            f.write(resp.content)
-                        brand_divider_logo_local = Path(tmp_div_logo.name)
-                        print(f"   ✓ Divider logo downloaded: {brand_divider_logo_local}", flush=True)
-                except Exception as e:
-                    print(f"   ⚠️ Divider logo download failed: {e}", flush=True)
+            if brand_divider_logo_url and brand_divider_logo_url != brand_logo_url:
+                brand_divider_logo_local = _download_logo_safe(brand_divider_logo_url, "Divider logo") or brand_logo_local
 
             # Download content logo (for reel header) if different from main logo
             brand_content_logo_local = brand_logo_local
-            if brand_content_logo_url and brand_content_logo_url != brand_logo_url and brand_content_logo_url.startswith("http"):
-                try:
-                    import httpx
-                    tmp_cont_logo = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
-                    tmp_cont_logo.close()
-                    resp = httpx.get(brand_content_logo_url, timeout=15, follow_redirects=True)
-                    if resp.status_code == 200:
-                        with open(tmp_cont_logo.name, 'wb') as f:
-                            f.write(resp.content)
-                        brand_content_logo_local = Path(tmp_cont_logo.name)
-                        print(f"   ✓ Content logo downloaded: {brand_content_logo_local}", flush=True)
-                except Exception as e:
-                    print(f"   ⚠️ Content logo download failed: {e}", flush=True)
+            if brand_content_logo_url and brand_content_logo_url != brand_logo_url:
+                brand_content_logo_local = _download_logo_safe(brand_content_logo_url, "Content logo") or brand_logo_local
 
             # ── Step 1: Source images ──────────────────────────
             image_source_mode = get_image_source_mode(db=self.db, user_id=user_id)

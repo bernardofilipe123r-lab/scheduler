@@ -190,8 +190,13 @@ async def update_dna_profile(
     user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Update a Content DNA profile."""
+    from app.services.toby.dna_change_detector import snapshot_fingerprint, check_and_reset_if_changed
+
     user_id = user["id"]
     dna = _verify_dna_ownership(db, dna_id, user_id)
+
+    # Snapshot identity BEFORE applying updates
+    old_fingerprint = snapshot_fingerprint(dna)
 
     update_data = body.dict(exclude_unset=True)
     for field_name, val in update_data.items():
@@ -201,6 +206,11 @@ async def update_dna_profile(
     dna.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(dna)
+
+    # If identity fields changed, reset Toby learning for this DNA
+    learning_reset = check_and_reset_if_changed(db, dna, old_fingerprint, user_id)
+    if learning_reset:
+        db.commit()
 
     # Invalidate service cache
     get_content_dna_service().invalidate_cache(user_id=user_id, content_dna_id=dna_id)
@@ -259,6 +269,21 @@ async def assign_brand_to_dna(
     old_dna_id = brand.content_dna_id
     brand.content_dna_id = dna_id
     db.commit()
+
+    # Log DNA reassignment for Toby audit trail
+    if old_dna_id and old_dna_id != dna_id:
+        from app.models.toby import TobyActivityLog
+        db.add(TobyActivityLog(
+            user_id=user_id,
+            action_type="dna_brand_reassigned",
+            description=(
+                f"Brand '{brand.display_name}' moved from DNA {old_dna_id[:8]} "
+                f"to DNA {dna_id[:8]}. Future content will use new DNA's learned strategies."
+            ),
+            level="info",
+            created_at=datetime.now(timezone.utc),
+        ))
+        db.commit()
 
     # Invalidate cache for old and new DNA
     svc = get_content_dna_service()

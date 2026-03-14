@@ -44,7 +44,7 @@ BOOTSTRAP_MAX_PER_BRAND_PER_HOUR = 6    # 6 per brand per hour in bootstrap
 BOOTSTRAP_MAX_PER_USER_PER_HOUR = 20    # 20 total per hour in bootstrap
 BOOTSTRAP_COOLDOWN_MINUTES = 2          # Only 2-min gap between same-brand gens
 BOOTSTRAP_MAX_PLANS_PER_TICK = 4        # Generate up to 4 plans per tick
-BOOTSTRAP_MAX_PARALLEL_WORKERS = 3      # Run up to 3 generations in parallel
+
 
 
 def toby_tick():
@@ -411,10 +411,6 @@ def _run_buffer_check(db: Session, user_id: str, state: TobyState, brands=None):
 
     # CRITICAL FIX (2026-03-08): Always execute sequentially to prevent
     # duplicate content from race conditions in parallel DB sessions.
-    # The old _execute_plans_parallel() used separate SessionLocal() per thread,
-    # so concurrent dedup checks couldn't see each other's uncommitted inserts,
-    # resulting in identical content being scheduled 4-6x per brand.
-    # See: https://github.com/... (duplicate-content-incident)
     import uuid as _uuid
     batch_id = str(_uuid.uuid4())[:8]
     generated, job_details = _execute_plans_sequential(db, eligible_plans, user_id, state, batch_id=batch_id)
@@ -1081,60 +1077,6 @@ def _execute_plans_sequential(db: Session, plans: list, user_id: str, state: Tob
     return generated, job_details
 
 
-def _execute_plans_parallel(plans: list, user_id: str, state: TobyState) -> int:
-    """Execute content plans in parallel using separate DB sessions per thread.
-
-    Each plan gets its own DB session so SQLAlchemy sessions stay thread-local.
-    """
-    from app.db_connection import SessionLocal
-
-    max_workers = min(len(plans), BOOTSTRAP_MAX_PARALLEL_WORKERS)
-    generated = 0
-    print(f"[TOBY] Parallel generation: {len(plans)} plans, {max_workers} workers", flush=True)
-
-    def _run_one(plan):
-        """Run a single content plan in its own DB session."""
-        thread_db = SessionLocal()
-        try:
-            job_detail = _execute_content_plan(thread_db, plan)
-            _record_generation(plan.user_id, plan.brand_id)
-            thread_db.commit()
-            return {"success": True, "brand_id": plan.brand_id, "job_detail": job_detail}
-        except Exception as e:
-            thread_db.rollback()
-            print(f"[TOBY] Parallel gen failed for {plan.brand_id}: {e}", flush=True)
-            clean = _sanitize_error(str(e)[:300])
-            thread_db.add(TobyActivityLog(
-                user_id=plan.user_id,
-                action_type="error",
-                description=f"Content generation failed for {plan.brand_id}: {clean}",
-                level="error",
-                created_at=datetime.now(timezone.utc),
-            ))
-            try:
-                thread_db.commit()
-            except Exception:
-                thread_db.rollback()
-            return {"success": False, "brand_id": plan.brand_id, "error": str(e)}
-        finally:
-            thread_db.close()
-
-    job_details: list[dict] = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {executor.submit(_run_one, plan): plan for plan in plans}
-        for future in concurrent.futures.as_completed(futures):
-            result = future.result()
-            if result["success"]:
-                generated += 1
-                _increment_budget(state)
-                print(f"[TOBY] ✓ Parallel gen completed for {result['brand_id']}", flush=True)
-                if result.get("job_detail"):
-                    job_details.append(result["job_detail"])
-
-    print(f"[TOBY] Parallel generation done: {generated}/{len(plans)} succeeded", flush=True)
-    return generated, job_details
-
-
 def _cleanup_supabase_on_failure(job_id: str, brand_id: str):
     """D4: Clean up orphaned Supabase storage files when media generation fails."""
     try:
@@ -1237,63 +1179,6 @@ def _increment_budget(state: TobyState, cost_cents: int = 5):
     state.spent_today_cents = (state.spent_today_cents or 0) + cost_cents
     if not state.budget_reset_at:
         state.budget_reset_at = datetime.now(timezone.utc)
-
-
-def _generate_48h_learning_events(db: Session, user_id: str, count: int):
-    """Generate human-readable learning event logs for newly 48h-scored posts.
-
-    v3.0: These fire within 48h of publishing so users see Toby actively learning,
-    rather than waiting 7 days for strategy updates.
-    """
-    from sqlalchemy import func
-
-    # Get per-brand average scores for comparison
-    brand_avg_results = (
-        db.query(TobyContentTag.brand_id, func.avg(TobyContentTag.toby_score))
-        .filter(
-            TobyContentTag.user_id == user_id,
-            TobyContentTag.toby_score.isnot(None),
-        )
-        .group_by(TobyContentTag.brand_id)
-        .all()
-    )
-    brand_avgs = {bid: float(avg) for bid, avg in brand_avg_results if avg}
-
-    # Fetch the recently 48h-scored tags (in order of scoring time)
-    recently_scored = (
-        db.query(TobyContentTag)
-        .filter(
-            TobyContentTag.user_id == user_id,
-            TobyContentTag.score_phase == "48h",
-            TobyContentTag.toby_score.isnot(None),
-            TobyContentTag.metrics_unreliable != True,
-        )
-        .order_by(TobyContentTag.scored_at.desc())
-        .limit(count)
-        .all()
-    )
-
-    for tag in recently_scored:
-        lesson = _generate_learning_lesson(tag, brand_avgs.get(tag.brand_id, 50.0))
-        if lesson:
-            event_time = tag.scored_at or datetime.now(timezone.utc)
-            db.add(TobyActivityLog(
-                user_id=user_id,
-                action_type="learning_event",
-                description=lesson,
-                level="info",
-                action_metadata={
-                    "schedule_id": tag.schedule_id,
-                    "brand_id": tag.brand_id,
-                    "score": round(tag.toby_score, 1) if tag.toby_score else None,
-                    "personality": tag.personality,
-                    "hook": tag.hook_strategy,
-                    "topic": tag.topic_bucket,
-                    "score_phase": "48h",
-                },
-                created_at=event_time,
-            ))
-    db.flush()
 
 
 def _generate_learning_lesson(tag, brand_avg: float) -> str:

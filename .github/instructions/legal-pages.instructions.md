@@ -1,6 +1,6 @@
 ---
 description: "Use when editing legal pages (Terms, Privacy Policy, Data Deletion). These pages are referenced by Meta, TikTok, and Google developer portals and must stay accurate."
-applyTo: ["src/pages/Terms.tsx", "src/pages/PrivacyPolicy.tsx", "src/pages/DataDeletion.tsx"]
+applyTo: "src/pages/{Terms,PrivacyPolicy,DataDeletion}.tsx"
 ---
 
 # Legal Page Rules

@@ -189,7 +189,7 @@ CAROUSEL_TITLE_TEMPLATES = {
         "template": "IF YOU HAVE [SYMPTOM], THIS IS WHAT YOUR [BODY_PART] IS TRYING TO TELL YOU",
         "instruction": "Fill in [SYMPTOM] with a common complaint, [BODY_PART] with the organ involved. Example: IF YOU HAVE BRAIN FOG, THIS IS WHAT YOUR GUT-BRAIN AXIS IS TRYING TO TELL YOU",
     },
-    # DATA / NUMBERS patterns  
+    # DATA / NUMBERS patterns
     "x_of_adults_dont_know": {
         "template": "[N]% OF ADULTS DON'T KNOW THEIR [X] IS AT DANGEROUS LEVELS",
         "instruction": "Fill in [N] with a realistic percentage (40-80), [X] with a measurable health marker. Example: 67% OF ADULTS DON'T KNOW THEIR OMEGA-3 INDEX IS AT DANGEROUS LEVELS",

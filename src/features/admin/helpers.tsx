@@ -1,7 +1,8 @@
 import React from 'react'
 import {
-  Ban, Crown, Shield, UserCheck,
+  AlertCircle, Ban, Crown, Shield, UserCheck, ChevronDown, ChevronUp,
 } from 'lucide-react'
+import { clsx } from 'clsx'
 import type { AdminUser } from './types'
 
 export function formatDate(iso: string | null) {
@@ -82,4 +83,68 @@ export const CATEGORY_STYLES: Record<string, string> = {
   publishing: 'bg-green-50 text-green-700',
   ai_generation: 'bg-violet-50 text-violet-700',
   user_action: 'bg-orange-50 text-orange-700',
+}
+
+export function UsageBar({ used, limit, label, icon, unit = 'GB', decimals = 2 }: {
+  used: number
+  limit: number
+  label: string
+  icon: React.ReactNode
+  unit?: string
+  decimals?: number
+}) {
+  const pct = limit > 0 ? Math.min((used / limit) * 100, 100) : 0
+  const overLimit = used > limit
+  const barColor = overLimit
+    ? 'bg-red-500'
+    : pct > 80
+      ? 'bg-amber-500'
+      : 'bg-emerald-500'
+  const textColor = overLimit ? 'text-red-600' : pct > 80 ? 'text-amber-600' : 'text-gray-700'
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <span className="flex items-center gap-1.5 text-xs font-medium text-gray-700">
+          {icon} {label}
+        </span>
+        <span className={clsx('text-xs font-semibold', textColor)}>
+          {used.toFixed(decimals)} / {limit.toFixed(decimals)} {unit}
+          {' '}({pct.toFixed(0)}%)
+        </span>
+      </div>
+      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+        <div
+          className={clsx('h-full rounded-full transition-all duration-500', barColor)}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      {overLimit && (
+        <p className="text-[10px] text-red-500 font-medium flex items-center gap-1">
+          <AlertCircle className="w-3 h-3" /> Exceeded by {(used - limit).toFixed(decimals)} {unit}
+        </p>
+      )}
+    </div>
+  )
+}
+
+export function SectionHeader({ label, open, toggle, icon }: { label: string; open: boolean; toggle: () => void; icon: React.ReactNode }) {
+  return (
+    <button onClick={toggle} className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wide hover:text-gray-700 transition-colors w-full">
+      {icon}
+      {label}
+      {open ? <ChevronUp className="w-3 h-3 ml-auto" /> : <ChevronDown className="w-3 h-3 ml-auto" />}
+    </button>
+  )
+}
+
+export function HealthDot({ healthy, status }: { healthy: boolean; status?: string }) {
+  return (
+    <span className="flex items-center gap-1.5 text-xs">
+      <span className={clsx('w-2 h-2 rounded-full shrink-0', healthy ? 'bg-emerald-500' : 'bg-red-500')} />
+      <span className={clsx('font-medium', healthy ? 'text-emerald-700' : 'text-red-700')}>
+        {status ?? (healthy ? 'Healthy' : 'Unhealthy')}
+      </span>
+    </span>
+  )
 }
