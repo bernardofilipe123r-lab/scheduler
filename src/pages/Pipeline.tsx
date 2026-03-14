@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import { AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
@@ -19,6 +20,8 @@ import {
   useBulkRejectPipeline,
   useDeletePipelineItem,
   usePipelineFilters,
+  pipelineKeys,
+  fetchPipelineItems,
 } from '@/features/pipeline'
 import type { PipelineItem } from '@/features/pipeline'
 import { useTobyConfig } from '@/features/toby'
@@ -26,6 +29,7 @@ import { PipelineSkeleton } from '@/shared/components/Skeleton'
 
 export function PipelinePage() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { filters, setStatus, setBrand, setContentType, setPage, resetFilters } = usePipelineFilters()
   const { data: statsData, isLoading: statsLoading } = usePipelineStats()
   const { data: pipelineData, isLoading: itemsLoading, isFetching: itemsFetching, isError: itemsError, isPlaceholderData } = usePipelineItems(filters)
@@ -204,6 +208,26 @@ export function PipelinePage() {
       setPage(filters.page - 1)
     }
   }, [filters.page, allItems.length, itemsFetching, itemsLoading, pipelineData, setPage])
+
+  // Prefetch adjacent pages so clicks render instantly
+  useEffect(() => {
+    if (totalPages <= 1) return
+    const pagesToPrefetch = [
+      currentPage - 1,
+      currentPage + 1,
+      currentPage + 2,
+      currentPage + 3,
+    ].filter(p => p >= 1 && p <= totalPages && p !== currentPage)
+
+    for (const p of pagesToPrefetch) {
+      const prefetchFilters = { ...filters, page: p }
+      queryClient.prefetchQuery({
+        queryKey: pipelineKeys.list(prefetchFilters),
+        queryFn: () => fetchPipelineItems(prefetchFilters),
+        staleTime: 30_000,
+      })
+    }
+  }, [currentPage, totalPages, filters, queryClient])
 
   return (
     <div className="space-y-6">

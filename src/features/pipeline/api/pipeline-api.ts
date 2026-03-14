@@ -13,7 +13,7 @@ export const pipelineKeys = {
   stats: () => [...pipelineKeys.all, 'stats'] as const,
 }
 
-export function usePipelineItems(filters: PipelineFilters) {
+function buildPipelineParams(filters: PipelineFilters): string {
   const params: Record<string, string> = {}
   if (filters.status) params.status = filters.status
   if (filters.brand) params.brand = filters.brand
@@ -21,14 +21,20 @@ export function usePipelineItems(filters: PipelineFilters) {
   if (filters.batch_id) params.batch_id = filters.batch_id
   params.page = String(filters.page)
   params.limit = String(filters.limit)
+  return new URLSearchParams(params).toString()
+}
 
-  const qs = new URLSearchParams(params).toString()
+export function fetchPipelineItems(filters: PipelineFilters) {
+  return get<PipelineResponse>(`/api/pipeline?${buildPipelineParams(filters)}`)
+}
+
+export function usePipelineItems(filters: PipelineFilters) {
   const isGenerating = filters.status === 'generating'
   const isPending = filters.status === 'pending_review'
 
   return useQuery({
     queryKey: pipelineKeys.list(filters),
-    queryFn: () => get<PipelineResponse>(`/api/pipeline?${qs}`),
+    queryFn: () => fetchPipelineItems(filters),
     staleTime: 0,
     refetchInterval: isGenerating ? 3_000 : isPending ? 10_000 : false,
     refetchOnWindowFocus: true,
