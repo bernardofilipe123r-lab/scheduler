@@ -17,6 +17,7 @@ Fallback: returns None → caller falls back to Freepik/DeAPI.
 """
 import logging
 import os
+import random
 import tempfile
 from pathlib import Path
 from typing import Optional
@@ -50,7 +51,8 @@ PORTRAIT_MAX_RATIO = 0.9
 MIN_DIMENSION = 400
 
 # How many candidate images to try before giving up
-MAX_CANDIDATES = 5
+# Increased from 5 to 10 to handle cross-story dedup rejections
+MAX_CANDIDATES = 10
 
 # Minimum visual complexity — images below this are mostly blank/solid background.
 # Measured as std-dev of pixel values on a 100x100 thumbnail (0-255 scale).
@@ -59,6 +61,13 @@ MIN_VISUAL_COMPLEXITY = 35
 # Max percentage of pixels close to avg_color before we consider an image "empty".
 # Pexels returns avg_color — if a huge chunk matches it, the image is plain background.
 MAX_DOMINANT_COLOR_PCT = 0.55
+
+
+# Module-level cross-story dedup — persists across all WebImageSourcer instances
+# within the same server process. Prevents the same Pexels photo from appearing
+# in different stories generated in the same session.
+_global_used_photo_ids: set[int] = set()
+_global_used_photo_ids_max = 500  # Cap to prevent unbounded growth
 
 
 class WebImageSourcer:
@@ -95,10 +104,13 @@ class WebImageSourcer:
             headers = {
                 "Authorization": self._api_key,
             }
+            # Randomize page to get different results for common queries
+            page = random.randint(1, 3)
             params = {
                 "query": query,
                 "orientation": orientation,
-                "per_page": 15,
+                "per_page": 30,
+                "page": page,
             }
 
             # Add color filter if valid
@@ -136,11 +148,13 @@ class WebImageSourcer:
                 return None
 
             # Try downloading top candidates, skipping already-used photos
+            # Check both per-story and cross-story (global) dedup sets
+            global _global_used_photo_ids
             size_key = "portrait" if orientation == "portrait" else "landscape"
             for photo in candidates[:MAX_CANDIDATES]:
                 photo_id = photo.get("id")
-                if photo_id and photo_id in self._used_photo_ids:
-                    logger.debug(f"[WebImageSourcer] Skipping duplicate photo {photo_id}")
+                if photo_id and (photo_id in self._used_photo_ids or photo_id in _global_used_photo_ids):
+                    logger.debug(f"[WebImageSourcer] Skipping duplicate photo {photo_id} (cross-story dedup)")
                     continue
 
                 url = photo.get("src", {}).get(size_key) or photo.get("src", {}).get("large")
@@ -151,6 +165,10 @@ class WebImageSourcer:
                 if path:
                     if photo_id:
                         self._used_photo_ids.add(photo_id)
+                        # Add to global dedup (cap size to prevent memory leak)
+                        if len(_global_used_photo_ids) >= _global_used_photo_ids_max:
+                            _global_used_photo_ids.clear()
+                        _global_used_photo_ids.add(photo_id)
                     photographer = photo.get("photographer", "Unknown")
                     logger.info(f"[WebImageSourcer] Downloaded Pexels {orientation} image by {photographer}: {url[:80]}...")
                     return path

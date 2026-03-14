@@ -74,7 +74,37 @@ class PolishedStory:
 _BAD_QUERY_WORDS = {
     "closeup", "close-up", "close", "macro", "detail", "detailed",
     "isolated", "overhead", "aerial", "extreme",
+    "abstract", "background", "concept", "hologram",
 }
+
+# Overused query patterns that return the same few photos on Pexels.
+# If a query matches any of these, we replace it with a random alternative.
+_OVERUSED_PATTERNS = [
+    re.compile(r'scientist.*lab', re.IGNORECASE),
+    re.compile(r'lab.*scientist', re.IGNORECASE),
+    re.compile(r'research.*lab', re.IGNORECASE),
+    re.compile(r'doctor.*office', re.IGNORECASE),
+    re.compile(r'medical.*research', re.IGNORECASE),
+]
+
+# Replacement queries when overused patterns are detected
+_DIVERSE_REPLACEMENTS = [
+    "woman stretching morning yoga",
+    "colorful farmers market stall",
+    "person hiking mountain trail",
+    "family cooking kitchen together",
+    "ocean waves beach sunrise",
+    "garden sunlight flowers close",
+    "city park people jogging",
+    "fresh smoothie fruit counter",
+    "cozy reading nook window",
+    "sunrise over wheat field",
+    "woman walking city streets",
+    "healthy breakfast table overhead",
+    "person meditating outdoors nature",
+    "herbal tea wooden table",
+    "friends laughing outdoor cafe",
+]
 
 
 def _sanitize_search_query(query: str | None) -> str | None:
@@ -82,6 +112,7 @@ def _sanitize_search_query(query: str | None) -> str | None:
 
     - Strips words that cause bad results (closeup, macro, etc.)
     - Removes parenthetical notes/instructions that the LLM sometimes leaks
+    - Replaces overused patterns (scientist laboratory) with diverse alternatives
     - Caps length at 5 words
     """
     if not query:
@@ -93,6 +124,15 @@ def _sanitize_search_query(query: str | None) -> str | None:
     # If query starts with "Note:" or similar, it's an instruction — discard
     if re.match(r'^(note|hint|tip|suggestion)\s*:', query, re.IGNORECASE):
         return None
+
+    # Replace overused patterns that return the same few photos
+    import random as _rand
+    for pattern in _OVERUSED_PATTERNS:
+        if pattern.search(query):
+            replacement = _rand.choice(_DIVERSE_REPLACEMENTS)
+            logger.info(f"[StoryPolisher] Replacing overused query {query!r} → {replacement!r}")
+            query = replacement
+            break
 
     # Strip bad words
     words = query.split()
@@ -198,22 +238,26 @@ CRITICAL RULES for search queries:
 • Use the simplest, most common words a photographer would tag
 • Think "what scene would a stock photographer shoot with a wide lens?"
 • Queries must describe scenes that THOUSANDS of stock photos exist for — not niche/specific scenarios
-• Each of the 4 queries MUST describe a COMPLETELY DIFFERENT scene (different subject, different setting) to avoid getting the same image repeated
+• Each of the 4 queries MUST describe a COMPLETELY DIFFERENT scene type — different subject, different setting, different visual mood
 • The query is ONLY the search terms — never include notes, instructions, or parenthetical comments
 • Avoid disturbing imagery (dead animals, injuries, destruction)
 
-WHAT WORKS on stock sites: wide scenes, people in environments, rooms, landscapes, buildings, crowds, workplaces
-WHAT FAILS on stock sites: specific technical equipment, niche scientific instruments, military ranks, financial charts, microscopic views
+DIVERSITY RULE (MANDATORY):
+• NEVER use "scientist laboratory" or any lab/research query more than ONCE across all 4 visuals
+• NEVER repeat the same scene category (e.g., don't use "woman gym" AND "woman exercise" — those return the same photos)
+• Mix at least 3 DIFFERENT visual categories from this list:
+  - People in daily life (cooking, walking, working, exercising, eating)
+  - Nature & outdoors (forest, ocean, mountains, sunset, garden)
+  - Food & ingredients (fruits, vegetables, meals, kitchen, market)
+  - Urban & architecture (city streets, buildings, cafes, homes)
+  - Abstract & textures (water droplets, light patterns, colors, textures)
+• Stock photo sites return the SAME FEW IMAGES for generic queries like "scientist laboratory" — use specific, varied scenes instead
 
-Good examples: "scientist laboratory", "woman office laptop", "city skyline night", "courtroom trial", "power plant industrial", "soldier training field", "protest crowd signs"
-Bad examples: "closeup circuit board macro", "seismograph data screen", "navy admiral portrait serious", "amortization chart", "food ingredients label closeup", "ocean sensor probe"
+Good examples: "woman running park sunrise", "colorful fruit market stall", "ocean waves aerial view", "cozy kitchen morning light", "yoga class group stretching", "fresh vegetables wooden table", "city rooftop sunset view"
+Bad examples: "scientist laboratory research" (overused, returns same 5 photos), "abstract science background" (too vague), "microscope slide colorful" (too niche), "healthy food table" (too generic)
 
 SEARCH COLOR
-Suggest a dominant color to filter stock photo results. Use one of: red, orange, yellow, green, turquoise, blue, violet, pink, brown, black, gray, white.
-Only suggest a color when it CLEARLY and OBVIOUSLY improves relevance. Color filters narrow results significantly, so prefer "none" unless the color is essential to the image concept.
-Good uses: "white" for a lab/clinical scene, "black" for luxury/dramatic, "green" for nature
-Bad uses: "blue" for a woman silhouette (too restrictive), "white" for a scientist (unnecessary)
-When in doubt, write "none" — a relevant image with wrong color is better than no good image at all.
+Write "none" for all queries. Color filters severely limit Pexels results and cause repeated images. Only use a color if the image concept ABSOLUTELY requires it (e.g., a story specifically about a red dress).
 
 IMAGE RULES
 
