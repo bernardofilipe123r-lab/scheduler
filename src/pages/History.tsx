@@ -35,7 +35,7 @@ export function HistoryPage() {
   const autoSchedule = useAutoScheduleReel()
   const updateBrandStatus = useUpdateBrandStatus()
 
-  const jobsArray = Array.isArray(jobs) ? jobs : []
+  const jobsArray = useMemo(() => Array.isArray(jobs) ? jobs : [], [jobs])
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('')

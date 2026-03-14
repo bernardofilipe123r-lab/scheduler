@@ -206,7 +206,7 @@ export function HomePage() {
     .slice(0, 6)
 
   // Brand analytics
-  const brandMetrics = analyticsData?.brands || []
+  const brandMetrics = useMemo(() => analyticsData?.brands || [], [analyticsData])
 
   // Active brands count
   const activeBrandsCount = dynamicBrands.filter(b => b.active).length

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Loader2, X } from 'lucide-react'
 import igIcon from '@/assets/icons/instagram.png'
@@ -51,7 +51,7 @@ export function GeneratorPage() {
   })
 
   // Helper: check if a platform is enabled for given brands based on their enabled_platforms config
-  const isPlatformEnabledForBrands = (platform: Platform, brands: BrandName[]): boolean => {
+  const isPlatformEnabledForBrands = useCallback((platform: Platform, brands: BrandName[]): boolean => {
     if (!brandConfigsData?.brands?.length || brands.length === 0) return true
     return brands.some(brandId => {
       const cfg = brandConfigsData.brands.find(bc => bc.brand_id === brandId)
@@ -61,18 +61,18 @@ export function GeneratorPage() {
       if (!reelsPlatforms) return true
       return reelsPlatforms.includes(platform)
     })
-  }
-  
+  }, [brandConfigsData])
+
   // CTA options from settings (weighted)
   const ctaOptions = (nicheConfig?.cta_options ?? []).filter(o => o.text && o.weight > 0)
-  
+
   // Form state
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
   const [selectedBrands, setSelectedBrands] = useState<BrandName[]>([])
   const [brandsInitialized, setBrandsInitialized] = useState(false)
   const [variant, setVariant] = useState<Variant>('light')
-  
+
   // Auto-select all brands when they load
   useEffect(() => {
     if (!brandsInitialized && brandIds.length > 0) {
@@ -83,7 +83,7 @@ export function GeneratorPage() {
   const [aiPrompt, setAiPrompt] = useState('')
   const [ctaType, setCtaType] = useState('auto')
   const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>([...SUPPORTED_PLATFORMS])
-  
+
   // Loading states
   const [isAutoGenerating, setIsAutoGenerating] = useState(false)
   const [isCreatingJob, setIsCreatingJob] = useState(false)
@@ -98,7 +98,7 @@ export function GeneratorPage() {
   const [imageModel, setImageModel] = useState<string>('ZImageTurbo_INT8')
   const [musicSource, setMusicSource] = useState<string>('trending_pick')
   const [selectedTrendingTrack, setSelectedTrendingTrack] = useState<string>('')
-  
+
   // When connections or brand config data loads, remove platforms with no connected brands
   // or not enabled for any selected brand from defaults
   useEffect(() => {
@@ -114,7 +114,7 @@ export function GeneratorPage() {
       const next = prev.filter(keep)
       return next.length > 0 ? next : prev // never empty
     })
-  }, [connectionsData, brandConfigsData, selectedBrands])
+  }, [connectionsData, brandConfigsData, selectedBrands, isPlatformEnabledForBrands])
 
   useEffect(() => {
     if (!connectionsData) return
@@ -129,21 +129,21 @@ export function GeneratorPage() {
       const next = prev.filter(keep)
       return next.length > 0 ? next : prev
     })
-  }, [connectionsData, brandConfigsData, autoBrands])
-  
+  }, [connectionsData, brandConfigsData, autoBrands, isPlatformEnabledForBrands])
+
   // Refs for highlighting
   const titleRef = useRef<HTMLTextAreaElement>(null)
   const contentRef = useRef<HTMLTextAreaElement>(null)
-  
+
   // Toggle brand selection
   const toggleBrand = (brand: BrandName) => {
-    setSelectedBrands(prev => 
+    setSelectedBrands(prev =>
       prev.includes(brand)
         ? prev.filter(b => b !== brand)
         : [...prev, brand]
     )
   }
-  
+
   // Toggle platform selection
   const togglePlatform = (platform: Platform) => {
     setSelectedPlatforms(prev => {
@@ -156,7 +156,7 @@ export function GeneratorPage() {
         : [...prev, platform]
     })
   }
-  
+
   // ── Auto-generate modal helpers ──────────────────────────────────
   const openAutoModal = () => {
     setAutoCount(brandIds.length)
@@ -229,32 +229,32 @@ export function GeneratorPage() {
       setIsAutoGenerating(false)
     }
   }
-  
+
   // Create job and generate reels
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!title.trim()) {
       toast.error('Enter a title')
       return
     }
-    
+
     if (selectedBrands.length === 0) {
       toast.error('Select at least one brand')
       return
     }
-    
+
     const contentLines = content.split('\n').filter(line => line.trim())
     if (contentLines.length === 0) {
       toast.error('Enter at least one content line')
       return
     }
-    
+
     if (selectedPlatforms.length === 0) {
       toast.error('Select at least one platform')
       return
     }
-    
+
     setIsCreatingJob(true)
     try {
       // For dark mode: auto-generate image prompt if user left it blank
@@ -294,13 +294,13 @@ export function GeneratorPage() {
         music_source: musicSource,
         music_track_id: musicSource === 'trending_pick' ? selectedTrendingTrack || undefined : undefined,
       })
-      
+
       setTitle('')
       setContent('')
       setAiPrompt('')
-      
+
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
-      
+
       toast.success(
         (t) => (
           <span className="cursor-pointer" onClick={() => { toast.dismiss(t.id); navigate(`/job/${job.id}`) }}>
@@ -309,7 +309,7 @@ export function GeneratorPage() {
         ),
         { duration: 6000 }
       )
-      
+
     } catch (error) {
       console.error('Error creating job:', error)
       toast.error('Failed to start generation')
@@ -317,7 +317,7 @@ export function GeneratorPage() {
       setIsCreatingJob(false)
     }
   }
-  
+
   if (brandsLoading || configLoading) return <GeneratorSkeleton />
 
   return (

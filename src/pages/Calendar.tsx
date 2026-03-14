@@ -36,6 +36,19 @@ type ContentTypeFilter = 'all' | 'reels' | 'posts'
 type StatusFilter = 'all' | 'scheduled' | 'published' | 'partial' | 'failed'
 type PlatformFilter = string | null
 
+const PLATFORM_DIMENSIONS: Record<string, { label: string; specs: { w: number; h: number; ratio: string }[] }> = {
+  instagram: { label: 'Instagram Reels', specs: [{ w: 1080, h: 1920, ratio: '9:16' }] },
+  instagram_carousel: { label: 'Instagram Carousel', specs: [{ w: 1080, h: 1350, ratio: '4:5' }] },
+  tiktok: { label: 'TikTok', specs: [{ w: 1080, h: 1920, ratio: '9:16' }] },
+  tiktok_carousel: { label: 'TikTok Carousel', specs: [
+    { w: 1080, h: 1920, ratio: '9:16' },
+    { w: 1080, h: 1350, ratio: '4:5' },
+    { w: 1080, h: 1080, ratio: '1:1' },
+  ]},
+  youtube: { label: 'YouTube Shorts', specs: [{ w: 1080, h: 1920, ratio: '9:16' }] },
+  facebook: { label: 'Facebook Reels', specs: [{ w: 1080, h: 1920, ratio: '9:16' }] },
+}
+
 function Calendar() {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
@@ -121,21 +134,7 @@ function Calendar() {
     setSelectedPost(post)
     // Clean the URL param without re-render loop
     setSearchParams(prev => { prev.delete('open_schedule'); return prev }, { replace: true })
-  }, [openScheduleParam, postsLoading, scheduledPosts])
-
-  // Platform dimension specs
-  const PLATFORM_DIMENSIONS: Record<string, { label: string; specs: { w: number; h: number; ratio: string }[] }> = {
-    instagram: { label: 'Instagram Reels', specs: [{ w: 1080, h: 1920, ratio: '9:16' }] },
-    instagram_carousel: { label: 'Instagram Carousel', specs: [{ w: 1080, h: 1350, ratio: '4:5' }] },
-    tiktok: { label: 'TikTok', specs: [{ w: 1080, h: 1920, ratio: '9:16' }] },
-    tiktok_carousel: { label: 'TikTok Carousel', specs: [
-      { w: 1080, h: 1920, ratio: '9:16' },
-      { w: 1080, h: 1350, ratio: '4:5' },
-      { w: 1080, h: 1080, ratio: '1:1' },
-    ]},
-    youtube: { label: 'YouTube Shorts', specs: [{ w: 1080, h: 1920, ratio: '9:16' }] },
-    facebook: { label: 'Facebook Reels', specs: [{ w: 1080, h: 1920, ratio: '9:16' }] },
-  }
+  }, [openScheduleParam, postsLoading, scheduledPosts, setSearchParams])
 
   // Check media dimensions against selected platform specs
   const checkMediaDimensions = useCallback((file: File, platforms: string[], isCarousel: boolean) => {

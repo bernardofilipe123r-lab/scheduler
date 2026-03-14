@@ -155,6 +155,7 @@ function useAutoTitleLines(title: string, _maxFontSize: number, font: string, co
   }, [])
 
   return useMemo(() => {
+    void fontReady // re-run when web fonts are loaded
     const words = title.split(/\s+/)
     if (words.length <= 1) return { lines: [title], fontSize: 300 }
 
@@ -206,7 +207,7 @@ function useAutoTitleLines(title: string, _maxFontSize: number, font: string, co
 
     // Fallback
     return { lines: [title], fontSize: 20 }
-  }, [title, _maxFontSize, font, containerWidthPx, fontReady])
+  }, [title, font, containerWidthPx, fontReady])
 }
 
 function ThumbnailPreview({ form, brandDividerLogoUrl, brandDividerLogoText }: { form: Partial<DesignSettings>; brandDividerLogoUrl?: string; brandDividerLogoText?: string }) {
@@ -661,12 +662,10 @@ function FormatBDesign({ tab, setTab, actionsRef, onStateChange, selectedBrand }
   }, [form, buildPayload])
 
   // Expose actions to parent header
-  // Note: handleSave/handleReset intentionally omitted — they're written to a mutable ref
-  // so the parent always calls the latest version without triggering this effect
   useEffect(() => {
     actionsRef.current = { save: handleSave, reset: handleReset, hasChanges, isPending: updateMutation.isPending }
     onStateChangeRef.current()
-  }, [hasChanges, updateMutation.isPending])
+  }, [actionsRef, handleSave, handleReset, hasChanges, updateMutation.isPending])
 
   if (isLoading) {
     return <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>

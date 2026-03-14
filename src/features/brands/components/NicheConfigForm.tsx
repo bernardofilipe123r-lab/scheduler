@@ -331,7 +331,7 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
       setValues(next)
       setDirty(true)
     }
-  }, [values.content_brief, values.topic_categories, values.topic_keywords, values.target_audience])
+  }, [values])
 
   // Keep a ref to latest values for flushSave (used by onboarding saveNow)
   const valuesRef = useRef(values)
@@ -459,7 +459,6 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
     setAiResult(null)
     setReelImages(null)
     handleAiUnderstanding()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [handleAiUnderstanding])
 
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({ general: false, reels: false, posts: false, ai: false })
