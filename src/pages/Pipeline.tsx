@@ -131,7 +131,9 @@ export function PipelinePage() {
     if (idx >= 0) setReviewModalIndex(idx)
   }, [items])
 
-  const showAllReviewedBanner = filters.status === 'pending_review' && items.length === 0 && !itemsLoading && !itemsFetching && (statsData?.pending_review ?? 0) === 0 && (statsData?.scheduled ?? 0) > 0
+  const showAllReviewedBanner = filters.status === 'pending_review' && items.length === 0 && !itemsLoading && (statsData?.pending_review ?? 0) === 0 && (statsData?.scheduled ?? 0) > 0
+  // Show skeleton only on initial load OR refetching when we know there are still items to show
+  const isShowingSkeleton = itemsLoading || (itemsFetching && items.length === 0 && (statsData?.pending_review ?? 0) > 0)
   const pendingCount = statsData?.pending_review ?? 0
 
   // When bulk approve/reject empties the visible batch but more items exist,
@@ -190,11 +192,11 @@ export function PipelinePage() {
         onSearch={setSearchQuery}
       />
 
-      {/* Loading skeleton — show on initial load OR when refetching an empty batch */}
-      {(itemsLoading || (itemsFetching && items.length === 0)) && <PipelineSkeleton status={filters.status} />}
+      {/* Loading skeleton — show on initial load OR when refetching an empty batch that still has items */}
+      {isShowingSkeleton && <PipelineSkeleton status={filters.status} />}
 
       {/* Content grid */}
-      {!itemsLoading && !(itemsFetching && items.length === 0) && items.length > 0 && (
+      {!isShowingSkeleton && items.length > 0 && (
         <PipelineGrid
           items={items}
           onApprove={handleApprove}
@@ -215,11 +217,11 @@ export function PipelinePage() {
           <p className="text-xs text-gray-400">Please refresh the page or try again later.</p>
         </div>
       )}
-      {!itemsLoading && !itemsFetching && !itemsError && items.length === 0 && !showAllReviewedBanner && (
+      {!isShowingSkeleton && !itemsError && items.length === 0 && !showAllReviewedBanner && (
         <EmptyState status={filters.status} />
       )}
 
-      {!itemsError && showAllReviewedBanner && (
+      {!itemsError && !itemsLoading && showAllReviewedBanner && (
         <PostReviewBanner
           contentBreakdown={statsData?.content_breakdown}
           scheduledUntil={statsData?.scheduled_until}
