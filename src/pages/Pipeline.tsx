@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2 } from 'lucide-react'
 import { AnimatePresence } from 'framer-motion'
 import {
@@ -18,6 +19,7 @@ import {
   useBulkRejectPipeline,
   useDeletePipelineItem,
   usePipelineFilters,
+  pipelineKeys,
 } from '@/features/pipeline'
 import type { PipelineItem } from '@/features/pipeline'
 import { useTobyConfig } from '@/features/toby'
@@ -25,9 +27,10 @@ import { PipelineSkeleton } from '@/shared/components/Skeleton'
 
 export function PipelinePage() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { filters, setStatus, setBrand, setContentType, resetFilters } = usePipelineFilters()
   const { data: statsData, isLoading: statsLoading } = usePipelineStats()
-  const { data: pipelineData, isLoading: itemsLoading, isError: itemsError } = usePipelineItems(filters)
+  const { data: pipelineData, isLoading: itemsLoading, isFetching: itemsFetching, isError: itemsError } = usePipelineItems(filters)
   const { data: tobyConfig } = useTobyConfig()
   const autoSchedule = tobyConfig?.auto_schedule ?? true
   const approve = useApprovePipelineItem()
@@ -128,8 +131,23 @@ export function PipelinePage() {
     if (idx >= 0) setReviewModalIndex(idx)
   }, [items])
 
-  const showAllReviewedBanner = filters.status === 'pending_review' && items.length === 0 && !itemsLoading && (statsData?.pending_review ?? 0) === 0 && (statsData?.scheduled ?? 0) > 0
+  const showAllReviewedBanner = filters.status === 'pending_review' && items.length === 0 && !itemsLoading && !itemsFetching && (statsData?.pending_review ?? 0) === 0 && (statsData?.scheduled ?? 0) > 0
   const pendingCount = statsData?.pending_review ?? 0
+
+  // When bulk approve/reject empties the visible batch but more items exist,
+  // force a refetch to load the next batch automatically.
+  useEffect(() => {
+    if (
+      !itemsLoading &&
+      !itemsFetching &&
+      items.length === 0 &&
+      filters.status === 'pending_review' &&
+      (statsData?.pending_review ?? 0) > 0
+    ) {
+      queryClient.refetchQueries({ queryKey: pipelineKeys.list(filters) })
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items.length, itemsLoading, itemsFetching, statsData?.pending_review, filters.status])
 
   return (
     <div className="space-y-6">
@@ -172,11 +190,11 @@ export function PipelinePage() {
         onSearch={setSearchQuery}
       />
 
-      {/* Loading skeleton */}
-      {itemsLoading && <PipelineSkeleton status={filters.status} />}
+      {/* Loading skeleton — show on initial load OR when refetching an empty batch */}
+      {(itemsLoading || (itemsFetching && items.length === 0)) && <PipelineSkeleton status={filters.status} />}
 
       {/* Content grid */}
-      {!itemsLoading && items.length > 0 && (
+      {!itemsLoading && !(itemsFetching && items.length === 0) && items.length > 0 && (
         <PipelineGrid
           items={items}
           onApprove={handleApprove}
@@ -197,7 +215,7 @@ export function PipelinePage() {
           <p className="text-xs text-gray-400">Please refresh the page or try again later.</p>
         </div>
       )}
-      {!itemsLoading && !itemsError && items.length === 0 && !showAllReviewedBanner && (
+      {!itemsLoading && !itemsFetching && !itemsError && items.length === 0 && !showAllReviewedBanner && (
         <EmptyState status={filters.status} />
       )}
 
