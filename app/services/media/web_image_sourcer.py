@@ -74,7 +74,7 @@ class WebImageSourcer:
         """Check if Pexels API key is configured."""
         return bool(self._api_key)
 
-    def search_image(self, query: str, orientation: str = "landscape", color: Optional[str] = None) -> Optional[Path]:
+    def search_image(self, query: str, orientation: str = "landscape", color: Optional[str] = None, target_ratio: Optional[float] = None) -> Optional[Path]:
         """
         Search Pexels for the query and download the best candidate.
 
@@ -82,6 +82,8 @@ class WebImageSourcer:
             query: Search query string.
             orientation: "landscape" for horizontal images, "portrait" for vertical.
             color: Optional Pexels color filter (e.g. "white", "blue").
+            target_ratio: Target width/height ratio from user's design settings.
+                          If None, uses default for the orientation.
 
         Returns path to downloaded image file, or None on any failure.
         """
@@ -128,7 +130,7 @@ class WebImageSourcer:
                 return None
 
             # Filter and rank candidates
-            candidates = self._rank_candidates(photos, orientation=orientation)
+            candidates = self._rank_candidates(photos, orientation=orientation, target_ratio=target_ratio)
             if not candidates:
                 logger.warning(f"[WebImageSourcer] No suitable Pexels candidates for: {query!r}")
                 return None
@@ -163,7 +165,7 @@ class WebImageSourcer:
             logger.error(f"[WebImageSourcer] Error: {e}")
             return None
 
-    def _rank_candidates(self, photos: list[dict], orientation: str = "landscape") -> list[dict]:
+    def _rank_candidates(self, photos: list[dict], orientation: str = "landscape", target_ratio: Optional[float] = None) -> list[dict]:
         """
         Filter and rank photo candidates by suitability.
 
@@ -173,13 +175,14 @@ class WebImageSourcer:
           - Both dimensions >= MIN_DIMENSION
 
         Ranks by closeness to target ratio for the orientation.
+        If target_ratio is provided (from user's design settings), it overrides the default.
         """
         if orientation == "portrait":
-            target_ratio = TARGET_RATIO_PORTRAIT
+            effective_target = target_ratio or TARGET_RATIO_PORTRAIT
             min_ratio = PORTRAIT_MIN_RATIO
             max_ratio = PORTRAIT_MAX_RATIO
         else:
-            target_ratio = TARGET_RATIO_LANDSCAPE
+            effective_target = target_ratio or TARGET_RATIO_LANDSCAPE
             min_ratio = LANDSCAPE_MIN_RATIO
             max_ratio = LANDSCAPE_MAX_RATIO
 
@@ -199,7 +202,7 @@ class WebImageSourcer:
                 continue
 
             # Score: distance from target ratio (lower = better)
-            distance = abs(ratio - target_ratio)
+            distance = abs(ratio - effective_target)
             scored.append((distance, photo))
 
         # Sort by distance (closest to target ratio first)

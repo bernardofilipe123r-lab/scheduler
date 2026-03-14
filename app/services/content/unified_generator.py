@@ -262,7 +262,20 @@ def generate_format_b_content(
     # 4. Gather recent titles for this brand to avoid repetition
     recent_titles = _get_recent_format_b_titles(brand_id, db=db)
 
-    # 5. Generate
+    # 5. Build Content DNA dict from PromptContext for StoryPolisher
+    content_dna = {}
+    if ctx:
+        content_dna = {
+            "niche_description": ctx.niche_description,
+            "content_tone": ctx.content_tone,
+            "topic_categories": ctx.topic_categories,
+            "topic_avoid": ctx.topic_avoid,
+            "content_philosophy": ctx.content_philosophy,
+            "format_b_story_tone": ctx.format_b_story_tone,
+            "format_b_story_niches": ctx.format_b_story_niches,
+        }
+
+    # 6. Generate
     polisher = StoryPolisher()
     return polisher.generate_content(
         niche=effective_niche,
@@ -271,6 +284,7 @@ def generate_format_b_content(
         personality_prompt=strategy["personality_prompt"],
         story_category=strategy["story_category"] or "",
         recent_titles=recent_titles,
+        content_dna=content_dna,
     )
 
 

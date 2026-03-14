@@ -117,11 +117,21 @@ def _compute_fingerprint(text: str, lines: list[str]) -> str:
 # Generates BOTH the viral post AND AI image prompts in one call.
 
 FORMAT_B_PROMPT = """Niche: {niche}
-{diversity_block}
+{diversity_block}{content_dna_block}
 Task:
 Write ONE viral-style insight post.
 
 With ~25% probability, instead base the post on a very recent or emerging topic (e.g., a new study, strange health news, unusual trend, or relevant global development related to the niche). Do not mention that it is recent—just write the post normally.
+
+FACTUAL ACCURACY (MANDATORY)
+
+Every claim in the post MUST be based on real, verifiable information:
+• Reference real studies, organizations, universities, or public data when possible
+• Numbers and statistics must be plausible and grounded in reality — do NOT invent statistics
+• If citing a study, mention who conducted it (e.g., "Harvard researchers found..." or "A 2024 BMJ study showed...")
+• The post should be something a curious person could fact-check and find supporting evidence for
+• General knowledge claims (e.g., "Vitamin C supports immune function") are fine without specific citations
+• Do NOT fabricate sensational stories, conspiracy theories, or unverifiable claims
 
 THUMBNAIL TITLE
 
@@ -134,18 +144,19 @@ Rules:
 • Written in ALL CAPS
 • Designed to stop the scroll and attract attention
 • Must relate to the niche provided
+• NEVER start with "BREAKING:", "JUST IN:", "ALERT:", "URGENT:", "SHOCKING:", or similar news prefixes — just state the fact directly
 
 These examples show the STYLE and FORMAT only — your title must match the niche above:
-"ELON MUSK'S WEALTH BREAKS REALITY"
-"GEN Z SAYS WORKING 40 HOURS NO LONGER BUYS A FUTURE"
-"ROBOT WITH AN ARTIFICIAL WOMB COULD DELIVER HUMAN BABY BY 2026"
+"YOUR BODY REPLACES ITSELF EVERY 7 YEARS"
+"VITAMIN D DEFICIENCY AFFECTS 1 BILLION PEOPLE"
+"WALKING 30 MINUTES DAILY CUTS HEART DISEASE BY 35%"
 "JAPAN RECORDS LOWEST BIRTHS SINCE 1899"
-"NETFLIX SPENT NEARLY $500M ON ONE SEASON"
-"CYBERTRUCK IS THE SAFEST PICKUP EVER TESTED"
-"MCDONALD'S KIOSKS ARE DESIGNED TO MAKE YOU SPEND MORE"
+"YOUR GUT BACTERIA CONTROL YOUR MOOD"
+"COLD SHOWERS BOOST IMMUNE CELLS BY 300%"
+"PROCESSED FOOD NOW MAKES UP 60% OF AMERICAN DIETS"
 "BY 2030, A FIT BODY WILL BE RARE LUXURY"
-"PIZZA ORDERS NEAR THE PENTAGON SPIKE BEFORE WAR"
-"DENMARK GIVES PEOPLE COPYRIGHT OVER THEIR OWN FACE AND VOICE"
+"SLEEP DEPRIVATION AGES YOUR BRAIN 3–5 YEARS"
+"MAGNESIUM DEFICIENCY IS BEHIND MOST MUSCLE CRAMPS"
 
 POST
 
@@ -157,11 +168,11 @@ Length:
 Style:
 • Start with a strong claim
 • Briefly explain the hidden mechanism, system, or reason behind it
-• Include one concrete number, statistic, or fact when possible
+• Include one concrete number, statistic, or fact when possible (from a real source)
 • End with a sharp insight
 
 Tone:
-concise, analytical, authoritative
+{tone_directive}
 
 No emojis, hashtags, fluff, or lists.
 
@@ -288,6 +299,50 @@ SEARCH COLOR:
 ..."""
 
 
+def _build_content_dna_block(dna: dict) -> str:
+    """Build a Content DNA prompt block from brand-specific DNA fields.
+
+    Injects topic guardrails, tone, philosophy, and topic avoidance into the prompt.
+    Returns empty string if no DNA fields are set.
+    """
+    lines = []
+
+    # Niche description for richer context
+    desc = dna.get("niche_description")
+    if desc:
+        lines.append(f"Niche description: {desc}")
+
+    # Topic categories to stay on-brand
+    topics = dna.get("topic_categories", [])
+    if topics:
+        lines.append(f"Stay within these topic areas: {', '.join(topics)}")
+
+    # Content philosophy
+    philosophy = dna.get("content_philosophy")
+    if philosophy:
+        lines.append(f"Content philosophy: {philosophy}")
+
+    # Topics to AVOID — critical guardrail
+    avoid = dna.get("topic_avoid", [])
+    if avoid:
+        lines.append(f"STRICTLY AVOID these topics: {', '.join(avoid)}")
+
+    # Format B specific tone
+    fb_tone = dna.get("format_b_story_tone")
+    if fb_tone:
+        lines.append(f"Story tone: {fb_tone}")
+
+    # Format B specific niches
+    fb_niches = dna.get("format_b_story_niches", [])
+    if fb_niches:
+        lines.append(f"Preferred story niches: {', '.join(fb_niches)}")
+
+    if not lines:
+        return ""
+
+    return "\nCONTENT DNA (brand identity — follow these rules):\n" + "\n".join(f"• {l}" for l in lines) + "\n"
+
+
 def _get_deepseek_client() -> OpenAI:
     return OpenAI(
         api_key=os.getenv("DEEPSEEK_API_KEY", ""),
@@ -309,6 +364,7 @@ class StoryPolisher:
         personality_prompt: str = "",
         story_category: str = "",
         recent_titles: list[str] = None,
+        content_dna: dict = None,
     ) -> Optional[PolishedStory]:
         """
         Generate a complete viral reel (text + image prompts) from scratch.
@@ -322,10 +378,13 @@ class StoryPolisher:
           - personality_prompt: Tone modifier (e.g., "You report just-happened stories with urgency.")
           - story_category: Category (e.g., "scientific_breakthrough", "hidden_cost")
           - recent_titles: Titles to avoid (prevents repetitive content)
+          - content_dna: Dict with Content DNA fields (topic_avoid, content_tone, etc.)
 
         Returns a PolishedStory or None on failure.
         """
         try:
+            content_dna = content_dna or {}
+
             # Build diversity block for the prompt
             diversity_lines = []
             if topic_hint and topic_hint != "general":
@@ -344,7 +403,19 @@ class StoryPolisher:
             if diversity_block:
                 diversity_block = "\n" + diversity_block + "\n"
 
-            user_prompt = FORMAT_B_PROMPT.format(niche=niche, diversity_block=diversity_block)
+            # Build Content DNA block — injects brand-specific guardrails
+            content_dna_block = _build_content_dna_block(content_dna)
+
+            # Build tone directive from Content DNA or fallback
+            tone_list = content_dna.get("content_tone", [])
+            tone_directive = ", ".join(tone_list) if tone_list else "concise, analytical, authoritative"
+
+            user_prompt = FORMAT_B_PROMPT.format(
+                niche=niche,
+                diversity_block=diversity_block,
+                content_dna_block=content_dna_block,
+                tone_directive=tone_directive,
+            )
 
             response = self.client.chat.completions.create(
                 model="deepseek-chat",

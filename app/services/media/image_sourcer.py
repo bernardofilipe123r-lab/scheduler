@@ -107,7 +107,7 @@ def get_thumbnail_image_source_mode(db=None, user_id: str = None) -> str:
 class ImageSourcer:
     """Sources images for format-b reels. Supports AI-generated and web images."""
 
-    def __init__(self, db=None, image_source_mode: str = None):
+    def __init__(self, db=None, image_source_mode: str = None, image_box_width: int = 910, image_box_height: int = 660):
         self.db = db
         self._image_source_mode = image_source_mode  # Override from caller
         self._deapi_key = os.environ.get("DEAPI_API_KEY")
@@ -115,6 +115,9 @@ class ImageSourcer:
         self._freepik_key = os.environ.get("FREEPIK_API_KEY")
         self._freepik_base_url = "https://api.freepik.com/v1/ai/text-to-image"
         self.last_service_used: str = "unknown"  # "freepik", "deapi", or "pexels"
+        # Design dimensions for Pexels target ratio adaptation
+        self._image_box_width = image_box_width
+        self._image_box_height = image_box_height
 
     def _is_freepik_available(self) -> bool:
         """Check if Freepik API key is set and daily usage is under 100%."""
@@ -188,7 +191,12 @@ class ImageSourcer:
                 logger.warning("[ImageSourcer] Pexels API not configured, skipping web source")
                 return None
 
-            path = web_sourcer.search_image(query, orientation=orientation, color=plan.search_color)
+            # Pass design dimensions so Pexels can adapt its target aspect ratio
+            target_ratio = self._image_box_width / max(self._image_box_height, 1)
+            path = web_sourcer.search_image(
+                query, orientation=orientation, color=plan.search_color,
+                target_ratio=target_ratio,
+            )
             if path:
                 self.last_service_used = "pexels"
                 return self._process_image(path)

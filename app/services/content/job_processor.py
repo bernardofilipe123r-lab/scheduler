@@ -807,7 +807,17 @@ class JobProcessor:
             # ── Step 1: Source images ──────────────────────────
             image_source_mode = get_image_source_mode(db=self.db, user_id=user_id)
             thumbnail_image_source_mode = get_thumbnail_image_source_mode(db=self.db, user_id=user_id)
-            sourcer = ImageSourcer(db=self.db, image_source_mode=image_source_mode)
+
+            # Calculate image box dimensions from user's design settings
+            _padding_left = getattr(design, 'reel_padding_left', 85) or 85
+            _padding_right = getattr(design, 'reel_padding_right', 85) or 85
+            _image_height = getattr(design, 'reel_image_height', 660) or 660
+            _image_box_width = 1080 - _padding_left - _padding_right  # Canvas width minus padding
+
+            sourcer = ImageSourcer(
+                db=self.db, image_source_mode=image_source_mode,
+                image_box_width=_image_box_width, image_box_height=_image_height,
+            )
             image_plans = [
                 ImagePlan(**ip) for ip in tv_data.get("images", [])
             ]
