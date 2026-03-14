@@ -1071,7 +1071,7 @@ function ContentSettings({ form, update, selectedBrandId, brandContentLogoUrl, b
         <div className="flex flex-col gap-1.5">
           {([
             { value: 'ai', label: 'AI Generated', desc: 'AI-generated images for video slides' },
-            { value: 'web', label: 'Web Images (Pexels)', desc: 'Real Pexels photos for video slides' },
+            { value: 'web', label: 'Web Images', desc: 'Real stock photos for video slides' },
           ] as const).map(opt => (
             <label key={opt.value} className="flex items-start gap-2 cursor-pointer">
               <input
@@ -1091,13 +1091,41 @@ function ContentSettings({ form, update, selectedBrandId, brandContentLogoUrl, b
         </div>
       </section>
 
+      {/* Web Image Provider — only show when image_source_mode is 'web' */}
+      {(form.image_source_mode ?? 'web') === 'web' && (
+        <section className="space-y-1.5">
+          <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Web Image Provider</h4>
+          <div className="flex flex-col gap-1.5">
+            {([
+              { value: 'pexels', label: 'Pexels', desc: 'Free stock photos — 200 req/hour' },
+              { value: 'unsplash', label: 'Unsplash', desc: 'High-quality photos — 50 req/hour (demo)' },
+            ] as const).map(opt => (
+              <label key={opt.value} className="flex items-start gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="web_image_provider"
+                  value={opt.value}
+                  checked={(form.web_image_provider ?? 'pexels') === opt.value}
+                  onChange={() => update('web_image_provider', opt.value)}
+                  className="mt-0.5 w-3 h-3 accent-primary-600"
+                />
+                <div>
+                  <span className="text-[11px] text-gray-700 font-medium">{opt.label}</span>
+                  <p className="text-[10px] text-gray-400">{opt.desc}</p>
+                </div>
+              </label>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* Image Source — Thumbnail */}
       <section className="space-y-1.5">
         <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Thumbnail Image</h4>
         <div className="flex flex-col gap-1.5">
           {([
             { value: 'ai', label: 'AI Generated', desc: 'AI-generated image for thumbnail' },
-            { value: 'web', label: 'Web Image (Pexels)', desc: 'Real Pexels photo for thumbnail' },
+            { value: 'web', label: 'Web Image', desc: 'Real stock photo for thumbnail' },
           ] as const).map(opt => (
             <label key={opt.value} className="flex items-start gap-2 cursor-pointer">
               <input

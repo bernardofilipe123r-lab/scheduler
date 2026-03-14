@@ -58,10 +58,12 @@ class FormatBDesign(Base):
     thumbnail_logo_size = Column(Integer, default=100)
     thumbnail_logo_shape = Column(String(20), default="square", nullable=False, server_default="square")
 
-    # Image source mode: 'ai' (Freepik/DeAPI) or 'web' (Pexels)
+    # Image source mode: 'ai' (Freepik/DeAPI) or 'web' (Pexels/Unsplash)
     # content = video slides, thumbnail = thumbnail image
     image_source_mode = Column(String(10), default="web", nullable=False, server_default="web")
     thumbnail_image_source_mode = Column(String(10), default="ai", nullable=False, server_default="ai")
+    # Web image provider: 'pexels' or 'unsplash' (used when image_source_mode='web')
+    web_image_provider = Column(String(20), default="pexels", nullable=False, server_default="pexels")
 
     created_at = Column(TIMESTAMP(timezone=True), server_default="now()")
     updated_at = Column(TIMESTAMP(timezone=True), server_default="now()")
@@ -113,4 +115,5 @@ class FormatBDesign(Base):
             "thumbnail_logo_shape": self.thumbnail_logo_shape or "square",
             "image_source_mode": self.image_source_mode or "web",
             "thumbnail_image_source_mode": self.thumbnail_image_source_mode or "ai",
+            "web_image_provider": self.web_image_provider or "pexels",
         }

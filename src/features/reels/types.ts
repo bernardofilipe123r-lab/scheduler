@@ -90,6 +90,7 @@ export interface DesignSettings {
   // Image source
   image_source_mode: string
   thumbnail_image_source_mode: string
+  web_image_provider: string
 }
 
 export interface DiscoverRequest {

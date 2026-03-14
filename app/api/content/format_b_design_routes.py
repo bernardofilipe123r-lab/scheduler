@@ -49,6 +49,7 @@ class DesignUpdate(BaseModel):
     reel_music_enabled: Optional[bool] = None
     image_source_mode: Optional[str] = Field(None, pattern="^(ai|web)$")
     thumbnail_image_source_mode: Optional[str] = Field(None, pattern="^(ai|web)$")
+    web_image_provider: Optional[str] = Field(None, pattern="^(pexels|unsplash)$")
 
     # Thumbnail settings
     thumbnail_title_color: Optional[str] = Field(None, max_length=20)

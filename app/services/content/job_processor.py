@@ -767,7 +767,7 @@ class JobProcessor:
         })
 
         try:
-            from app.services.media.image_sourcer import ImageSourcer, get_image_source_mode, get_thumbnail_image_source_mode
+            from app.services.media.image_sourcer import ImageSourcer, get_image_source_mode, get_thumbnail_image_source_mode, get_web_image_provider
             from app.services.media.thumbnail_compositor import ThumbnailCompositor
             from app.services.media.slideshow_compositor import SlideshowCompositor
             from app.services.discovery.story_polisher import ImagePlan
@@ -807,6 +807,7 @@ class JobProcessor:
             # ── Step 1: Source images ──────────────────────────
             image_source_mode = get_image_source_mode(db=self.db, user_id=user_id)
             thumbnail_image_source_mode = get_thumbnail_image_source_mode(db=self.db, user_id=user_id)
+            web_image_provider = get_web_image_provider(db=self.db, user_id=user_id)
 
             # Calculate image box dimensions from user's design settings
             _padding_left = getattr(design, 'reel_padding_left', 85) or 85
@@ -816,6 +817,7 @@ class JobProcessor:
 
             sourcer = ImageSourcer(
                 db=self.db, image_source_mode=image_source_mode,
+                web_image_provider=web_image_provider,
                 image_box_width=_image_box_width, image_box_height=_image_height,
             )
             image_plans = [
@@ -891,6 +893,7 @@ class JobProcessor:
                 updated_format_b_data["image_service"] = image_service
                 updated_format_b_data["image_source_mode"] = image_source_mode
                 updated_format_b_data["thumbnail_image_source_mode"] = thumbnail_image_source_mode
+                updated_format_b_data["web_image_provider"] = web_image_provider
 
                 job.format_b_data = updated_format_b_data
                 from sqlalchemy.orm.attributes import flag_modified

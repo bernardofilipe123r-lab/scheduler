@@ -104,12 +104,39 @@ def get_thumbnail_image_source_mode(db=None, user_id: str = None) -> str:
     return "ai"
 
 
+def get_web_image_provider(db=None, user_id: str = None) -> str:
+    """Get which web image provider to use: 'pexels' or 'unsplash'.
+
+    Reads from format_b_design table. Falls back to 'pexels'.
+    """
+    if db:
+        try:
+            from app.models.format_b_design import FormatBDesign
+
+            global_design = db.query(FormatBDesign).filter(
+                FormatBDesign.user_id == GLOBAL_FORMAT_B_SETTINGS_USER_ID
+            ).first()
+            if global_design and getattr(global_design, 'web_image_provider', None):
+                return global_design.web_image_provider.lower()
+
+            if user_id:
+                design = db.query(FormatBDesign).filter(
+                    FormatBDesign.user_id == user_id
+                ).first()
+                if design and getattr(design, 'web_image_provider', None):
+                    return design.web_image_provider.lower()
+        except Exception as e:
+            logger.warning(f"[ImageSourcer] Could not read web_image_provider from DB: {e}")
+    return "pexels"
+
+
 class ImageSourcer:
     """Sources images for format-b reels. Supports AI-generated and web images."""
 
-    def __init__(self, db=None, image_source_mode: str = None, image_box_width: int = 910, image_box_height: int = 660):
+    def __init__(self, db=None, image_source_mode: str = None, web_image_provider: str = None, image_box_width: int = 910, image_box_height: int = 660):
         self.db = db
         self._image_source_mode = image_source_mode  # Override from caller
+        self._web_image_provider = web_image_provider  # "pexels" or "unsplash"
         self._deapi_key = os.environ.get("DEAPI_API_KEY")
         self._deapi_base_url = "https://api.deapi.ai/api/v1/client"
         self._freepik_key = os.environ.get("FREEPIK_API_KEY")
@@ -178,7 +205,7 @@ class ImageSourcer:
         return self._source_via_ai(plan)
 
     def _source_via_web(self, plan: ImagePlan, orientation: str = "landscape") -> Optional[Path]:
-        """Try to fetch a real web image via Pexels API.
+        """Try to fetch a real web image via Pexels or Unsplash API.
 
         Uses a fallback cascade:
           1. Primary search_query from DeepSeek
@@ -186,11 +213,19 @@ class ImageSourcer:
           3. Simplified 2-word version of the AI prompt
         """
         try:
-            from app.services.media.web_image_sourcer import WebImageSourcer
-            web_sourcer = WebImageSourcer(db=self.db)
+            provider = self._web_image_provider or get_web_image_provider(db=self.db)
 
-            if not web_sourcer.is_available():
-                logger.warning("[ImageSourcer] Pexels API not configured, skipping web source")
+            if provider == "unsplash":
+                from app.services.media.unsplash_image_sourcer import UnsplashImageSourcer
+                sourcer = UnsplashImageSourcer(db=self.db)
+                service_name = "unsplash"
+            else:
+                from app.services.media.web_image_sourcer import WebImageSourcer
+                sourcer = WebImageSourcer(db=self.db)
+                service_name = "pexels"
+
+            if not sourcer.is_available():
+                logger.warning(f"[ImageSourcer] {service_name} API not configured, skipping web source")
                 return None
 
             target_ratio = self._image_box_width / max(self._image_box_height, 1)
@@ -214,13 +249,13 @@ class ImageSourcer:
 
             for i, query in enumerate(queries_to_try):
                 if i > 0:
-                    logger.info(f"[ImageSourcer] Pexels fallback #{i+1}: trying {query!r}")
-                path = web_sourcer.search_image(
+                    logger.info(f"[ImageSourcer] {service_name} fallback #{i+1}: trying {query!r}")
+                path = sourcer.search_image(
                     query, orientation=orientation, color=plan.search_color,
                     target_ratio=target_ratio,
                 )
                 if path:
-                    self.last_service_used = "pexels"
+                    self.last_service_used = service_name
                     return path
 
             return None
