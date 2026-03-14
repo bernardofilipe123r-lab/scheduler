@@ -1,14 +1,17 @@
 """
 Story Polisher — generates viral reel content + AI image prompts via DeepSeek.
 
-100% self-contained: DeepSeek generates the post text AND image prompts.
-No external story discovery needed. Images are generated via DeAPI from the
-AI prompts returned by DeepSeek.
+Architecture (v2 — decoupled):
+  Call 1: DeepSeek generates text (title + post) only
+  Call 2: DeepSeek generates image plans given the text context
+  This allows independent retry of image planning without regenerating text.
+
+Images are generated via DeAPI or sourced from Pexels depending on config.
 """
 import hashlib
-import json
 import logging
 import os
+import random
 import re
 from dataclasses import dataclass, asdict
 from typing import Optional
@@ -23,8 +26,9 @@ class ImagePlan:
     source_type: str  # "ai_generate" | "web_search"
     query: str  # The AI PROMPT for image generation
     fallback_query: Optional[str] = None
-    search_query: Optional[str] = None  # Google Images search query (from DeepSeek SEARCH QUERY)
-    search_color: Optional[str] = None  # Pexels color filter (from DeepSeek SEARCH COLOR)
+    search_query: Optional[str] = None  # Pexels search query
+    search_color: Optional[str] = None  # Pexels color filter
+    text_segment: Optional[str] = None  # Which part of the reel text this image illustrates
 
 
 @dataclass
@@ -78,7 +82,6 @@ _BAD_QUERY_WORDS = {
 }
 
 # Overused query patterns that return the same few photos on Pexels.
-# If a query matches any of these, we replace it with a random alternative.
 _OVERUSED_PATTERNS = [
     re.compile(r'scientist.*lab', re.IGNORECASE),
     re.compile(r'lab.*scientist', re.IGNORECASE),
@@ -94,13 +97,13 @@ _DIVERSE_REPLACEMENTS = [
     "person hiking mountain trail",
     "family cooking kitchen together",
     "ocean waves beach sunrise",
-    "garden sunlight flowers close",
+    "garden sunlight flowers",
     "city park people jogging",
     "fresh smoothie fruit counter",
     "cozy reading nook window",
     "sunrise over wheat field",
     "woman walking city streets",
-    "healthy breakfast table overhead",
+    "healthy breakfast table",
     "person meditating outdoors nature",
     "herbal tea wooden table",
     "friends laughing outdoor cafe",
@@ -108,13 +111,7 @@ _DIVERSE_REPLACEMENTS = [
 
 
 def _sanitize_search_query(query: str | None) -> str | None:
-    """Clean up a DeepSeek search query to improve Pexels results.
-
-    - Strips words that cause bad results (closeup, macro, etc.)
-    - Removes parenthetical notes/instructions that the LLM sometimes leaks
-    - Replaces overused patterns (scientist laboratory) with diverse alternatives
-    - Caps length at 5 words
-    """
+    """Clean up a DeepSeek search query to improve Pexels results."""
     if not query:
         return query
 
@@ -126,10 +123,9 @@ def _sanitize_search_query(query: str | None) -> str | None:
         return None
 
     # Replace overused patterns that return the same few photos
-    import random as _rand
     for pattern in _OVERUSED_PATTERNS:
         if pattern.search(query):
-            replacement = _rand.choice(_DIVERSE_REPLACEMENTS)
+            replacement = random.choice(_DIVERSE_REPLACEMENTS)
             logger.info(f"[StoryPolisher] Replacing overused query {query!r} → {replacement!r}")
             query = replacement
             break
@@ -145,6 +141,46 @@ def _sanitize_search_query(query: str | None) -> str | None:
     return cleaned if cleaned else None
 
 
+def _extract_fallback_queries(reel_text: str) -> list[str]:
+    """Extract simple noun phrases from reel text as fallback Pexels queries.
+
+    Used when the primary search query fails — extracts key concepts
+    from the actual post text as a last resort.
+    """
+    # Remove common stop words and extract 2-3 word phrases
+    stop_words = {
+        "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
+        "have", "has", "had", "do", "does", "did", "will", "would", "could",
+        "should", "may", "might", "can", "shall", "must", "need", "dare",
+        "to", "of", "in", "for", "on", "with", "at", "by", "from", "as",
+        "into", "through", "during", "before", "after", "above", "below",
+        "between", "under", "over", "again", "further", "then", "once",
+        "and", "but", "or", "nor", "not", "so", "yet", "both", "either",
+        "neither", "each", "every", "all", "any", "few", "more", "most",
+        "other", "some", "such", "no", "only", "own", "same", "than",
+        "too", "very", "just", "because", "if", "when", "while", "how",
+        "what", "which", "who", "whom", "this", "that", "these", "those",
+        "it", "its", "they", "them", "their", "we", "us", "our", "you",
+        "your", "he", "him", "his", "she", "her", "my", "me", "i",
+    }
+
+    words = re.findall(r'[a-zA-Z]+', reel_text.lower())
+    keywords = [w for w in words if w not in stop_words and len(w) > 3]
+
+    # Take unique keywords and build 2-3 word queries
+    seen = set()
+    queries = []
+    for i in range(0, len(keywords) - 1, 2):
+        pair = f"{keywords[i]} {keywords[i+1]}"
+        if pair not in seen:
+            seen.add(pair)
+            queries.append(pair)
+        if len(queries) >= 4:
+            break
+
+    return queries
+
+
 def _compute_fingerprint(text: str, lines: list[str]) -> str:
     """Compute dedup fingerprint from reel text + first few lines."""
     content = text.lower().strip() + "|" + "|".join(
@@ -153,10 +189,10 @@ def _compute_fingerprint(text: str, lines: list[str]) -> str:
     return hashlib.sha256(content.encode()).hexdigest()[:16]
 
 
-# ── DeepSeek prompt template ───────────────────────────────────────────────
-# Generates BOTH the viral post AND AI image prompts in one call.
+# ── DeepSeek prompt templates ────────────────────────────────────────────
 
-FORMAT_B_PROMPT = """Niche: {niche}
+# Call 1: Text generation only (title + post)
+TEXT_PROMPT = """Niche: {niche}
 {diversity_block}{content_dna_block}
 Task:
 Write ONE viral-style insight post.
@@ -216,82 +252,57 @@ Tone:
 
 No emojis, hashtags, fluff, or lists.
 
-VISUALS
-
-Recommend 3–4 visuals that would work well with the post.
-
-For each visual provide:
-
-IMAGE IDEA
-Describe what the image should show.
-
-AI PROMPT
-A prompt for generating the image with an AI image generator.
-
-SEARCH QUERY
-A short 2–4 word stock-photo-friendly search query to find a real photo on Pexels.
-
-CRITICAL RULES for search queries:
-• Keep it SHORT: 2–4 simple, common words
-• Describe WIDE SCENES, environments, or people doing things — NEVER close-ups of objects
-• NEVER use the words: closeup, close-up, macro, detail, isolated, overhead, aerial
-• Use the simplest, most common words a photographer would tag
-• Think "what scene would a stock photographer shoot with a wide lens?"
-• Queries must describe scenes that THOUSANDS of stock photos exist for — not niche/specific scenarios
-• Each of the 4 queries MUST describe a COMPLETELY DIFFERENT scene type — different subject, different setting, different visual mood
-• The query is ONLY the search terms — never include notes, instructions, or parenthetical comments
-• Avoid disturbing imagery (dead animals, injuries, destruction)
-
-DIVERSITY RULE (MANDATORY):
-• NEVER use "scientist laboratory" or any lab/research query more than ONCE across all 4 visuals
-• NEVER repeat the same scene category (e.g., don't use "woman gym" AND "woman exercise" — those return the same photos)
-• Mix at least 3 DIFFERENT visual categories from this list:
-  - People in daily life (cooking, walking, working, exercising, eating)
-  - Nature & outdoors (forest, ocean, mountains, sunset, garden)
-  - Food & ingredients (fruits, vegetables, meals, kitchen, market)
-  - Urban & architecture (city streets, buildings, cafes, homes)
-  - Abstract & textures (water droplets, light patterns, colors, textures)
-• Stock photo sites return the SAME FEW IMAGES for generic queries like "scientist laboratory" — use specific, varied scenes instead
-
-Good examples: "woman running park sunrise", "colorful fruit market stall", "ocean waves aerial view", "cozy kitchen morning light", "yoga class group stretching", "fresh vegetables wooden table", "city rooftop sunset view"
-Bad examples: "scientist laboratory research" (overused, returns same 5 photos), "abstract science background" (too vague), "microscope slide colorful" (too niche), "healthy food table" (too generic)
-
-SEARCH COLOR
-Write "none" for all queries. Color filters severely limit Pexels results and cause repeated images. Only use a color if the image concept ABSOLUTELY requires it (e.g., a story specifically about a red dress).
-
-IMAGE RULES
-
-Images must be:
-• cinematic 4K
-• vivid colors
-• dramatic lighting
-• high contrast
-• realistic photography style
-• visually striking and engaging for social media
-• no text overlays
-• no infographic style
-
-CONTENT SAFETY (MANDATORY)
-
-• NEVER depict nudity, nude silhouettes, exposed bodies, or sexualized content
-• All people in images MUST be fully clothed (professional attire, casual wear, lab coats, etc.)
-• No see-through clothing, body-revealing poses, or suggestive compositions
-• No bare torsos, exposed skin beyond face/hands/arms
-• When describing body-related topics, focus on objects, technology, documents, or environments — NOT on the human body itself
-• Violating these rules will result in account bans on social media platforms
-
 OUTPUT FORMAT
 
 TITLE:
 <thumbnail headline>
 
 POST:
-<viral insight post>
+<viral insight post>"""
 
-VISUALS:
+
+# Call 2: Image planning given the text (separate call, can be retried independently)
+IMAGE_PROMPT = """You are planning visuals for a social media reel video.
+
+The reel title is: {title}
+The reel text is: {post_text}
+
+Generate exactly 4 visuals that complement this text. Each image will be shown as a slide in a crossfade slideshow while the text is displayed.
+
+IMPORTANT: Each image should illustrate a DIFFERENT aspect or moment from the text. Think of it like a storyboard — image 1 sets the scene, image 2 shows the mechanism, image 3 shows the impact, image 4 shows the takeaway.
+
+For each visual provide:
+
+TEXT SEGMENT
+Quote the exact phrase or sentence from the post text that this image illustrates. This creates a semantic link between the image and the text.
+
+AI PROMPT
+A prompt for generating the image with an AI image generator. Must be cinematic 4K, vivid colors, dramatic lighting, high contrast, realistic photography style, no text overlays.
+
+SEARCH QUERY
+A 2–4 word stock-photo-friendly search query for Pexels.
+
+CRITICAL SEARCH QUERY RULES:
+• 2–4 simple, common words only
+• Describe WIDE SCENES, environments, or people doing things
+• NEVER use: closeup, close-up, macro, detail, isolated, overhead, aerial, abstract, background
+• Each of the 4 queries MUST describe a COMPLETELY DIFFERENT scene type
+• Mix at least 3 categories: people in daily life, nature/outdoors, food/ingredients, urban/architecture, textures/patterns
+• Think "what would a stock photographer tag this wide-angle shot?"
+• NEVER repeat "scientist laboratory" or similar lab/research queries — Pexels returns the same 5 photos every time
+
+Good: "woman running park sunrise", "colorful fruit market stall", "ocean waves sandy beach", "cozy kitchen morning light"
+Bad: "scientist laboratory research", "abstract science background", "microscope slide colorful"
+
+SEARCH COLOR
+Write "none" — color filters cause repeated images.
+
+CONTENT SAFETY: No nudity, no exposed bodies, all people fully clothed. Focus on environments and objects, not human bodies.
+
+OUTPUT FORMAT
 
 1.
-IMAGE IDEA:
+TEXT SEGMENT:
 ...
 
 AI PROMPT:
@@ -304,7 +315,7 @@ SEARCH COLOR:
 ...
 
 2.
-IMAGE IDEA:
+TEXT SEGMENT:
 ...
 
 AI PROMPT:
@@ -317,7 +328,7 @@ SEARCH COLOR:
 ...
 
 3.
-IMAGE IDEA:
+TEXT SEGMENT:
 ...
 
 AI PROMPT:
@@ -330,7 +341,7 @@ SEARCH COLOR:
 ...
 
 4.
-IMAGE IDEA:
+TEXT SEGMENT:
 ...
 
 AI PROMPT:
@@ -344,39 +355,29 @@ SEARCH COLOR:
 
 
 def _build_content_dna_block(dna: dict) -> str:
-    """Build a Content DNA prompt block from brand-specific DNA fields.
-
-    Injects topic guardrails, tone, philosophy, and topic avoidance into the prompt.
-    Returns empty string if no DNA fields are set.
-    """
+    """Build a Content DNA prompt block from brand-specific DNA fields."""
     lines = []
 
-    # Niche description for richer context
     desc = dna.get("niche_description")
     if desc:
         lines.append(f"Niche description: {desc}")
 
-    # Topic categories to stay on-brand
     topics = dna.get("topic_categories", [])
     if topics:
         lines.append(f"Stay within these topic areas: {', '.join(topics)}")
 
-    # Content philosophy
     philosophy = dna.get("content_philosophy")
     if philosophy:
         lines.append(f"Content philosophy: {philosophy}")
 
-    # Topics to AVOID — critical guardrail
     avoid = dna.get("topic_avoid", [])
     if avoid:
         lines.append(f"STRICTLY AVOID these topics: {', '.join(avoid)}")
 
-    # Format B specific tone
     fb_tone = dna.get("format_b_story_tone")
     if fb_tone:
         lines.append(f"Story tone: {fb_tone}")
 
-    # Format B specific niches
     fb_niches = dna.get("format_b_story_niches", [])
     if fb_niches:
         lines.append(f"Preferred story niches: {', '.join(fb_niches)}")
@@ -395,7 +396,12 @@ def _get_deepseek_client() -> OpenAI:
 
 
 class StoryPolisher:
-    """Generates viral reel content + AI image prompts via DeepSeek."""
+    """Generates viral reel content + AI image prompts via DeepSeek.
+
+    v2 Architecture: Two decoupled DeepSeek calls.
+      Call 1: Generate text (title + post) — fast, deterministic
+      Call 2: Generate image plans given the text — can be retried independently
+    """
 
     def __init__(self):
         self.client = _get_deepseek_client()
@@ -411,25 +417,80 @@ class StoryPolisher:
         content_dna: dict = None,
     ) -> Optional[PolishedStory]:
         """
-        Generate a complete viral reel (text + image prompts) from scratch.
+        Generate a complete viral reel (text + image prompts).
 
-        DeepSeek generates everything — no external story source needed.
-        The AI PROMPTs in the response are used directly by DeAPI for image generation.
+        Two-phase generation:
+          Phase 1: Generate text (title + post) via DeepSeek
+          Phase 2: Generate image plans given the text (separate call)
 
-        Diversity parameters guide DeepSeek to produce varied content:
-          - topic_hint: Topic bucket (e.g., "Nutrition & Food Benefits")
-          - hook_hint: Hook style (e.g., "statistic_lead", "controversy_opener")
-          - personality_prompt: Tone modifier (e.g., "You report just-happened stories with urgency.")
-          - story_category: Category (e.g., "scientific_breakthrough", "hidden_cost")
-          - recent_titles: Titles to avoid (prevents repetitive content)
-          - content_dna: Dict with Content DNA fields (topic_avoid, content_tone, etc.)
-
-        Returns a PolishedStory or None on failure.
+        If image planning fails, retries up to 2 times without regenerating text.
         """
         try:
             content_dna = content_dna or {}
 
-            # Build diversity block for the prompt
+            # ── Phase 1: Generate text ──────────────────────────
+            text_result = self._generate_text(
+                niche=niche,
+                topic_hint=topic_hint,
+                hook_hint=hook_hint,
+                personality_prompt=personality_prompt,
+                story_category=story_category,
+                recent_titles=recent_titles,
+                content_dna=content_dna,
+            )
+            if not text_result:
+                return None
+
+            title, post_text, text_prompt_used = text_result
+
+            # ── Phase 2: Generate image plans (with retry) ──────
+            images = None
+            for attempt in range(3):
+                images = self._generate_image_plans(title, post_text)
+                if images and len(images) >= 2:
+                    break
+                logger.warning(f"[StoryPolisher] Image planning attempt {attempt + 1} failed, retrying...")
+
+            if not images:
+                logger.error("[StoryPolisher] All image planning attempts failed")
+                return None
+
+            # Build the PolishedStory
+            reel_lines = [l.strip() for l in post_text.split("\n") if l.strip()]
+            thumbnail_title_lines = [l.strip() for l in title.split("\n") if l.strip()]
+            thumbnail_image = images[0]
+            fingerprint = _compute_fingerprint(post_text, reel_lines)
+
+            return PolishedStory(
+                reel_text=post_text,
+                reel_lines=reel_lines,
+                thumbnail_title=title,
+                thumbnail_title_lines=thumbnail_title_lines,
+                images=images,
+                thumbnail_image=thumbnail_image,
+                caption="",
+                hashtags=[],
+                story_category="insight",
+                story_fingerprint=fingerprint,
+                deepseek_prompt=text_prompt_used,
+                deepseek_response=post_text,
+            )
+
+        except Exception as e:
+            logger.error(f"[StoryPolisher] Error: {e}")
+            return None
+
+    def _generate_text(
+        self, niche: str, topic_hint: str, hook_hint: str,
+        personality_prompt: str, story_category: str,
+        recent_titles: list[str], content_dna: dict,
+    ) -> Optional[tuple[str, str, str]]:
+        """Phase 1: Generate title + post text via DeepSeek.
+
+        Returns (title, post_text, prompt_used) or None.
+        """
+        try:
+            # Build diversity block
             diversity_lines = []
             if topic_hint and topic_hint != "general":
                 diversity_lines.append(f"Topic focus: {topic_hint}")
@@ -447,14 +508,11 @@ class StoryPolisher:
             if diversity_block:
                 diversity_block = "\n" + diversity_block + "\n"
 
-            # Build Content DNA block — injects brand-specific guardrails
             content_dna_block = _build_content_dna_block(content_dna)
-
-            # Build tone directive from Content DNA or fallback
             tone_list = content_dna.get("content_tone", [])
             tone_directive = ", ".join(tone_list) if tone_list else "concise, analytical, authoritative"
 
-            user_prompt = FORMAT_B_PROMPT.format(
+            prompt = TEXT_PROMPT.format(
                 niche=niche,
                 diversity_block=diversity_block,
                 content_dna_block=content_dna_block,
@@ -465,87 +523,101 @@ class StoryPolisher:
                 model="deepseek-chat",
                 messages=[
                     {"role": "system", "content": "You are a viral content creator. Follow the output format exactly."},
-                    {"role": "user", "content": user_prompt},
+                    {"role": "user", "content": prompt},
                 ],
                 temperature=0.8,
-                max_tokens=2000,
+                max_tokens=800,
                 top_p=0.95,
             )
 
             content = response.choices[0].message.content
             if not content:
-                logger.error("[StoryPolisher] Empty response from DeepSeek")
+                logger.error("[StoryPolisher] Empty text response from DeepSeek")
                 return None
 
-            result = self._parse_response(content)
-            if result:
-                result.deepseek_prompt = user_prompt
-                result.deepseek_response = content
-            return result
+            # Parse title and post
+            title_match = re.search(r'TITLE:\s*\n(.+?)(?=\nPOST:)', content, re.DOTALL)
+            post_match = re.search(r'POST:\s*\n(.+)', content, re.DOTALL)
+
+            title = title_match.group(1).strip() if title_match else ""
+            post_text = post_match.group(1).strip() if post_match else ""
+
+            if not title or not post_text:
+                logger.error(f"[StoryPolisher] Failed to parse text response: title={bool(title)}, post={bool(post_text)}")
+                return None
+
+            logger.info(f"[StoryPolisher] Phase 1 OK: title={title[:50]!r}")
+            return title, post_text, prompt
 
         except Exception as e:
-            logger.error(f"[StoryPolisher] DeepSeek error: {e}")
+            logger.error(f"[StoryPolisher] Text generation error: {e}")
             return None
 
-    def _parse_response(self, content: str) -> Optional[PolishedStory]:
-        """Parse DeepSeek structured text response into PolishedStory."""
+    def _generate_image_plans(self, title: str, post_text: str) -> Optional[list[ImagePlan]]:
+        """Phase 2: Generate image plans given the text context.
+
+        This is a separate DeepSeek call that can be retried independently.
+        Returns list of ImagePlan or None.
+        """
         try:
-            # Extract TITLE section (comes before POST in new format)
-            title_match = re.search(r'TITLE:\s*\n(.+?)(?=\nPOST:)', content, re.DOTALL)
-            thumbnail_title = title_match.group(1).strip() if title_match else ""
-            thumbnail_title_lines = [l.strip() for l in thumbnail_title.split("\n") if l.strip()]
+            prompt = IMAGE_PROMPT.format(title=title, post_text=post_text)
 
-            # Extract POST section
-            post_match = re.search(r'POST:\s*\n(.+?)(?=\nVISUALS:)', content, re.DOTALL)
-            reel_text = post_match.group(1).strip() if post_match else ""
-            reel_lines = [l.strip() for l in reel_text.split("\n") if l.strip()]
+            response = self.client.chat.completions.create(
+                model="deepseek-chat",
+                messages=[
+                    {"role": "system", "content": "You are a visual planner for social media reels. Follow the output format exactly."},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.7,
+                max_tokens=1200,
+                top_p=0.95,
+            )
 
-            # Extract VISUALS — get AI PROMPTs (these go directly to DeAPI)
-            visuals_match = re.search(r'VISUALS:\s*\n(.+)', content, re.DOTALL)
-            visuals_text = visuals_match.group(1) if visuals_match else ""
+            content = response.choices[0].message.content
+            if not content:
+                logger.error("[StoryPolisher] Empty image planning response")
+                return None
 
-            ai_prompts = re.findall(r'AI PROMPT:\s*\n?(.+)', visuals_text)
-            search_queries = re.findall(r'SEARCH QUERY:\s*\n?(.+)', visuals_text)
-            search_colors = re.findall(r'SEARCH COLOR:\s*\n?(.+)', visuals_text)
+            # Parse image plans
+            ai_prompts = re.findall(r'AI PROMPT:\s*\n?(.+)', content)
+            search_queries = re.findall(r'SEARCH QUERY:\s*\n?(.+)', content)
+            search_colors = re.findall(r'SEARCH COLOR:\s*\n?(.+)', content)
+            text_segments = re.findall(r'TEXT SEGMENT:\s*\n?(.+)', content)
+
+            # Extract fallback queries from the post text
+            fallback_queries = _extract_fallback_queries(post_text)
 
             images = []
-            for i, prompt in enumerate(ai_prompts):
-                if not prompt.strip():
+            for i, prompt_text in enumerate(ai_prompts):
+                if not prompt_text.strip():
                     continue
                 sq = search_queries[i].strip() if i < len(search_queries) and search_queries[i].strip() else None
                 sc_raw = search_colors[i].strip().lower() if i < len(search_colors) and search_colors[i].strip() else None
                 sc = sc_raw if sc_raw and sc_raw != "none" else None
+                ts = text_segments[i].strip() if i < len(text_segments) and text_segments[i].strip() else None
+
                 # Sanitize search query
                 sq = _sanitize_search_query(sq)
+
+                # Assign a fallback query from text extraction
+                fq = fallback_queries[i] if i < len(fallback_queries) else None
+
                 images.append(ImagePlan(
                     source_type="ai_generate",
-                    query=prompt.strip(),
+                    query=prompt_text.strip(),
                     search_query=sq,
                     search_color=sc,
+                    fallback_query=fq,
+                    text_segment=ts,
                 ))
 
-            if not reel_text or not images:
-                logger.error(f"[StoryPolisher] Missing required fields. reel_text={bool(reel_text)}, images={len(images)}")
+            if len(images) < 2:
+                logger.error(f"[StoryPolisher] Only {len(images)} images parsed from response")
                 return None
 
-            # Use first image as thumbnail image
-            thumbnail_image = images[0] if images else ImagePlan(source_type="ai_generate", query=reel_text[:100])
-
-            fingerprint = _compute_fingerprint(reel_text, reel_lines)
-
-            return PolishedStory(
-                reel_text=reel_text,
-                reel_lines=reel_lines,
-                thumbnail_title=thumbnail_title,
-                thumbnail_title_lines=thumbnail_title_lines,
-                images=images,
-                thumbnail_image=thumbnail_image,
-                caption="",
-                hashtags=[],
-                story_category="insight",
-                story_fingerprint=fingerprint,
-            )
+            logger.info(f"[StoryPolisher] Phase 2 OK: {len(images)} image plans")
+            return images
 
         except Exception as e:
-            logger.error(f"[StoryPolisher] Parse error: {e}, content: {content[:300]}")
+            logger.error(f"[StoryPolisher] Image planning error: {e}")
             return None

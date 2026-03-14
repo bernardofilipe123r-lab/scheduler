@@ -826,7 +826,10 @@ class JobProcessor:
                 image_plans[0] if image_plans else None
             )
 
+            # Source images with retry for failed ones
+            MIN_IMAGES = 3  # Minimum images needed for a good reel
             image_paths = []
+            failed_indices = []
             for i, plan in enumerate(image_plans):
                 _update_output({
                     "progress_message": f"Generating image {i+1}/{len(image_plans)}...",
@@ -837,10 +840,34 @@ class JobProcessor:
                     image_paths.append(path)
                     print(f"   ✓ Image {i+1}: {path}", flush=True)
                 else:
+                    failed_indices.append(i)
                     print(f"   ⚠️ Image {i+1} failed to source", flush=True)
+
+            # Retry failed images with modified queries if we're below minimum
+            if failed_indices and len(image_paths) < MIN_IMAGES:
+                print(f"   🔄 Retrying {len(failed_indices)} failed images...", flush=True)
+                for idx in failed_indices:
+                    if len(image_paths) >= MIN_IMAGES:
+                        break
+                    plan = image_plans[idx]
+                    # Try with fallback query or simplified query
+                    retry_plan = ImagePlan(
+                        source_type=plan.source_type,
+                        query=plan.query,
+                        search_query=plan.fallback_query or plan.search_query,
+                        fallback_query=None,
+                        search_color=None,
+                    )
+                    path = sourcer.source_image(retry_plan)
+                    if path:
+                        image_paths.append(path)
+                        print(f"   ✓ Image {idx+1} retry succeeded: {path}", flush=True)
 
             if not image_paths:
                 raise ValueError("Failed to source any images for format-b reel")
+
+            if len(image_paths) < 2:
+                print(f"   ⚠️ Only {len(image_paths)} image(s) sourced — reel quality may be low", flush=True)
 
             # Store which image service was used in format_b_data
             image_service = sourcer.last_service_used

@@ -178,11 +178,13 @@ class ImageSourcer:
         return self._source_via_ai(plan)
 
     def _source_via_web(self, plan: ImagePlan, orientation: str = "landscape") -> Optional[Path]:
-        """Try to fetch a real web image via Pexels API."""
-        query = plan.search_query or plan.query
-        if not query:
-            return None
+        """Try to fetch a real web image via Pexels API.
 
+        Uses a fallback cascade:
+          1. Primary search_query from DeepSeek
+          2. fallback_query (extracted from reel text nouns)
+          3. Simplified 2-word version of the AI prompt
+        """
         try:
             from app.services.media.web_image_sourcer import WebImageSourcer
             web_sourcer = WebImageSourcer(db=self.db)
@@ -191,15 +193,36 @@ class ImageSourcer:
                 logger.warning("[ImageSourcer] Pexels API not configured, skipping web source")
                 return None
 
-            # Pass design dimensions so Pexels can adapt its target aspect ratio
             target_ratio = self._image_box_width / max(self._image_box_height, 1)
-            path = web_sourcer.search_image(
-                query, orientation=orientation, color=plan.search_color,
-                target_ratio=target_ratio,
-            )
-            if path:
-                self.last_service_used = "pexels"
-                return self._process_image(path)
+
+            # Build query cascade: primary → fallback → simplified AI prompt
+            queries_to_try = []
+            if plan.search_query:
+                queries_to_try.append(plan.search_query)
+            if plan.fallback_query and plan.fallback_query != plan.search_query:
+                queries_to_try.append(plan.fallback_query)
+            # Last resort: extract first 3 meaningful words from AI prompt
+            if plan.query:
+                import re
+                words = re.findall(r'[a-zA-Z]+', plan.query)
+                simple = " ".join(w for w in words[:4] if len(w) > 3)
+                if simple and simple not in queries_to_try:
+                    queries_to_try.append(simple)
+
+            if not queries_to_try:
+                return None
+
+            for i, query in enumerate(queries_to_try):
+                if i > 0:
+                    logger.info(f"[ImageSourcer] Pexels fallback #{i+1}: trying {query!r}")
+                path = web_sourcer.search_image(
+                    query, orientation=orientation, color=plan.search_color,
+                    target_ratio=target_ratio,
+                )
+                if path:
+                    self.last_service_used = "pexels"
+                    return path
+
             return None
         except Exception as e:
             logger.error(f"[ImageSourcer] Web image source error: {e}")
