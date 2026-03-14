@@ -28,7 +28,7 @@ export function usePipelineItems(filters: PipelineFilters) {
     queryKey: pipelineKeys.list(filters),
     queryFn: () => get<PipelineResponse>(`/api/pipeline?${qs}`),
     staleTime: 0,
-    refetchInterval: isGenerating ? 5_000 : isPending ? 15_000 : false,
+    refetchInterval: isGenerating ? 3_000 : isPending ? 10_000 : false,
     refetchOnWindowFocus: true,
   })
 }
@@ -37,8 +37,8 @@ export function usePipelineStats() {
   return useQuery({
     queryKey: pipelineKeys.stats(),
     queryFn: () => get<PipelineStats>('/api/pipeline/stats'),
-    staleTime: 15_000,
-    refetchInterval: 15_000,
+    staleTime: 5_000,
+    refetchInterval: 5_000,
   })
 }
 

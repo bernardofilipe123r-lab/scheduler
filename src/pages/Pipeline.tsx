@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2 } from 'lucide-react'
 import { AnimatePresence } from 'framer-motion'
+import toast from 'react-hot-toast'
 import {
   PipelineStats,
   PipelineToolbar,
@@ -43,15 +44,37 @@ export function PipelinePage() {
   const [reviewModalIndex, setReviewModalIndex] = useState<number | null>(null)
   const [bulkAction, setBulkAction] = useState<{ action: 'approve' | 'reject'; count: number } | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
-  const hasAutoSwitched = useRef(false)
+  const prevGeneratingCount = useRef<number | null>(null)
 
-  // Auto-switch to pending_review if generating tab is empty on the very first load
+  // Continuous auto-switch: when generating tab empties out and pending_review has items, switch automatically.
+  // Also shows a toast when items finish generating so user knows content is ready.
   useEffect(() => {
-    if (hasAutoSwitched.current || !statsData) return
-    if (filters.status === 'generating' && statsData.generating === 0 && statsData.pending_review > 0) {
+    if (!statsData) return
+    const prev = prevGeneratingCount.current
+    const curr = statsData.generating
+
+    // Detect transition: items just finished generating
+    if (prev !== null && prev > 0 && curr === 0 && statsData.pending_review > 0) {
+      if (filters.status === 'generating') {
+        setStatus('pending_review')
+        toast.success(`${statsData.pending_review} item${statsData.pending_review > 1 ? 's' : ''} ready for review!`, { duration: 4000 })
+      }
+    }
+
+    // Also handle the case where user lands on generating tab but nothing is generating
+    if (prev === null && curr === 0 && statsData.pending_review > 0 && filters.status === 'generating') {
       setStatus('pending_review')
     }
-    hasAutoSwitched.current = true
+
+    // Notify about failures
+    if (prev !== null && prev > 0 && statsData.failed > 0) {
+      const newlyFailed = Math.max(0, prev - curr - (statsData.pending_review - (prevGeneratingCount.current === null ? 0 : 0)))
+      if (newlyFailed > 0 && curr === 0) {
+        toast.error(`${statsData.failed} item${statsData.failed > 1 ? 's' : ''} failed to generate`, { duration: 5000 })
+      }
+    }
+
+    prevGeneratingCount.current = curr
   }, [statsData, filters.status, setStatus])
 
   const allItems = useMemo(() => pipelineData?.items ?? [], [pipelineData])

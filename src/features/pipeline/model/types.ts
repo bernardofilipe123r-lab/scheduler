@@ -17,6 +17,9 @@ export interface BrandOutput {
   is_chain?: boolean
   chain_parts?: string[]
   format_type?: string
+  progress_message?: string
+  progress_percent?: number
+  error?: string
 }
 
 export interface PipelineItem {

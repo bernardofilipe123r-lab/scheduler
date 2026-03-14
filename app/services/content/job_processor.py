@@ -357,16 +357,11 @@ class JobProcessor:
 
             # Pick a music track based on music_source
             from app.services.media.music_picker import resolve_music_url
-            from app.db_connection import SessionLocal
-            _music_db = SessionLocal()
-            try:
-                _music_url = resolve_music_url(
-                    _music_db, user_id,
-                    getattr(job, 'music_track_id', None),
-                    getattr(job, 'music_source', None),
-                )
-            finally:
-                _music_db.close()
+            _music_url = resolve_music_url(
+                self.db, user_id,
+                getattr(job, 'music_track_id', None),
+                getattr(job, 'music_source', None),
+            )
 
             video_gen.generate_reel_video(reel_path, video_path, music_url=_music_url)
             print(f"   ✓ Video saved: {video_path}", flush=True)
@@ -728,19 +723,14 @@ class JobProcessor:
             from app.services.discovery.story_polisher import ImagePlan
             from app.models.format_b_design import FormatBDesign
             from app.models.brands import Brand
-            from app.db_connection import SessionLocal
 
-            # Load user's design preferences + brand info
-            design_db = SessionLocal()
-            try:
-                design = design_db.query(FormatBDesign).filter(
-                    FormatBDesign.user_id == user_id
-                ).first()
-                brand_obj = design_db.query(Brand).filter(
-                    Brand.id == brand, Brand.user_id == user_id
-                ).first()
-            finally:
-                design_db.close()
+            # Load user's design preferences + brand info (reuse existing session)
+            design = self.db.query(FormatBDesign).filter(
+                FormatBDesign.user_id == user_id
+            ).first()
+            brand_obj = self.db.query(Brand).filter(
+                Brand.id == brand, Brand.user_id == user_id
+            ).first()
 
             # Extract brand info for compositor
             brand_display_name = brand_obj.display_name if brand_obj else brand

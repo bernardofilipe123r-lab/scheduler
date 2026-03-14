@@ -1,4 +1,4 @@
-import { CheckCircle2, X, Pencil, Star, Loader2, Trash2, Download, Eye } from 'lucide-react'
+import { CheckCircle2, X, Pencil, Star, Loader2, Trash2, Download, Eye, AlertTriangle } from 'lucide-react'
 import { clsx } from 'clsx'
 import { format } from 'date-fns'
 import { ContentPreview } from './ContentPreview'
@@ -66,7 +66,21 @@ export function PipelineCard({ item, onApprove, onReject, onEdit, onDelete, onOp
   const lifecycle = item.lifecycle
   const isPending = lifecycle === 'pending_review'
   const isGenerating = lifecycle === 'generating'
+  const isFailed = lifecycle === 'failed'
   const badge = LIFECYCLE_BADGES[lifecycle]
+
+  // Extract progress info from brand_outputs for generating items
+  const brandOutput = getFirstBrandOutput(item)
+  const progressPercent = isGenerating
+    ? (brandOutput?.progress_percent ?? item.progress_percent ?? 0)
+    : isFailed
+    ? 100
+    : 0
+  const progressMessage = isGenerating
+    ? (brandOutput?.progress_message ?? 'Starting...')
+    : isFailed
+    ? (brandOutput?.error ?? item.status)
+    : ''
 
   const handleDownload = () => {
     const output = getFirstBrandOutput(item)
@@ -109,13 +123,28 @@ export function PipelineCard({ item, onApprove, onReject, onEdit, onDelete, onOp
 
         {/* Content preview */}
         <div
-          className={clsx('aspect-[4/5] overflow-hidden', !isGenerating && 'cursor-pointer')}
-          onClick={() => !isGenerating && onOpenReview(item)}
+          className={clsx('aspect-[4/5] overflow-hidden', !isGenerating && !isFailed && 'cursor-pointer')}
+          onClick={() => !isGenerating && !isFailed && onOpenReview(item)}
         >
           {isGenerating ? (
-            <div className="w-full h-full bg-gray-50 flex flex-col items-center justify-center">
-              <Loader2 className="w-6 h-6 text-blue-400 animate-spin mb-2" />
-              <span className="text-xs text-gray-400">Generating…</span>
+            <div className="w-full h-full bg-gray-50 flex flex-col items-center justify-center px-4">
+              <Loader2 className="w-6 h-6 text-blue-400 animate-spin mb-3" />
+              <span className="text-xs text-gray-500 font-medium mb-1">Generating…</span>
+              <span className="text-[10px] text-gray-400 text-center line-clamp-1 mb-3">{progressMessage}</span>
+              {/* Progress bar */}
+              <div className="w-full max-w-[120px] h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-blue-400 rounded-full transition-all duration-700 ease-out"
+                  style={{ width: `${Math.max(2, progressPercent)}%` }}
+                />
+              </div>
+              <span className="text-[10px] text-gray-400 mt-1 tabular-nums">{progressPercent}%</span>
+            </div>
+          ) : isFailed ? (
+            <div className="w-full h-full bg-red-50/50 flex flex-col items-center justify-center px-4">
+              <AlertTriangle className="w-6 h-6 text-red-400 mb-2" />
+              <span className="text-xs text-red-500 font-medium mb-1">Failed</span>
+              <span className="text-[10px] text-red-400/80 text-center line-clamp-2">{progressMessage}</span>
             </div>
           ) : (
             <ContentPreview item={item} />
