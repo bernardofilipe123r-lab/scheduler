@@ -21,6 +21,7 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
+import numpy as np
 import requests
 from PIL import Image
 
@@ -50,6 +51,14 @@ MIN_DIMENSION = 400
 
 # How many candidate images to try before giving up
 MAX_CANDIDATES = 5
+
+# Minimum visual complexity — images below this are mostly blank/solid background.
+# Measured as std-dev of pixel values on a 100x100 thumbnail (0-255 scale).
+MIN_VISUAL_COMPLEXITY = 35
+
+# Max percentage of pixels close to avg_color before we consider an image "empty".
+# Pexels returns avg_color — if a huge chunk matches it, the image is plain background.
+MAX_DOMINANT_COLOR_PCT = 0.55
 
 
 class WebImageSourcer:
@@ -190,7 +199,7 @@ class WebImageSourcer:
         return [photo for _, photo in scored]
 
     def _download_image(self, url: str) -> Optional[Path]:
-        """Download an image URL and validate it can be opened by Pillow."""
+        """Download an image URL, validate it, and reject visually empty images."""
         try:
             resp = requests.get(url, timeout=15, headers={
                 "User-Agent": "Mozilla/5.0 (compatible; ViralToby/1.0)",
@@ -219,10 +228,46 @@ class WebImageSourcer:
                 path.unlink(missing_ok=True)
                 return None
 
+            # Check visual complexity — reject images that are mostly blank/solid
+            if not self._has_sufficient_detail(path):
+                logger.info(f"[WebImageSourcer] Skipping low-detail image: {url[:60]}...")
+                path.unlink(missing_ok=True)
+                return None
+
             return path
 
         except Exception:
             return None
+
+    def _has_sufficient_detail(self, path: Path) -> bool:
+        """Check if the image has enough visual detail to look good in a slide.
+
+        Rejects images that are mostly a single solid color (e.g. product shots
+        on plain backgrounds where the subject is tiny).
+        """
+        try:
+            img = Image.open(path).convert("RGB")
+            # Resize to small thumbnail for fast analysis
+            thumb = img.resize((100, 100), Image.LANCZOS)
+            arr = np.array(thumb, dtype=np.float32)
+
+            # Overall pixel std-dev across all channels
+            overall_std = arr.std()
+            if overall_std < MIN_VISUAL_COMPLEXITY:
+                logger.debug(f"[WebImageSourcer] Image std={overall_std:.1f} < {MIN_VISUAL_COMPLEXITY} — too uniform")
+                return False
+
+            # Check dominant color coverage — what % of pixels are near the average
+            avg_color = arr.mean(axis=(0, 1))  # [R, G, B]
+            distances = np.sqrt(((arr - avg_color) ** 2).sum(axis=2))
+            close_pixels = (distances < 40).mean()  # % within ~40 color distance
+            if close_pixels > MAX_DOMINANT_COLOR_PCT:
+                logger.debug(f"[WebImageSourcer] {close_pixels:.0%} pixels near avg color — too much blank space")
+                return False
+
+            return True
+        except Exception:
+            return True  # On error, don't block the image
 
     def _record_api_call(self):
         """Record Pexels API call for usage tracking."""

@@ -38,6 +38,16 @@ MAX_RETRY_DELAY = 60
 FREEPIK_DAILY_LIMIT = 100
 GLOBAL_FORMAT_B_SETTINGS_USER_ID = "__global_format_b_settings__"
 
+# Safety suffix appended to all AI image generation prompts
+_SAFETY_SUFFIX = ", safe for work, no nudity, no exposed bodies, all people fully clothed"
+
+
+def _sanitize_ai_prompt(prompt: str) -> str:
+    """Append safety suffix to AI image prompts to prevent NSFW generation."""
+    if not prompt:
+        return prompt
+    return prompt.rstrip(".") + _SAFETY_SUFFIX
+
 
 def get_image_source_mode(db=None, user_id: str = None) -> str:
     """Get the configured image source mode for Format B video slides.
@@ -229,6 +239,7 @@ class ImageSourcer:
             size: Aspect ratio. Use 'widescreen_16_9' for content images (rectangular),
                   'social_story_9_16' for vertical thumbnails.
         """
+        prompt = _sanitize_ai_prompt(prompt)
         try:
             headers = {
                 "x-freepik-api-key": self._freepik_key,
@@ -304,6 +315,7 @@ class ImageSourcer:
 
     def _generate_via_deapi(self, prompt: str, orientation: str = "landscape") -> Optional[Path]:
         """Generate an image via DeAPI using Flux1schnell model."""
+        prompt = _sanitize_ai_prompt(prompt)
         acquired = _sourcer_semaphore.acquire(timeout=QUEUE_TIMEOUT)
         if not acquired:
             logger.warning("[ImageSourcer] DeAPI queue timeout")

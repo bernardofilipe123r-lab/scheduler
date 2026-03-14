@@ -151,14 +151,19 @@ Rules for search queries:
 • Describe real, photographable scenes — not abstract concepts
 • Stock sites do NOT have: microscopic views, futuristic devices, AI-generated art, scientific visualizations
 • Think "what would a stock photographer actually shoot?"
+• IMPORTANT: Prefer close-up and detailed compositions. Avoid queries that return product-on-solid-background shots (e.g., "hand holding vial" returns a tiny vial on a plain yellow background — bad). Instead use queries like "laboratory test tubes closeup" that return images with detail filling the whole frame.
+• Add atmosphere/mood words when the topic is serious (e.g., "dark laboratory research", "serious businesswoman office", "dramatic courtroom")
+• Avoid overly generic queries (e.g., "woman silhouette glass wall" is too vague — "woman behind frosted glass" is more specific)
 
-Good examples: "scientist laboratory", "woman researcher portrait", "corporate meeting room", "hospital corridor", "city skyline night"
-Bad examples: "human oocyte egg cell microscopic view glowing", "futuristic data crystal with swirling bio patterns", "abstract biological clock DNA helix"
+Good examples: "scientist laboratory closeup", "legal documents desk overhead", "biotech research dark lab", "serious researcher portrait", "city skyline night"
+Bad examples: "hand holding vial liquid", "woman silhouette glass wall", "human oocyte egg cell microscopic view glowing", "futuristic data crystal with swirling bio patterns"
 
 SEARCH COLOR
 Suggest a dominant color to filter stock photo results. Use one of: red, orange, yellow, green, turquoise, blue, violet, pink, brown, black, gray, white.
-Only suggest a color when it clearly improves relevance (e.g., "white" for clinical/lab scenes, "blue" for tech/corporate, "green" for nature/health, "black" for dramatic/luxury).
-Write "none" if no color filter is needed.
+Only suggest a color when it CLEARLY and OBVIOUSLY improves relevance. Color filters narrow results significantly, so prefer "none" unless the color is essential to the image concept.
+Good uses: "white" for a lab/clinical scene, "black" for luxury/dramatic, "green" for nature
+Bad uses: "blue" for a woman silhouette (too restrictive), "white" for a scientist (unnecessary)
+When in doubt, write "none" — a relevant image with wrong color is better than no good image at all.
 
 IMAGE RULES
 
@@ -171,6 +176,15 @@ Images must be:
 • visually striking and engaging for social media
 • no text overlays
 • no infographic style
+
+CONTENT SAFETY (MANDATORY)
+
+• NEVER depict nudity, nude silhouettes, exposed bodies, or sexualized content
+• All people in images MUST be fully clothed (professional attire, casual wear, lab coats, etc.)
+• No see-through clothing, body-revealing poses, or suggestive compositions
+• No bare torsos, exposed skin beyond face/hands/arms
+• When describing body-related topics, focus on objects, technology, documents, or environments — NOT on the human body itself
+• Violating these rules will result in account bans on social media platforms
 
 OUTPUT FORMAT
 
