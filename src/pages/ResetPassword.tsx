@@ -16,6 +16,7 @@ export function ResetPasswordPage() {
 
   useEffect(() => {
     let active = true
+    let listenerSetCanReset = false
 
     // Set up auth listener FIRST — before any async calls
     // This catches PASSWORD_RECOVERY events from hash fragment processing
@@ -23,6 +24,7 @@ export function ResetPasswordPage() {
       if (!active) return
 
       if (event === 'PASSWORD_RECOVERY') {
+        listenerSetCanReset = true
         setCanReset(Boolean(session))
         setIsReady(true)
       }
@@ -57,7 +59,7 @@ export function ResetPasswordPage() {
       if (session) {
         setCanReset(true)
         setIsReady(true)
-      } else if (!canReset) {
+      } else if (!listenerSetCanReset) {
         // Only show error if the listener hasn't already set canReset
         setIsReady(true)
       }

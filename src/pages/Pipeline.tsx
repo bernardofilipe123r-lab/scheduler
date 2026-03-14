@@ -54,7 +54,7 @@ export function PipelinePage() {
     hasAutoSwitched.current = true
   }, [statsData, filters.status, setStatus])
 
-  const allItems = pipelineData?.items ?? []
+  const allItems = useMemo(() => pipelineData?.items ?? [], [pipelineData])
 
   // Client-side search filter
   const items = useMemo(() => {

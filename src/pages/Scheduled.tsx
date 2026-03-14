@@ -160,7 +160,7 @@ export function ScheduledPage() {
       } catch { /* ignore */ }
     }
     fetchLogo()
-  }, [selectedPost?.brand])
+  }, [selectedPost, brandLogos])
 
 
   
