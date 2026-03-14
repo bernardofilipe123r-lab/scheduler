@@ -43,6 +43,7 @@ class ImageSourceRequest(BaseModel):
     source_type: str = Field(..., pattern="^(web_search|ai_generate)$")
     query: str = Field(..., min_length=1, max_length=300)
     fallback_query: Optional[str] = None
+    search_color: Optional[str] = None
 
 
 class SourceImagesRequest(BaseModel):
@@ -158,6 +159,7 @@ async def source_images(
             source_type=img.source_type,
             query=img.query,
             fallback_query=img.fallback_query,
+            search_color=img.search_color,
         )
         for img in request.images
     ]

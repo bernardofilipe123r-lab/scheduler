@@ -28,6 +28,12 @@ logger = logging.getLogger(__name__)
 
 PEXELS_SEARCH_URL = "https://api.pexels.com/v1/search"
 
+# Valid Pexels color filter values
+VALID_PEXELS_COLORS = {
+    "red", "orange", "yellow", "green", "turquoise", "blue",
+    "violet", "pink", "brown", "black", "gray", "white",
+}
+
 # Target aspect ratio for slideshow image box (910w / 660h ≈ 1.38)
 TARGET_RATIO_LANDSCAPE = 910 / 660  # ~1.378
 # Target aspect ratio for thumbnails (9:16 portrait ≈ 0.5625)
@@ -57,13 +63,14 @@ class WebImageSourcer:
         """Check if Pexels API key is configured."""
         return bool(self._api_key)
 
-    def search_image(self, query: str, orientation: str = "landscape") -> Optional[Path]:
+    def search_image(self, query: str, orientation: str = "landscape", color: Optional[str] = None) -> Optional[Path]:
         """
         Search Pexels for the query and download the best candidate.
 
         Args:
             query: Search query string.
             orientation: "landscape" for horizontal images, "portrait" for vertical.
+            color: Optional Pexels color filter (e.g. "white", "blue").
 
         Returns path to downloaded image file, or None on any failure.
         """
@@ -81,7 +88,12 @@ class WebImageSourcer:
                 "per_page": 15,
             }
 
-            logger.info(f"[WebImageSourcer] Pexels searching: {query!r} (orientation={orientation})")
+            # Add color filter if valid
+            if color and color.lower() in VALID_PEXELS_COLORS:
+                params["color"] = color.lower()
+
+            color_log = f", color={color}" if color else ""
+            logger.info(f"[WebImageSourcer] Pexels searching: {query!r} (orientation={orientation}{color_log})")
             resp = requests.get(PEXELS_SEARCH_URL, headers=headers, params=params, timeout=15)
 
             if resp.status_code == 429:

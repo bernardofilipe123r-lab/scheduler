@@ -24,6 +24,7 @@ class ImagePlan:
     query: str  # The AI PROMPT for image generation
     fallback_query: Optional[str] = None
     search_query: Optional[str] = None  # Google Images search query (from DeepSeek SEARCH QUERY)
+    search_color: Optional[str] = None  # Pexels color filter (from DeepSeek SEARCH COLOR)
 
 
 @dataclass
@@ -142,7 +143,22 @@ AI PROMPT
 A prompt for generating the image with an AI image generator.
 
 SEARCH QUERY
-A precise Google Images search query to find a real photo matching this visual. Be specific to avoid ambiguity — e.g., "U.S. Pentagon building aerial view" not just "pentagon", "Apple iPhone 16 Pro" not just "apple", "Donald Trump speech podium" not just "Trump". Include context keywords (location, brand, object type) so the search returns exactly the right subject.
+A short 2–5 word stock-photo-friendly search query to find a real photo on a stock photo site like Pexels.
+
+Rules for search queries:
+• Keep it SHORT: 2–5 words maximum
+• Use everyday language a photographer would tag
+• Describe real, photographable scenes — not abstract concepts
+• Stock sites do NOT have: microscopic views, futuristic devices, AI-generated art, scientific visualizations
+• Think "what would a stock photographer actually shoot?"
+
+Good examples: "scientist laboratory", "woman researcher portrait", "corporate meeting room", "hospital corridor", "city skyline night"
+Bad examples: "human oocyte egg cell microscopic view glowing", "futuristic data crystal with swirling bio patterns", "abstract biological clock DNA helix"
+
+SEARCH COLOR
+Suggest a dominant color to filter stock photo results. Use one of: red, orange, yellow, green, turquoise, blue, violet, pink, brown, black, gray, white.
+Only suggest a color when it clearly improves relevance (e.g., "white" for clinical/lab scenes, "blue" for tech/corporate, "green" for nature/health, "black" for dramatic/luxury).
+Write "none" if no color filter is needed.
 
 IMAGE RULES
 
@@ -176,6 +192,9 @@ AI PROMPT:
 SEARCH QUERY:
 ...
 
+SEARCH COLOR:
+...
+
 2.
 IMAGE IDEA:
 ...
@@ -184,6 +203,9 @@ AI PROMPT:
 ...
 
 SEARCH QUERY:
+...
+
+SEARCH COLOR:
 ...
 
 3.
@@ -196,6 +218,9 @@ AI PROMPT:
 SEARCH QUERY:
 ...
 
+SEARCH COLOR:
+...
+
 4.
 IMAGE IDEA:
 ...
@@ -204,6 +229,9 @@ AI PROMPT:
 ...
 
 SEARCH QUERY:
+...
+
+SEARCH COLOR:
 ..."""
 
 
@@ -310,16 +338,20 @@ class StoryPolisher:
 
             ai_prompts = re.findall(r'AI PROMPT:\s*\n?(.+)', visuals_text)
             search_queries = re.findall(r'SEARCH QUERY:\s*\n?(.+)', visuals_text)
+            search_colors = re.findall(r'SEARCH COLOR:\s*\n?(.+)', visuals_text)
 
             images = []
             for i, prompt in enumerate(ai_prompts):
                 if not prompt.strip():
                     continue
                 sq = search_queries[i].strip() if i < len(search_queries) and search_queries[i].strip() else None
+                sc_raw = search_colors[i].strip().lower() if i < len(search_colors) and search_colors[i].strip() else None
+                sc = sc_raw if sc_raw and sc_raw != "none" else None
                 images.append(ImagePlan(
                     source_type="ai_generate",
                     query=prompt.strip(),
                     search_query=sq,
+                    search_color=sc,
                 ))
 
             if not reel_text or not images:

@@ -178,7 +178,7 @@ class ImageSourcer:
                 logger.warning("[ImageSourcer] Pexels API not configured, skipping web source")
                 return None
 
-            path = web_sourcer.search_image(query, orientation=orientation)
+            path = web_sourcer.search_image(query, orientation=orientation, color=plan.search_color)
             if path:
                 self.last_service_used = "pexels"
                 return self._process_image(path)
