@@ -979,23 +979,25 @@ function ThumbnailSettings({ form, update, selectedBrandId, brandDividerLogoUrl,
           </>
         )}
         <SliderRow label="Logo Size" value={form.thumbnail_logo_size ?? 100} min={80} max={120} onChange={v => update('thumbnail_logo_size', v)} />
-        {/* Logo shape: square or circular */}
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-gray-500 w-28 flex-shrink-0">Shape</span>
-          <div className="flex gap-1 bg-gray-100 rounded-lg p-0.5">
-            {(['square', 'circular'] as const).map(shape => (
-              <button
-                key={shape}
-                onClick={() => update('thumbnail_logo_shape', shape)}
-                className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors capitalize ${
-                  (form.thumbnail_logo_shape || 'square') === shape
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >{shape}</button>
-            ))}
+        {/* Logo shape: square or circular — only for image mode */}
+        {!isTextMode && (
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-gray-500 w-28 flex-shrink-0">Shape</span>
+            <div className="flex gap-1 bg-gray-100 rounded-lg p-0.5">
+              {(['square', 'circular'] as const).map(shape => (
+                <button
+                  key={shape}
+                  onClick={() => update('thumbnail_logo_shape', shape)}
+                  className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors capitalize ${
+                    (form.thumbnail_logo_shape || 'square') === shape
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >{shape}</button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </section>
 
       <section className="space-y-2">

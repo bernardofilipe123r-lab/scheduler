@@ -1034,18 +1034,18 @@ async def apply_design_to_all_brands(
     if not source_brand:
         raise HTTPException(status_code=404, detail=f"Brand '{brand_id}' not found")
 
-    all_brands = manager.get_brands(user_id=user["id"])
+    all_brands = manager.get_all_brands(user_id=user["id"])
     updated = 0
     for brand in all_brands:
-        bid = brand.get("id") or (brand.id if hasattr(brand, "id") else None)
+        bid = brand.get("id") if isinstance(brand, dict) else getattr(brand, "id", None)
         if str(bid) == str(brand_id):
             continue
         manager.update_brand(
             str(bid),
             {
-                "reel_divider_logo_path": source_brand.get("reel_divider_logo_path") if isinstance(source_brand, dict) else getattr(source_brand, "reel_divider_logo_path", None),
-                "reel_divider_logo_text": source_brand.get("reel_divider_logo_text") if isinstance(source_brand, dict) else getattr(source_brand, "reel_divider_logo_text", None),
-                "reel_content_logo_path": source_brand.get("reel_content_logo_path") if isinstance(source_brand, dict) else getattr(source_brand, "reel_content_logo_path", None),
+                "reel_divider_logo_path": source_brand.get("reel_divider_logo_path"),
+                "reel_divider_logo_text": source_brand.get("reel_divider_logo_text"),
+                "reel_content_logo_path": source_brand.get("reel_content_logo_path"),
             },
             user_id=user["id"],
         )
