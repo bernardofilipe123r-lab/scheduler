@@ -16,27 +16,34 @@ export function useRealtimeSync() {
   const queryClient = useQueryClient()
 
   useEffect(() => {
-    const channel = supabase
-      .channel('db-sync')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'generation_jobs' },
-        () => {
-          queryClient.invalidateQueries({ queryKey: jobKeys.all })
-          queryClient.invalidateQueries({ queryKey: pipelineKeys.all })
-        },
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'scheduled_reels' },
-        () => {
-          queryClient.invalidateQueries({ queryKey: schedulingKeys.all })
-        },
-      )
-      .subscribe()
+    // Delay subscription by one tick to avoid React StrictMode's double-invoke
+    // unmounting the channel before the WebSocket connection is established.
+    let channel: ReturnType<typeof supabase.channel> | null = null
+
+    const timer = setTimeout(() => {
+      channel = supabase
+        .channel('db-sync')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'generation_jobs' },
+          () => {
+            queryClient.invalidateQueries({ queryKey: jobKeys.all })
+            queryClient.invalidateQueries({ queryKey: pipelineKeys.all })
+          },
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'scheduled_reels' },
+          () => {
+            queryClient.invalidateQueries({ queryKey: schedulingKeys.all })
+          },
+        )
+        .subscribe()
+    }, 0)
 
     return () => {
-      supabase.removeChannel(channel)
+      clearTimeout(timer)
+      if (channel) supabase.removeChannel(channel)
     }
   }, [queryClient])
 }
