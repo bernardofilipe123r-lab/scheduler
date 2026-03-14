@@ -143,7 +143,19 @@ class JobProcessor:
             msg = f"{progress_label} {brand}..." if total > 1 else f"{progress_label}..."
             self._manager.update_job_status(job_id, "generating", msg, progress)
 
-            extra = (extra_kwargs_per_brand or {}).get(brand, {})
+            extra = {
+                **(extra_kwargs_per_brand or {}).get(brand, {}),
+                'brand_index': i,
+                'total_brands': total,
+            }
+
+            # Pre-initialize brand output so frontend shows progress immediately
+            self._manager.update_brand_output(job_id, brand, {
+                "status": "generating",
+                "progress_percent": 0,
+                "progress_message": "Starting...",
+            })
+
             result = {"success": False, "error": "Timeout"}
 
             def _run(b=brand, kw=extra):
@@ -173,6 +185,8 @@ class JobProcessor:
         brand: str,
         title: Optional[str] = None,
         content_lines: Optional[List[str]] = None,
+        brand_index: int = 0,
+        total_brands: int = 1,
     ) -> Dict[str, Any]:
         """
         Regenerate images/video for a single brand.
@@ -195,6 +209,14 @@ class JobProcessor:
         # Helper to thread through all update_brand_output calls
         def _update_output(data: dict):
             self._manager.update_brand_output(job_id, brand, data)
+            if "progress_percent" in data:
+                job_pct = int(
+                    (brand_index / max(total_brands, 1)) * 100
+                    + (data["progress_percent"] / max(total_brands, 1))
+                )
+                self._manager.update_job_status(
+                    job_id, "generating", data.get("progress_message"), job_pct
+                )
 
         # Use provided values or fall back to per-brand title in brand_outputs, then job title
         brand_data = job.get_brand_output(brand)
@@ -532,7 +554,10 @@ class JobProcessor:
 
             return {"success": False, "error": error_msg}
 
-    def process_post_brand(self, job_id: str, brand: str) -> Dict[str, Any]:
+    def process_post_brand(
+        self, job_id: str, brand: str,
+        brand_index: int = 0, total_brands: int = 1,
+    ) -> Dict[str, Any]:
         """
         Process a single brand for a POST job.
         Only generates the AI background image — composite rendering happens client-side.
@@ -548,6 +573,14 @@ class JobProcessor:
         # Helper to thread through all update_brand_output calls
         def _update_output(data: dict):
             self._manager.update_brand_output(job_id, brand, data)
+            if "progress_percent" in data:
+                job_pct = int(
+                    (brand_index / max(total_brands, 1)) * 100
+                    + (data["progress_percent"] / max(total_brands, 1))
+                )
+                self._manager.update_job_status(
+                    job_id, "generating", data.get("progress_message"), job_pct
+                )
 
         # Get per-brand content from brand_outputs
         brand_data = job.get_brand_output(brand)
@@ -696,7 +729,10 @@ class JobProcessor:
             })
             return {"success": False, "error": error_msg}
 
-    def process_format_b_brand(self, job_id: str, brand: str) -> Dict[str, Any]:
+    def process_format_b_brand(
+        self, job_id: str, brand: str,
+        brand_index: int = 0, total_brands: int = 1,
+    ) -> Dict[str, Any]:
         """
         Process a Format B reel for a single brand.
         Sources images, composes thumbnail, composes slideshow video, uploads to Supabase.
@@ -710,6 +746,14 @@ class JobProcessor:
         # Helper to thread through all update_brand_output calls
         def _update_output(data: dict):
             self._manager.update_brand_output(job_id, brand, data)
+            if "progress_percent" in data:
+                job_pct = int(
+                    (brand_index / max(total_brands, 1)) * 100
+                    + (data["progress_percent"] / max(total_brands, 1))
+                )
+                self._manager.update_job_status(
+                    job_id, "generating", data.get("progress_message"), job_pct
+                )
 
         tv_data = job.format_b_data or {}
         brand_data = job.get_brand_output(brand)
@@ -951,6 +995,8 @@ class JobProcessor:
         self,
         job_id: str,
         brand: str,
+        brand_index: int = 0,
+        total_brands: int = 1,
     ) -> Dict[str, Any]:
         """Generate thread text content for a single brand.
 
@@ -967,8 +1013,16 @@ class JobProcessor:
 
         def _update_output(data: dict):
             self._manager.update_brand_output(job_id, brand, data)
+            if "progress_percent" in data:
+                job_pct = int(
+                    (brand_index / max(total_brands, 1)) * 100
+                    + (data["progress_percent"] / max(total_brands, 1))
+                )
+                self._manager.update_job_status(
+                    job_id, "generating", data.get("progress_message"), job_pct
+                )
 
-        _update_output({"status": "generating", "progress_message": "Generating thread content..."})
+        _update_output({"status": "generating", "progress_message": "Generating thread content...", "progress_percent": 10})
 
         try:
             from app.core.prompt_context import PromptContext
@@ -1116,11 +1170,17 @@ class JobProcessor:
                     step_msg = f"Generating thread for {brand}..."
                     self._manager.update_job_status(job_id, "generating", step_msg, progress)
 
+                    # Pre-initialize brand output so frontend shows progress immediately
+                    self._manager.update_brand_output(job_id, brand, {
+                        "status": "generating",
+                        "progress_percent": 0,
+                        "progress_message": "Starting...",
+                    })
                     thread_result = {"success": False, "error": "Timeout"}
-                    def _run_thread_brand(b=brand):
+                    def _run_thread_brand(b=brand, bi=wi, tot=total_work):
                         nonlocal thread_result
                         try:
-                            thread_result = self.process_threads_brand(job_id, b)
+                            thread_result = self.process_threads_brand(job_id, b, brand_index=bi, total_brands=tot)
                         except Exception as ex:
                             thread_result = {"success": False, "error": f"{type(ex).__name__}: {str(ex)}"}
 
@@ -1219,11 +1279,17 @@ class JobProcessor:
                     progress = int(((wi + 1) / (total_brands + 1)) * 100)
                     self._manager.update_job_status(job_id, "generating", f"Generating image for {brand}...", progress)
 
+                    # Pre-initialize brand output so frontend shows progress immediately
+                    self._manager.update_brand_output(job_id, brand, {
+                        "status": "generating",
+                        "progress_percent": 0,
+                        "progress_message": "Starting...",
+                    })
                     post_result = {"success": False, "error": "Timeout"}
-                    def _run_post_brand(b=brand):
+                    def _run_post_brand(b=brand, bi=wi, tot=total_brands):
                         nonlocal post_result
                         try:
-                            post_result = self.process_post_brand(job_id, b)
+                            post_result = self.process_post_brand(job_id, b, brand_index=bi, total_brands=tot)
                         except Exception as ex:
                             post_result = {"success": False, "error": f"{type(ex).__name__}: {str(ex)}"}
 
@@ -1264,11 +1330,17 @@ class JobProcessor:
                     progress = int((wi / max(total_brands, 1)) * 100)
                     self._manager.update_job_status(job_id, "generating", f"Processing format-b for {brand}...", progress)
 
+                    # Pre-initialize brand output so frontend shows progress immediately
+                    self._manager.update_brand_output(job_id, brand, {
+                        "status": "generating",
+                        "progress_percent": 0,
+                        "progress_message": "Starting...",
+                    })
                     tv_result = {"success": False, "error": "Timeout"}
-                    def _run_tv_brand(b=brand):
+                    def _run_tv_brand(b=brand, bi=wi, tot=total_brands):
                         nonlocal tv_result
                         try:
-                            tv_result = self.process_format_b_brand(job_id, b)
+                            tv_result = self.process_format_b_brand(job_id, b, brand_index=bi, total_brands=tot)
                         except Exception as ex:
                             tv_result = {"success": False, "error": f"{type(ex).__name__}: {str(ex)}"}
 

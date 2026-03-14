@@ -1,3 +1,4 @@
+import { useState, useEffect, useRef } from 'react'
 import { CheckCircle2, X, Pencil, Star, Loader2, Trash2, Download, Eye, AlertTriangle } from 'lucide-react'
 import { clsx } from 'clsx'
 import { format } from 'date-fns'
@@ -92,6 +93,33 @@ export function PipelineCard({ item, onApprove, onReject, onEdit, onDelete, onOp
     a.click()
   }
 
+  // Animated display percent: snaps up when backend reports higher value,
+  // slowly ticks forward between polls so the bar never looks completely frozen
+  const [displayPct, setDisplayPct] = useState(progressPercent)
+  const actualPctRef = useRef(progressPercent)
+  actualPctRef.current = progressPercent
+
+  useEffect(() => {
+    // Immediately snap to backend value if it jumped ahead
+    setDisplayPct(p => actualPctRef.current > p ? actualPctRef.current : p)
+  }, [progressPercent])
+
+  useEffect(() => {
+    if (!isGenerating) {
+      setDisplayPct(actualPctRef.current)
+      return
+    }
+    const t = setInterval(() => {
+      setDisplayPct(p => {
+        const real = actualPctRef.current
+        if (real > p) return real          // snap to backend value
+        const ceiling = Math.min(real + 6, 93)
+        return p < ceiling ? +(p + 0.3).toFixed(1) : p  // slow tick between polls
+      })
+    }, 500)
+    return () => clearInterval(t)
+  }, [isGenerating, progressPercent])
+
   return (
     <div
       className={clsx(
@@ -134,11 +162,11 @@ export function PipelineCard({ item, onApprove, onReject, onEdit, onDelete, onOp
               {/* Progress bar */}
               <div className="w-full max-w-[120px] h-1.5 bg-gray-200 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-blue-400 rounded-full transition-all duration-700 ease-out"
-                  style={{ width: `${Math.max(2, progressPercent)}%` }}
+                  className="h-full bg-blue-400 rounded-full transition-all duration-500 ease-out"
+                  style={{ width: `${Math.max(2, displayPct)}%` }}
                 />
               </div>
-              <span className="text-[10px] text-gray-400 mt-1 tabular-nums">{progressPercent}%</span>
+              <span className="text-[10px] text-gray-400 mt-1 tabular-nums">{Math.round(displayPct)}%</span>
             </div>
           ) : isFailed ? (
             <div className="w-full h-full bg-red-50/50 flex flex-col items-center justify-center px-4">
