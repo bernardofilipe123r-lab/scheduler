@@ -19,6 +19,8 @@ export function usePipelineItems(filters: PipelineFilters) {
   if (filters.brand) params.brand = filters.brand
   if (filters.content_type && filters.content_type !== 'all') params.content_type = filters.content_type
   if (filters.batch_id) params.batch_id = filters.batch_id
+  params.page = String(filters.page)
+  params.limit = String(filters.limit)
 
   const qs = new URLSearchParams(params).toString()
   const isGenerating = filters.status === 'generating'

@@ -1,7 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2 } from 'lucide-react'
+import { CheckCircle2, ChevronLeft, ChevronRight } from 'lucide-react'
 import { AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
 import {
@@ -20,7 +19,6 @@ import {
   useBulkRejectPipeline,
   useDeletePipelineItem,
   usePipelineFilters,
-  pipelineKeys,
 } from '@/features/pipeline'
 import type { PipelineItem } from '@/features/pipeline'
 import { useTobyConfig } from '@/features/toby'
@@ -28,8 +26,7 @@ import { PipelineSkeleton } from '@/shared/components/Skeleton'
 
 export function PipelinePage() {
   const navigate = useNavigate()
-  const queryClient = useQueryClient()
-  const { filters, setStatus, setBrand, setContentType, resetFilters } = usePipelineFilters()
+  const { filters, setStatus, setBrand, setContentType, setPage, resetFilters } = usePipelineFilters()
   const { data: statsData, isLoading: statsLoading } = usePipelineStats()
   const { data: pipelineData, isLoading: itemsLoading, isFetching: itemsFetching, isError: itemsError } = usePipelineItems(filters)
   const { data: tobyConfig } = useTobyConfig()
@@ -158,21 +155,52 @@ export function PipelinePage() {
   // Show skeleton only on initial load OR refetching when we know there are still items to show
   const isShowingSkeleton = itemsLoading || (itemsFetching && items.length === 0 && (statsData?.pending_review ?? 0) > 0)
   const pendingCount = statsData?.pending_review ?? 0
+  const totalItems = pipelineData?.total ?? 0
+  const currentPage = pipelineData?.page ?? filters.page
+  const pageSize = pipelineData?.limit ?? filters.limit
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize))
+  const canGoPrev = currentPage > 1
+  const canGoNext = currentPage < totalPages
 
-  // When bulk approve/reject empties the visible batch but more items exist,
-  // force a refetch to load the next batch automatically.
+  const visiblePageItems = useMemo(() => {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, idx) => idx + 1)
+    }
+
+    const pages: number[] = [1]
+    const middleStart = Math.max(2, currentPage - 1)
+    const middleEnd = Math.min(totalPages - 1, currentPage + 1)
+
+    if (middleStart > 2) pages.push(-1)
+    for (let p = middleStart; p <= middleEnd; p++) pages.push(p)
+    if (middleEnd < totalPages - 1) pages.push(-2)
+
+    pages.push(totalPages)
+    return pages
+  }, [currentPage, totalPages])
+
+  // Keep selection scoped to currently visible items only.
+  useEffect(() => {
+    const visibleIds = new Set(items.map(i => i.job_id))
+    setSelectedIds(prev => {
+      const next = new Set(Array.from(prev).filter(id => visibleIds.has(id)))
+      return next.size === prev.size ? prev : next
+    })
+  }, [items])
+
+  // If current page becomes empty after mutations/refetches, step back one page.
   useEffect(() => {
     if (
+      pipelineData &&
       !itemsLoading &&
       !itemsFetching &&
       items.length === 0 &&
-      filters.status === 'pending_review' &&
-      (statsData?.pending_review ?? 0) > 0
+      pipelineData.total > 0 &&
+      filters.page > 1
     ) {
-      queryClient.refetchQueries({ queryKey: pipelineKeys.list(filters) })
+      setPage(filters.page - 1)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items.length, itemsLoading, itemsFetching, statsData?.pending_review, filters.status])
+  }, [filters.page, items.length, itemsFetching, itemsLoading, pipelineData, setPage])
 
   return (
     <div className="space-y-6">
@@ -212,7 +240,10 @@ export function PipelinePage() {
         onSelectAll={handleSelectAll}
         totalPending={pendingItems.length}
         searchQuery={searchQuery}
-        onSearch={setSearchQuery}
+        onSearch={(q) => {
+          setSearchQuery(q)
+          if (filters.page !== 1) setPage(1)
+        }}
       />
 
       {/* Loading skeleton — show on initial load OR when refetching an empty batch that still has items */}
@@ -220,17 +251,70 @@ export function PipelinePage() {
 
       {/* Content grid */}
       {!isShowingSkeleton && items.length > 0 && (
-        <PipelineGrid
-          items={items}
-          onApprove={handleApprove}
-          onReject={handleReject}
-          onEdit={handleEdit}
-          onDelete={handleDelete}
-          onOpenReview={handleOpenReview}
-          selectedIds={selectedIds}
-          onToggleSelect={toggleSelect}
-          autoSchedule={autoSchedule}
-        />
+        <>
+          <PipelineGrid
+            items={items}
+            onApprove={handleApprove}
+            onReject={handleReject}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            onOpenReview={handleOpenReview}
+            selectedIds={selectedIds}
+            onToggleSelect={toggleSelect}
+            autoSchedule={autoSchedule}
+          />
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between rounded-xl border border-gray-100 bg-white px-4 py-3 shadow-sm">
+              <p className="text-xs text-gray-500">
+                Showing page {currentPage} of {totalPages} ({totalItems} total)
+              </p>
+
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => canGoPrev && setPage(currentPage - 1)}
+                  disabled={!canGoPrev}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  aria-label="Previous page"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+
+                {visiblePageItems.map((pageValue, idx) => {
+                  if (pageValue < 0) {
+                    return (
+                      <span key={`ellipsis-${idx}`} className="px-2 text-xs text-gray-400">...</span>
+                    )
+                  }
+
+                  const isActive = pageValue === currentPage
+                  return (
+                    <button
+                      key={pageValue}
+                      onClick={() => setPage(pageValue)}
+                      className={`h-8 min-w-8 rounded-lg px-2 text-xs font-semibold transition-colors ${
+                        isActive
+                          ? 'bg-[#00435c] text-white'
+                          : 'border border-gray-200 text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      {pageValue}
+                    </button>
+                  )
+                })}
+
+                <button
+                  onClick={() => canGoNext && setPage(currentPage + 1)}
+                  disabled={!canGoNext}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  aria-label="Next page"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* Empty states */}

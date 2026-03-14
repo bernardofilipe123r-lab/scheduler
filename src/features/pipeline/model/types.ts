@@ -72,6 +72,8 @@ export interface PipelineFilters {
   brand: string | null
   content_type: 'all' | 'reels' | 'carousels' | 'threads'
   batch_id: string | null
+  page: number
+  limit: number
 }
 
 export interface PipelineResponse {
