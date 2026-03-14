@@ -45,7 +45,7 @@ export function PipelinePage() {
   const [searchQuery, setSearchQuery] = useState('')
   const hasAutoSwitched = useRef(false)
 
-  // Auto-switch to pending_review if generating tab is empty on first load
+  // Auto-switch to pending_review if generating tab is empty on the very first load
   useEffect(() => {
     if (hasAutoSwitched.current || !statsData) return
     if (filters.status === 'generating' && statsData.generating === 0 && statsData.pending_review > 0) {
