@@ -39,6 +39,8 @@ export interface PipelineItem {
   lifecycle: LifecycleStage
   brand_outputs: Record<string, BrandOutput | BrandOutput[]>
   progress_percent?: number | null
+  image_source_mode?: string | null
+  thumbnail_image_source_mode?: string | null
 }
 
 /** Extract the first brand output, handling both single object and array (multi-content) formats */

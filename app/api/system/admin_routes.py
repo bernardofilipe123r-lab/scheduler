@@ -586,9 +586,11 @@ async def get_ai_credits(user: dict = Depends(get_current_user)):
             design = _isdb.query(FormatBDesign).filter(
                 FormatBDesign.user_id == GLOBAL_FORMAT_B_SETTINGS_USER_ID
             ).first()
-            results["image_source_mode"] = (design.image_source_mode if design and design.image_source_mode else "ai")
+            results["image_source_mode"] = (design.image_source_mode if design and design.image_source_mode else "web")
+            results["thumbnail_image_source_mode"] = (design.thumbnail_image_source_mode if design and design.thumbnail_image_source_mode else "ai")
     except Exception:
-        results["image_source_mode"] = os.getenv("FORMAT_B_IMAGE_SOURCE", "ai")
+        results["image_source_mode"] = os.getenv("FORMAT_B_IMAGE_SOURCE", "web")
+        results["thumbnail_image_source_mode"] = "ai"
 
     return results
 
@@ -597,6 +599,7 @@ async def get_ai_credits(user: dict = Depends(get_current_user)):
 
 class ImageSourceToggleRequest(BaseModel):
     mode: str  # "ai" or "web"
+    target: str = "content"  # "content", "thumbnail", or "both"
 
 
 @router.put("/api/admin/image-source", summary="Toggle Format B image source (super admin only)")
@@ -605,11 +608,13 @@ async def set_image_source(
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Set the image source for Format B video slides. Changes take effect on next job."""
+    """Set the image source for Format B slides and/or thumbnail. Changes take effect on next job."""
     _require_super_admin(user)
 
     if request.mode not in ("ai", "web"):
         raise HTTPException(status_code=400, detail="Mode must be 'ai' or 'web'")
+    if request.target not in ("content", "thumbnail", "both"):
+        raise HTTPException(status_code=400, detail="Target must be 'content', 'thumbnail', or 'both'")
 
     # Persist globally to database (survives deploys and applies to all users)
     from app.models.format_b_design import FormatBDesign
@@ -617,17 +622,19 @@ async def set_image_source(
     design = db.query(FormatBDesign).filter(
         FormatBDesign.user_id == GLOBAL_FORMAT_B_SETTINGS_USER_ID
     ).first()
-    if design:
-        design.image_source_mode = request.mode
-    else:
-        design = FormatBDesign(user_id=GLOBAL_FORMAT_B_SETTINGS_USER_ID, image_source_mode=request.mode)
+    if not design:
+        design = FormatBDesign(user_id=GLOBAL_FORMAT_B_SETTINGS_USER_ID)
         db.add(design)
+
+    if request.target in ("content", "both"):
+        design.image_source_mode = request.mode
+        os.environ["FORMAT_B_IMAGE_SOURCE"] = request.mode
+    if request.target in ("thumbnail", "both"):
+        design.thumbnail_image_source_mode = request.mode
+
     db.commit()
 
-    # Also set env var for backward compatibility within this process
-    os.environ["FORMAT_B_IMAGE_SOURCE"] = request.mode
-
-    return {"mode": request.mode, "message": f"Image source set to '{request.mode}'. Takes effect on next job."}
+    return {"mode": request.mode, "target": request.target, "message": f"Image source for '{request.target}' set to '{request.mode}'."}
 
 
 # ─── Supabase Usage Metrics ───────────────────────────────────────────────────

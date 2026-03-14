@@ -58,7 +58,9 @@ class FormatBDesign(Base):
     thumbnail_logo_size = Column(Integer, default=100)
 
     # Image source mode: 'ai' (Freepik/DeAPI) or 'web' (Pexels)
+    # content = video slides, thumbnail = thumbnail image
     image_source_mode = Column(String(10), default="web", nullable=False, server_default="web")
+    thumbnail_image_source_mode = Column(String(10), default="ai", nullable=False, server_default="ai")
 
     created_at = Column(TIMESTAMP(timezone=True), server_default="now()")
     updated_at = Column(TIMESTAMP(timezone=True), server_default="now()")
@@ -108,4 +110,5 @@ class FormatBDesign(Base):
             "thumbnail_overlay_opacity": self.thumbnail_overlay_opacity,
             "thumbnail_logo_size": self.thumbnail_logo_size,
             "image_source_mode": self.image_source_mode or "web",
+            "thumbnail_image_source_mode": self.thumbnail_image_source_mode or "ai",
         }

@@ -92,6 +92,8 @@ def _serialize_pipeline_item(job: GenerationJob) -> dict:
         "lifecycle": _compute_lifecycle(job),
         "brand_outputs": job.brand_outputs or {},
         "progress_percent": getattr(job, "progress_percent", None),
+        "image_source_mode": (job.format_b_data or {}).get("image_source_mode") if job.content_format == "format_b" else None,
+        "thumbnail_image_source_mode": (job.format_b_data or {}).get("thumbnail_image_source_mode") if job.content_format == "format_b" else None,
     }
 
 

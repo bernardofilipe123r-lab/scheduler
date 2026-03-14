@@ -132,6 +132,13 @@ export function PipelineCard({ item, onApprove, onReject, onEdit, onDelete, onOp
             <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">
               {variantLabel(item)}
             </span>
+            {item.variant === 'format_b' && (item.image_source_mode || item.thumbnail_image_source_mode) && (
+              <span className="text-[9px] font-medium text-gray-300 bg-gray-50 border border-gray-100 px-1 py-0.5 rounded">
+                {item.image_source_mode === 'web' ? 'Pexels' : 'AI'}
+                {' / '}
+                {item.thumbnail_image_source_mode === 'web' ? 'Th:Pexels' : 'Th:AI'}
+              </span>
+            )}
           </div>
           {item.quality_score != null && (
             <div className={clsx('flex items-center gap-1 px-1.5 py-0.5 rounded-md', scoreColor(item.quality_score))}>

@@ -703,7 +703,7 @@ class JobProcessor:
         })
 
         try:
-            from app.services.media.image_sourcer import ImageSourcer, get_image_source_mode
+            from app.services.media.image_sourcer import ImageSourcer, get_image_source_mode, get_thumbnail_image_source_mode
             from app.services.media.thumbnail_compositor import ThumbnailCompositor
             from app.services.media.slideshow_compositor import SlideshowCompositor
             from app.services.discovery.story_polisher import ImagePlan
@@ -782,6 +782,7 @@ class JobProcessor:
 
             # ── Step 1: Source images ──────────────────────────
             image_source_mode = get_image_source_mode(db=self.db, user_id=user_id)
+            thumbnail_image_source_mode = get_thumbnail_image_source_mode(db=self.db, user_id=user_id)
             sourcer = ImageSourcer(db=self.db, image_source_mode=image_source_mode)
             image_plans = [
                 ImagePlan(**ip) for ip in tv_data.get("images", [])
@@ -813,6 +814,7 @@ class JobProcessor:
                 updated_format_b_data = dict(job.format_b_data)
                 updated_format_b_data["image_service"] = image_service
                 updated_format_b_data["image_source_mode"] = image_source_mode
+                updated_format_b_data["thumbnail_image_source_mode"] = thumbnail_image_source_mode
 
                 job.format_b_data = updated_format_b_data
                 from sqlalchemy.orm.attributes import flag_modified
@@ -827,8 +829,9 @@ class JobProcessor:
 
             thumb_image_path = None
             if thumb_plan:
-                # Thumbnails always use AI generation (Freepik/DeAPI), not web images
-                thumb_image_path = sourcer.source_image_ai_only(thumb_plan)
+                # Thumbnail uses its own image source mode (independent from content slides)
+                thumb_sourcer = ImageSourcer(db=self.db, image_source_mode=thumbnail_image_source_mode)
+                thumb_image_path = thumb_sourcer.source_image(thumb_plan)
             if not thumb_image_path:
                 thumb_image_path = image_paths[0]
 

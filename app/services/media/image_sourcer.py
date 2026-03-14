@@ -1,11 +1,11 @@
 """
 Image Sourcer — generates/fetches images for Format B reels.
 
-Image source for video slides is controlled by FORMAT_B_IMAGE_SOURCE env var:
+Image source is controlled by FORMAT_B_IMAGE_SOURCE env var (or DB setting):
   - "ai" (default): Freepik primary, DeAPI fallback (AI-generated images)
   - "web": Pexels API photos (real web images, no AI fallback)
 
-Thumbnails always use AI generation (Freepik/DeAPI) regardless of toggle.
+Applies to both video slide images and thumbnails.
 """
 import base64
 import logging
@@ -67,6 +67,33 @@ def get_image_source_mode(db=None, user_id: str = None) -> str:
     return os.environ.get("FORMAT_B_IMAGE_SOURCE", "ai").lower()
 
 
+def get_thumbnail_image_source_mode(db=None, user_id: str = None) -> str:
+    """Get the configured image source mode for Format B thumbnails.
+
+    Reads thumbnail_image_source_mode from format_b_design table.
+    Falls back to 'ai' (AI generation is the default for thumbnails).
+    """
+    if db:
+        try:
+            from app.models.format_b_design import FormatBDesign
+
+            global_design = db.query(FormatBDesign).filter(
+                FormatBDesign.user_id == GLOBAL_FORMAT_B_SETTINGS_USER_ID
+            ).first()
+            if global_design and global_design.thumbnail_image_source_mode:
+                return global_design.thumbnail_image_source_mode.lower()
+
+            if user_id:
+                design = db.query(FormatBDesign).filter(
+                    FormatBDesign.user_id == user_id
+                ).first()
+                if design and design.thumbnail_image_source_mode:
+                    return design.thumbnail_image_source_mode.lower()
+        except Exception as e:
+            logger.warning(f"[ImageSourcer] Could not read thumbnail_image_source_mode from DB: {e}")
+    return "ai"
+
+
 class ImageSourcer:
     """Sources images for format-b reels. Supports AI-generated and web images."""
 
@@ -102,9 +129,14 @@ class ImageSourcer:
             logger.warning(f"[ImageSourcer] Could not check Freepik usage: {e}")
             return True  # Optimistic — try Freepik anyway
 
-    def source_image(self, plan: ImagePlan) -> Optional[Path]:
+    def source_image(self, plan: ImagePlan, orientation: str = "landscape") -> Optional[Path]:
         """
         Source a single image based on the configured mode.
+
+        Args:
+            plan: Image generation/search plan.
+            orientation: "landscape" for horizontal content images,
+                         "portrait" for vertical thumbnail images.
 
         When FORMAT_B_IMAGE_SOURCE=web:
           1. Try Pexels API photos (using plan.search_query)
@@ -119,20 +151,20 @@ class ImageSourcer:
         mode = self._image_source_mode or get_image_source_mode(db=self.db)
 
         if mode == "web":
-            path = self._source_via_web(plan)
+            path = self._source_via_web(plan, orientation=orientation)
             if path:
                 return path
             logger.warning("[ImageSourcer] Web mode selected and Pexels returned no image (strict mode, no AI fallback)")
             return None
 
         # AI generation path (default)
-        return self._source_via_ai(plan)
+        return self._source_via_ai(plan, orientation=orientation)
 
     def source_image_ai_only(self, plan: ImagePlan) -> Optional[Path]:
         """Source an image using AI generation only (for thumbnails)."""
         return self._source_via_ai(plan)
 
-    def _source_via_web(self, plan: ImagePlan) -> Optional[Path]:
+    def _source_via_web(self, plan: ImagePlan, orientation: str = "landscape") -> Optional[Path]:
         """Try to fetch a real web image via Pexels API."""
         query = plan.search_query or plan.query
         if not query:
@@ -146,7 +178,7 @@ class ImageSourcer:
                 logger.warning("[ImageSourcer] Pexels API not configured, skipping web source")
                 return None
 
-            path = web_sourcer.search_image(query)
+            path = web_sourcer.search_image(query, orientation=orientation)
             if path:
                 self.last_service_used = "pexels"
                 return self._process_image(path)
@@ -155,14 +187,16 @@ class ImageSourcer:
             logger.error(f"[ImageSourcer] Web image source error: {e}")
             return None
 
-    def _source_via_ai(self, plan: ImagePlan) -> Optional[Path]:
+    def _source_via_ai(self, plan: ImagePlan, orientation: str = "landscape") -> Optional[Path]:
         """Generate an image via AI (Freepik primary, DeAPI fallback)."""
         use_freepik = self._is_freepik_available()
 
+        freepik_size = "social_story_9_16" if orientation == "portrait" else "widescreen_16_9"
+
         if use_freepik:
-            path = self._generate_via_freepik(plan.query)
+            path = self._generate_via_freepik(plan.query, size=freepik_size)
             if not path and plan.fallback_query:
-                path = self._generate_via_freepik(plan.fallback_query)
+                path = self._generate_via_freepik(plan.fallback_query, size=freepik_size)
             if path:
                 self.last_service_used = "freepik"
                 return self._process_image(path)
@@ -173,9 +207,9 @@ class ImageSourcer:
             logger.error("[ImageSourcer] DEAPI_API_KEY not set and Freepik unavailable")
             return None
 
-        path = self._generate_via_deapi(plan.query)
+        path = self._generate_via_deapi(plan.query, orientation=orientation)
         if not path and plan.fallback_query:
-            path = self._generate_via_deapi(plan.fallback_query)
+            path = self._generate_via_deapi(plan.fallback_query, orientation=orientation)
 
         if path:
             self.last_service_used = "deapi"
@@ -268,8 +302,8 @@ class ImageSourcer:
             logger.error(f"[ImageSourcer] Freepik error: {e}")
             return None
 
-    def _generate_via_deapi(self, prompt: str) -> Optional[Path]:
-        """Generate an image via DeAPI using Flux1schnell model in 16:9 format."""
+    def _generate_via_deapi(self, prompt: str, orientation: str = "landscape") -> Optional[Path]:
+        """Generate an image via DeAPI using Flux1schnell model."""
         acquired = _sourcer_semaphore.acquire(timeout=QUEUE_TIMEOUT)
         if not acquired:
             logger.warning("[ImageSourcer] DeAPI queue timeout")
@@ -286,9 +320,13 @@ class ImageSourcer:
                 "Accept": "application/json",
             }
 
-            # 16:9 format rounded to 128 for Flux1schnell
-            width = 1280  # 128-aligned
-            height = 768   # 128-aligned (closest to 720 for 16:9)
+            # 128-aligned dimensions for Flux1schnell
+            if orientation == "portrait":
+                width = 768    # 128-aligned
+                height = 1280  # 128-aligned (9:16 portrait)
+            else:
+                width = 1280   # 128-aligned
+                height = 768   # 128-aligned (16:9 landscape)
 
             seed = random.randint(0, 2**31 - 1)
             payload = {

@@ -945,13 +945,13 @@ function ContentSettings({ form, update, selectedBrandId, brandContentLogoUrl, b
 
   return (
     <div className="space-y-3">
-      {/* Video Slide Images */}
+      {/* Image Source — Content Slides */}
       <section className="space-y-1.5">
-        <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Video Slide Images</h4>
+        <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Content Slide Images</h4>
         <div className="flex flex-col gap-1.5">
           {([
-            { value: 'ai', label: 'AI Generated' },
-            { value: 'web', label: 'Web Images (Pexels)', desc: 'Using real Pexels photos for video slides' },
+            { value: 'ai', label: 'AI Generated', desc: 'AI-generated images for video slides' },
+            { value: 'web', label: 'Web Images (Pexels)', desc: 'Real Pexels photos for video slides' },
           ] as const).map(opt => (
             <label key={opt.value} className="flex items-start gap-2 cursor-pointer">
               <input
@@ -964,11 +964,36 @@ function ContentSettings({ form, update, selectedBrandId, brandContentLogoUrl, b
               />
               <div>
                 <span className="text-[11px] text-gray-700 font-medium">{opt.label}</span>
-                {'desc' in opt && <p className="text-[10px] text-gray-400">{opt.desc}</p>}
+                <p className="text-[10px] text-gray-400">{opt.desc}</p>
               </div>
             </label>
           ))}
-          <p className="text-[10px] text-gray-400 mt-0.5">Thumbnails always use AI generation regardless of this setting.</p>
+        </div>
+      </section>
+
+      {/* Image Source — Thumbnail */}
+      <section className="space-y-1.5">
+        <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Thumbnail Image</h4>
+        <div className="flex flex-col gap-1.5">
+          {([
+            { value: 'ai', label: 'AI Generated', desc: 'AI-generated image for thumbnail' },
+            { value: 'web', label: 'Web Image (Pexels)', desc: 'Real Pexels photo for thumbnail' },
+          ] as const).map(opt => (
+            <label key={opt.value} className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="thumbnail_image_source_mode"
+                value={opt.value}
+                checked={(form.thumbnail_image_source_mode ?? 'ai') === opt.value}
+                onChange={() => update('thumbnail_image_source_mode', opt.value)}
+                className="mt-0.5 w-3 h-3 accent-primary-600"
+              />
+              <div>
+                <span className="text-[11px] text-gray-700 font-medium">{opt.label}</span>
+                <p className="text-[10px] text-gray-400">{opt.desc}</p>
+              </div>
+            </label>
+          ))}
         </div>
       </section>
 

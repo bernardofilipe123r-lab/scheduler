@@ -88,6 +88,7 @@ export interface DesignSettings {
   reel_music_enabled: boolean
   // Image source
   image_source_mode: string
+  thumbnail_image_source_mode: string
 }
 
 export interface DiscoverRequest {

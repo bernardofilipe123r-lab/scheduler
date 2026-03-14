@@ -2,7 +2,7 @@
 Web Image Sourcer — fetches real images from Pexels API.
 
 Used for Format B video slide images when FORMAT_B_IMAGE_SOURCE=web.
-Thumbnails always use AI-generated images (Freepik/DeAPI), not this service.
+Used when FORMAT_B_IMAGE_SOURCE=web for both video slides and thumbnails.
 
 Candidate selection strategy:
   - Search Pexels for landscape-oriented photos matching the query
@@ -29,11 +29,15 @@ logger = logging.getLogger(__name__)
 PEXELS_SEARCH_URL = "https://api.pexels.com/v1/search"
 
 # Target aspect ratio for slideshow image box (910w / 660h ≈ 1.38)
-TARGET_RATIO = 910 / 660  # ~1.378
+TARGET_RATIO_LANDSCAPE = 910 / 660  # ~1.378
+# Target aspect ratio for thumbnails (9:16 portrait ≈ 0.5625)
+TARGET_RATIO_PORTRAIT = 9 / 16  # ~0.5625
 
-# Accept images with aspect ratio between 1.0 (square) and 2.0 (wide landscape)
-MIN_RATIO = 1.0
-MAX_RATIO = 2.0
+# Acceptable ratio ranges per orientation
+LANDSCAPE_MIN_RATIO = 1.0
+LANDSCAPE_MAX_RATIO = 2.0
+PORTRAIT_MIN_RATIO = 0.4
+PORTRAIT_MAX_RATIO = 0.9
 
 # Minimum resolution — below this images look blurry when scaled
 MIN_DIMENSION = 400
@@ -53,9 +57,13 @@ class WebImageSourcer:
         """Check if Pexels API key is configured."""
         return bool(self._api_key)
 
-    def search_image(self, query: str) -> Optional[Path]:
+    def search_image(self, query: str, orientation: str = "landscape") -> Optional[Path]:
         """
         Search Pexels for the query and download the best candidate.
+
+        Args:
+            query: Search query string.
+            orientation: "landscape" for horizontal images, "portrait" for vertical.
 
         Returns path to downloaded image file, or None on any failure.
         """
@@ -69,11 +77,11 @@ class WebImageSourcer:
             }
             params = {
                 "query": query,
-                "orientation": "landscape",
+                "orientation": orientation,
                 "per_page": 15,
             }
 
-            logger.info(f"[WebImageSourcer] Pexels searching: {query!r}")
+            logger.info(f"[WebImageSourcer] Pexels searching: {query!r} (orientation={orientation})")
             resp = requests.get(PEXELS_SEARCH_URL, headers=headers, params=params, timeout=15)
 
             if resp.status_code == 429:
@@ -97,22 +105,23 @@ class WebImageSourcer:
                 return None
 
             # Filter and rank candidates
-            candidates = self._rank_candidates(photos)
+            candidates = self._rank_candidates(photos, orientation=orientation)
             if not candidates:
                 logger.warning(f"[WebImageSourcer] No suitable Pexels candidates for: {query!r}")
                 return None
 
             # Try downloading top candidates
+            # Use 'portrait' size for portrait orientation, 'landscape' for landscape
+            size_key = "portrait" if orientation == "portrait" else "landscape"
             for photo in candidates[:MAX_CANDIDATES]:
-                # Use 'landscape' size (1200x627) — good quality, not too large
-                url = photo.get("src", {}).get("landscape") or photo.get("src", {}).get("large")
+                url = photo.get("src", {}).get(size_key) or photo.get("src", {}).get("large")
                 if not url:
                     continue
 
                 path = self._download_image(url)
                 if path:
                     photographer = photo.get("photographer", "Unknown")
-                    logger.info(f"[WebImageSourcer] Downloaded Pexels image by {photographer}: {url[:80]}...")
+                    logger.info(f"[WebImageSourcer] Downloaded Pexels {orientation} image by {photographer}: {url[:80]}...")
                     return path
 
             logger.warning(f"[WebImageSourcer] All Pexels candidate downloads failed for: {query!r}")
@@ -125,17 +134,26 @@ class WebImageSourcer:
             logger.error(f"[WebImageSourcer] Error: {e}")
             return None
 
-    def _rank_candidates(self, photos: list[dict]) -> list[dict]:
+    def _rank_candidates(self, photos: list[dict], orientation: str = "landscape") -> list[dict]:
         """
         Filter and rank photo candidates by suitability.
 
         Filters:
           - Must have width and height metadata
-          - Aspect ratio between 1.0 and 2.0
+          - Aspect ratio within acceptable range for the orientation
           - Both dimensions >= MIN_DIMENSION
 
-        Ranks by closeness to TARGET_RATIO (1.38:1).
+        Ranks by closeness to target ratio for the orientation.
         """
+        if orientation == "portrait":
+            target_ratio = TARGET_RATIO_PORTRAIT
+            min_ratio = PORTRAIT_MIN_RATIO
+            max_ratio = PORTRAIT_MAX_RATIO
+        else:
+            target_ratio = TARGET_RATIO_LANDSCAPE
+            min_ratio = LANDSCAPE_MIN_RATIO
+            max_ratio = LANDSCAPE_MAX_RATIO
+
         scored = []
         for photo in photos:
             w = photo.get("width", 0)
@@ -148,11 +166,11 @@ class WebImageSourcer:
                 continue
 
             ratio = w / h
-            if ratio < MIN_RATIO or ratio > MAX_RATIO:
+            if ratio < min_ratio or ratio > max_ratio:
                 continue
 
             # Score: distance from target ratio (lower = better)
-            distance = abs(ratio - TARGET_RATIO)
+            distance = abs(ratio - target_ratio)
             scored.append((distance, photo))
 
         # Sort by distance (closest to target ratio first)
