@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CheckCircle2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { CheckCircle2, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import { AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
 import {
@@ -28,7 +28,7 @@ export function PipelinePage() {
   const navigate = useNavigate()
   const { filters, setStatus, setBrand, setContentType, setPage, resetFilters } = usePipelineFilters()
   const { data: statsData, isLoading: statsLoading } = usePipelineStats()
-  const { data: pipelineData, isLoading: itemsLoading, isFetching: itemsFetching, isError: itemsError } = usePipelineItems(filters)
+  const { data: pipelineData, isLoading: itemsLoading, isFetching: itemsFetching, isError: itemsError, isPlaceholderData } = usePipelineItems(filters)
   const { data: tobyConfig } = useTobyConfig()
   const autoSchedule = tobyConfig?.auto_schedule ?? true
   const approve = useApprovePipelineItem()
@@ -152,12 +152,14 @@ export function PipelinePage() {
   }, [items])
 
   const showAllReviewedBanner = filters.status === 'pending_review' && items.length === 0 && !itemsLoading && (statsData?.pending_review ?? 0) === 0 && (statsData?.scheduled ?? 0) > 0
-  // Show skeleton only on initial load OR refetching when we know there are still items to show
-  const isShowingSkeleton = itemsLoading || (itemsFetching && items.length === 0 && (statsData?.pending_review ?? 0) > 0)
   const pendingCount = statsData?.pending_review ?? 0
   const totalItems = pipelineData?.total ?? 0
-  const currentPage = pipelineData?.page ?? filters.page
-  const pageSize = pipelineData?.limit ?? filters.limit
+  const currentPage = filters.page
+  const pageSize = filters.limit
+  // Show skeleton on initial tab load (no data/placeholder). Also show when
+  // optimistic updates empty the page but more items exist — prevents empty-state
+  // flash during refetch/step-back. Works across ALL tabs, not just pending.
+  const isShowingSkeleton = itemsLoading || (allItems.length === 0 && totalItems > 0 && !itemsError)
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize))
   const canGoPrev = currentPage > 1
   const canGoNext = currentPage < totalPages
@@ -189,18 +191,19 @@ export function PipelinePage() {
   }, [items])
 
   // If current page becomes empty after mutations/refetches, step back one page.
+  // Uses allItems (pre-search) to avoid false step-back when search matches nothing.
   useEffect(() => {
     if (
       pipelineData &&
       !itemsLoading &&
       !itemsFetching &&
-      items.length === 0 &&
+      allItems.length === 0 &&
       pipelineData.total > 0 &&
       filters.page > 1
     ) {
       setPage(filters.page - 1)
     }
-  }, [filters.page, items.length, itemsFetching, itemsLoading, pipelineData, setPage])
+  }, [filters.page, allItems.length, itemsFetching, itemsLoading, pipelineData, setPage])
 
   return (
     <div className="space-y-6">
@@ -267,7 +270,14 @@ export function PipelinePage() {
           {totalPages > 1 && (
             <div className="flex items-center justify-between rounded-xl border border-gray-100 bg-white px-4 py-3 shadow-sm">
               <p className="text-xs text-gray-500">
-                Showing page {currentPage} of {totalPages} ({totalItems} total)
+                {itemsFetching && isPlaceholderData ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <Loader2 className="h-3 w-3 animate-spin text-gray-400" />
+                    Loading page {currentPage}…
+                  </span>
+                ) : (
+                  <>Showing page {currentPage} of {totalPages} ({totalItems} total)</>
+                )}
               </p>
 
               <div className="flex items-center gap-1">

@@ -32,6 +32,21 @@ export function usePipelineItems(filters: PipelineFilters) {
     staleTime: 0,
     refetchInterval: isGenerating ? 3_000 : isPending ? 10_000 : false,
     refetchOnWindowFocus: true,
+    placeholderData: (previousData, previousQuery) => {
+      // Keep previous page data during same-tab page changes to prevent
+      // skeleton flash. Don't keep across tab/filter changes (wrong data).
+      if (!previousData || !previousQuery) return undefined
+      const prevFilters = (previousQuery.queryKey as readonly unknown[])[2] as PipelineFilters | undefined
+      if (
+        prevFilters &&
+        prevFilters.status === filters.status &&
+        prevFilters.brand === filters.brand &&
+        prevFilters.content_type === filters.content_type
+      ) {
+        return previousData
+      }
+      return undefined
+    },
   })
 }
 
@@ -63,10 +78,14 @@ export function useApprovePipelineItem() {
       toast.loading('Scheduling…', { id: 'approve-' + jobId })
       await queryClient.cancelQueries({ queryKey: pipelineKeys.all })
       const lifecycle = findItemLifecycle(queryClient, jobId)
-      // Remove from all cached lists
+      // Remove from all cached lists and decrement total for pagination
       queryClient.setQueriesData<PipelineResponse>(
         { queryKey: pipelineKeys.all },
-        (old) => old && Array.isArray(old.items) ? { ...old, items: old.items.filter(i => i.job_id !== jobId) } : old,
+        (old) => {
+          if (!old || !Array.isArray(old.items)) return old
+          const next = old.items.filter(i => i.job_id !== jobId)
+          return { ...old, items: next, total: old.total - (old.items.length - next.length) }
+        },
       )
       // Optimistically update stats immediately
       queryClient.setQueryData<PipelineStats>(pipelineKeys.stats(), (old) => {
@@ -132,7 +151,11 @@ export function useRejectPipelineItem() {
       const lifecycle = findItemLifecycle(queryClient, jobId)
       queryClient.setQueriesData<PipelineResponse>(
         { queryKey: pipelineKeys.all },
-        (old) => old && Array.isArray(old.items) ? { ...old, items: old.items.filter(i => i.job_id !== jobId) } : old,
+        (old) => {
+          if (!old || !Array.isArray(old.items)) return old
+          const next = old.items.filter(i => i.job_id !== jobId)
+          return { ...old, items: next, total: old.total - (old.items.length - next.length) }
+        },
       )
       queryClient.setQueryData<PipelineStats>(pipelineKeys.stats(), (old) => {
         if (!old) return old
@@ -164,7 +187,11 @@ export function useBulkApprovePipeline() {
       const idSet = new Set(jobIds)
       queryClient.setQueriesData<PipelineResponse>(
         { queryKey: pipelineKeys.all },
-        (old) => old && Array.isArray(old.items) ? { ...old, items: old.items.filter(i => !idSet.has(i.job_id)) } : old,
+        (old) => {
+          if (!old || !Array.isArray(old.items)) return old
+          const next = old.items.filter(i => !idSet.has(i.job_id))
+          return { ...old, items: next, total: old.total - (old.items.length - next.length) }
+        },
       )
       queryClient.setQueryData<PipelineStats>(pipelineKeys.stats(), (old) => {
         if (!old) return old
@@ -195,7 +222,11 @@ export function useBulkRejectPipeline() {
       const idSet = new Set(jobIds)
       queryClient.setQueriesData<PipelineResponse>(
         { queryKey: pipelineKeys.all },
-        (old) => old && Array.isArray(old.items) ? { ...old, items: old.items.filter(i => !idSet.has(i.job_id)) } : old,
+        (old) => {
+          if (!old || !Array.isArray(old.items)) return old
+          const next = old.items.filter(i => !idSet.has(i.job_id))
+          return { ...old, items: next, total: old.total - (old.items.length - next.length) }
+        },
       )
       queryClient.setQueryData<PipelineStats>(pipelineKeys.stats(), (old) => {
         if (!old) return old
@@ -249,7 +280,11 @@ export function useDeletePipelineItem() {
       const lifecycle = findItemLifecycle(queryClient, jobId)
       queryClient.setQueriesData<PipelineResponse>(
         { queryKey: pipelineKeys.all },
-        (old) => old && Array.isArray(old.items) ? { ...old, items: old.items.filter(i => i.job_id !== jobId) } : old,
+        (old) => {
+          if (!old || !Array.isArray(old.items)) return old
+          const next = old.items.filter(i => i.job_id !== jobId)
+          return { ...old, items: next, total: old.total - (old.items.length - next.length) }
+        },
       )
       queryClient.setQueryData<PipelineStats>(pipelineKeys.stats(), (old) => {
         if (!old) return old
