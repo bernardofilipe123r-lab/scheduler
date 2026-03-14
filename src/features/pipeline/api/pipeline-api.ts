@@ -171,6 +171,9 @@ export function useBulkApprovePipeline() {
     },
     onSuccess: (_: unknown, jobIds: string[]) => {
       queryClient.invalidateQueries({ queryKey: pipelineKeys.all })
+      // Explicitly refetch active pipeline queries so the next batch
+      // loads immediately without requiring a manual page refresh.
+      queryClient.refetchQueries({ queryKey: pipelineKeys.all, type: 'active' })
       toast.success(`${jobIds.length} items approved and scheduled!`)
     },
     onError: () => {
@@ -199,6 +202,9 @@ export function useBulkRejectPipeline() {
     },
     onSuccess: (_: unknown, jobIds: string[]) => {
       queryClient.invalidateQueries({ queryKey: pipelineKeys.all })
+      // Explicitly refetch active pipeline queries so the next batch
+      // loads immediately without requiring a manual page refresh.
+      queryClient.refetchQueries({ queryKey: pipelineKeys.all, type: 'active' })
       toast(`${jobIds.length} items rejected`, { icon: '🗑️' })
     },
     onError: () => {
