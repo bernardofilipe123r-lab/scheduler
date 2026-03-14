@@ -869,6 +869,21 @@ class JobProcessor:
             if len(image_paths) < 2:
                 print(f"   ⚠️ Only {len(image_paths)} image(s) sourced — reel quality may be low", flush=True)
 
+            # ── Refinement layer: enhance sourced images ──────
+            # Upscale low-res images, auto-contrast, color boost, sharpening.
+            # Only for web (Pexels) images — AI-generated images are already polished.
+            if image_source_mode == "web":
+                try:
+                    from app.services.media.image_refiner import ImageRefiner
+                    refiner = ImageRefiner(
+                        target_width=_image_box_width,
+                        target_height=_image_height,
+                    )
+                    image_paths = refiner.refine_batch(image_paths)
+                    print(f"   ✓ Refined {len(image_paths)} images (upscale + enhance)", flush=True)
+                except Exception as e:
+                    print(f"   ⚠️ Image refinement failed (non-fatal): {e}", flush=True)
+
             # Store which image service was used in format_b_data
             image_service = sourcer.last_service_used
             if job.format_b_data and isinstance(job.format_b_data, dict):
