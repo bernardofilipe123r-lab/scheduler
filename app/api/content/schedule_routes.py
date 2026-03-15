@@ -69,7 +69,7 @@ scheduler_service = DatabaseSchedulerService()
 async def schedule_reel(request: ScheduleRequest, user: dict = Depends(get_current_user)):
     """
     Schedule a reel for future publication on Instagram.
-    
+
     Note: This stores the scheduling information. Actual publication to Instagram
     requires Meta API credentials to be configured.
     """
@@ -80,24 +80,24 @@ async def schedule_reel(request: ScheduleRequest, user: dict = Depends(get_curre
     print(f"📅 Date: {request.schedule_date}")
     print(f"⏰ Time: {request.schedule_time}")
     print(f"💬 Caption: {request.caption[:50]}..." if len(request.caption) > 50 else f"💬 Caption: {request.caption}")
-    
+
     try:
         # Parse the date and time
         from datetime import datetime
-        
+
         print("\n🔄 Parsing scheduled datetime...")
         scheduled_datetime = datetime.strptime(
             f"{request.schedule_date} {request.schedule_time}",
             "%Y-%m-%d %H:%M"
         )
         print(f"✅ Parsed datetime: {scheduled_datetime.isoformat()}")
-        
+
         if scheduled_datetime <= datetime.now():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Cannot schedule in the past"
             )
-        
+
         # Extract job_id from reel_id (format: {job_id}_{brand})
         parts = request.reel_id.rsplit('_', 1)
         extracted_job_id = parts[0] if len(parts) > 1 else request.reel_id
@@ -144,14 +144,14 @@ async def schedule_reel(request: ScheduleRequest, user: dict = Depends(get_curre
             user_name="Web Interface User",
             job_id=extracted_job_id,
         )
-        
+
         print(f"✅ Successfully saved to database!")
         print(f"📝 Schedule ID: {result.get('schedule_id')}")
         print(f"📊 Status: {result.get('status')}")
         print("\n" + "="*80)
         print("✨ SCHEDULING COMPLETE!")
         print("="*80 + "\n")
-        
+
         return {
             "status": "scheduled",
             "reel_id": request.reel_id,
@@ -160,7 +160,7 @@ async def schedule_reel(request: ScheduleRequest, user: dict = Depends(get_curre
             "message": f"Reel scheduled for {request.schedule_date} at {request.schedule_time}",
             "note": "Configure META_ACCESS_TOKEN and META_INSTAGRAM_ACCOUNT_ID in .env to enable automatic publishing"
         }
-        
+
     except ValueError as e:
         print(f"\n❌ ERROR: Invalid date/time format")
         print(f"   Details: {str(e)}")
@@ -194,10 +194,10 @@ async def schedule_reel(request: ScheduleRequest, user: dict = Depends(get_curre
 async def schedule_auto(request: AutoScheduleRequest, user: dict = Depends(get_current_user)):
     """
     Auto-schedule a reel for future publication.
-    
+
     If scheduled_time is provided, uses that exact time.
     Otherwise, uses magic scheduling to find next available slot.
-    
+
     MAGIC SCHEDULING RULES (when no custom time):
     - Each brand has 6 daily slots (every 4 hours), alternating Light → Dark
     - Brands are staggered by 1 hour:
@@ -215,7 +215,7 @@ async def schedule_auto(request: AutoScheduleRequest, user: dict = Depends(get_c
     print(f"🎨 Variant: {request.variant}")
     if request.scheduled_time:
         print(f"📅 Custom time: {request.scheduled_time}")
-    
+
     try:
         # Determine scheduled time
         if request.scheduled_time:
@@ -228,7 +228,7 @@ async def schedule_auto(request: AutoScheduleRequest, user: dict = Depends(get_c
             else:
                 next_slot = next_slot.astimezone(__import__('datetime').timezone.utc)
             print(f"📅 Using custom time: {next_slot.isoformat()}")
-            
+
             if next_slot <= datetime.now(__import__('datetime').timezone.utc):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -241,7 +241,7 @@ async def schedule_auto(request: AutoScheduleRequest, user: dict = Depends(get_c
                 variant=request.variant
             )
             print(f"📅 Next available slot: {next_slot.isoformat()}")
-        
+
         # All media paths are Supabase URLs — pass through directly
         video_path_str = request.video_path or None
         thumbnail_path_str = request.thumbnail_path or None
@@ -251,7 +251,7 @@ async def schedule_auto(request: AutoScheduleRequest, user: dict = Depends(get_c
         print(f"🖼️  Thumbnail: {thumbnail_path_str}")
         if yt_thumbnail_str:
             print(f"📺 YT thumbnail: {yt_thumbnail_str}")
-        
+
         # Determine platforms - use request.platforms if provided, otherwise fall back to legacy logic
         if request.platforms:
             platforms = request.platforms
@@ -262,15 +262,15 @@ async def schedule_auto(request: AutoScheduleRequest, user: dict = Depends(get_c
             if request.yt_title:
                 platforms.append("youtube")
             print(f"📱 Platforms (auto-detected): {platforms}")
-        
+
         if request.yt_title:
             print(f"📺 YouTube title: {request.yt_title}")
-        
+
         # Extract job_id from reel_id (format: {job_id}_{brand})
         # e.g. "GEN-990797_vitalitycollege" → "GEN-990797"
         parts = request.reel_id.rsplit('_', 1)
         extracted_job_id = parts[0] if len(parts) > 1 else request.reel_id
-        
+
         # Schedule the reel
         result = scheduler_service.schedule_reel(
             user_id=user["id"],
@@ -287,11 +287,11 @@ async def schedule_auto(request: AutoScheduleRequest, user: dict = Depends(get_c
             variant=request.variant,
             job_id=extracted_job_id,
         )
-        
+
         print(f"✅ Scheduled successfully!")
         print(f"📝 Schedule ID: {result.get('schedule_id')}")
         print("="*80 + "\n")
-        
+
         return {
             "status": "scheduled",
             "reel_id": request.reel_id,
@@ -301,7 +301,7 @@ async def schedule_auto(request: AutoScheduleRequest, user: dict = Depends(get_c
             "scheduled_for": next_slot.isoformat(),
             "message": f"Reel auto-scheduled for {next_slot.strftime('%Y-%m-%d %I:%M %p')}"
         }
-        
+
     except Exception as e:
         print(f"\n❌ ERROR: Failed to auto-schedule")
         print(f"   Details: {str(e)}")
@@ -343,7 +343,8 @@ async def get_scheduled_posts(
             metadata = schedule.get("metadata", {})
 
             if compact:
-                # Lightweight response for calendar grid — skip heavy fields
+                # Lightweight response for calendar grid — skip heavy fields, but
+                # include carousel_paths so the detail panel can render slides correctly
                 formatted_schedules.append({
                     "schedule_id": schedule.get("schedule_id"),
                     "reel_id": schedule.get("reel_id"),
@@ -360,6 +361,7 @@ async def get_scheduled_posts(
                         "platforms": metadata.get("platforms"),
                         "thumbnail_path": metadata.get("thumbnail_path"),
                         "video_path": metadata.get("video_path"),
+                        "carousel_paths": metadata.get("carousel_paths") or [],
                         "title": metadata.get("title"),
                         "job_id": metadata.get("job_id"),
                         "original_scheduled_time": metadata.get("original_scheduled_time"),
@@ -400,7 +402,7 @@ async def get_scheduled_posts(
                     "publish_results": metadata.get("publish_results"),
                 }
             })
-        
+
         return {
             "total": len(formatted_schedules),
             "schedules": formatted_schedules
@@ -568,18 +570,18 @@ async def delete_scheduled_post(schedule_id: str, user: dict = Depends(get_curre
 async def retry_failed_post(schedule_id: str, user: dict = Depends(get_current_user)):
     """
     Retry a failed scheduled post by resetting its status to 'scheduled'.
-    
+
     This allows the auto-publisher to pick it up again on the next check.
     """
     try:
         success = scheduler_service.retry_failed(schedule_id, user_id=user["id"])
-        
+
         if not success:
             raise HTTPException(
                 status_code=404,
                 detail=f"Scheduled post {schedule_id} not found or not in failed status"
             )
-        
+
         return {
             "success": True,
             "message": f"Post {schedule_id} reset to scheduled status for retry"
@@ -597,17 +599,17 @@ async def retry_failed_post(schedule_id: str, user: dict = Depends(get_current_u
 async def reschedule_post(schedule_id: str, request: RescheduleRequest, user: dict = Depends(get_current_user)):
     """
     Reschedule a scheduled post to a new date/time.
-    
+
     Args:
         schedule_id: ID of the scheduled post
         request: New scheduled time as ISO datetime string
     """
     try:
         from datetime import datetime
-        
+
         # Parse the new scheduled time
         new_time = datetime.fromisoformat(request.scheduled_time.replace('Z', '+00:00'))
-        
+
         # Ensure timezone-aware UTC for comparison
         if new_time.tzinfo is None:
             new_time = new_time.replace(tzinfo=__import__('datetime').timezone.utc)
@@ -618,15 +620,15 @@ async def reschedule_post(schedule_id: str, request: RescheduleRequest, user: di
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Cannot reschedule to a time in the past"
             )
-        
+
         success = scheduler_service.reschedule(schedule_id, new_time, user_id=user["id"])
-        
+
         if not success:
             raise HTTPException(
                 status_code=404,
                 detail=f"Scheduled post {schedule_id} not found"
             )
-        
+
         return {
             "success": True,
             "message": f"Post rescheduled to {new_time.isoformat()}",
@@ -696,11 +698,11 @@ async def publish_scheduled_now(schedule_id: str, request: Request, user: dict =
 async def get_next_available_slot(brand: str, variant: str, user: dict = Depends(get_current_user)):
     """
     Get the next available scheduling slot for a brand+variant combination.
-    
+
     Slot Rules:
     - Light mode: 12 AM, 8 AM, 4 PM (every 8 hours)
     - Dark mode: 4 AM, 12 PM, 8 PM (every 8 hours)
-    
+
     Each brand maintains its own independent schedule.
     Starting from January 16, 2026 or today (whichever is later).
     """
@@ -711,19 +713,19 @@ async def get_next_available_slot(brand: str, variant: str, user: dict = Depends
                 status_code=400,
                 detail=f"Invalid brand: {brand}. Must be one of: {', '.join(valid_brands)}"
             )
-        
+
         if variant.lower() not in ["light", "dark"]:
             raise HTTPException(
                 status_code=400,
                 detail=f"Invalid variant: {variant}. Must be 'light' or 'dark'"
             )
-        
+
         next_slot = scheduler_service.get_next_available_slot(
             brand=brand.lower(),
             variant=variant.lower(),
             user_id=user["id"]
         )
-        
+
         return {
             "brand": brand.lower(),
             "variant": variant.lower(),
@@ -745,16 +747,16 @@ async def get_next_available_slot(brand: str, variant: str, user: dict = Depends
 async def get_all_next_slots(user: dict = Depends(get_current_user)):
     """
     Get the next available slots for all brand+variant combinations.
-    
+
     Returns next slots for:
     - gymcollege light
-    - gymcollege dark  
+    - gymcollege dark
     - healthycollege light
     - healthycollege dark
     """
     try:
         slots = {}
-        
+
         for brand in brand_resolver.get_all_brand_ids():
             slots[brand] = {}
             for variant in ["light", "dark"]:
@@ -769,7 +771,7 @@ async def get_all_next_slots(user: dict = Depends(get_current_user)):
                     "time": next_slot.strftime("%H:%M"),
                     "human_readable": next_slot.strftime("%B %d, %Y at %I:%M %p")
                 }
-        
+
         return {
             "slots": slots,
             "slot_rules": {
@@ -789,7 +791,7 @@ async def schedule_post_image(request: SchedulePostImageRequest, user: dict = De
     """Schedule a single post image for a specific brand at a given time."""
     try:
         from datetime import datetime
-        
+
         # Validate schedule time is not in the past
         schedule_dt = datetime.fromisoformat(request.schedule_time.replace('Z', '+00:00'))
         if schedule_dt.tzinfo is None:
@@ -801,26 +803,26 @@ async def schedule_post_image(request: SchedulePostImageRequest, user: dict = De
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Cannot schedule in the past"
             )
-        
+
         print(f"\n{'='*80}")
         print(f"📸 SCHEDULING POST IMAGE")
         print(f"   Brand: {request.brand}")
         print(f"   Title: {request.title[:60]}...")
         print(f"   Schedule: {request.schedule_time}")
         print(f"{'='*80}")
-        
+
         # Generate unique post ID
         post_id = f"post_{request.brand}_{str(uuid.uuid4())[:8]}"
         user_id = user["id"]
         brand_slug = request.brand
-        
+
         # Remove data URL prefix if present
         image_b64 = request.image_data
         if ',' in image_b64:
             image_b64 = image_b64.split(',', 1)[1]
-        
+
         image_bytes = base64.b64decode(image_b64)
-        
+
         # Upload cover image directly to Supabase (no local write)
         cover_remote = storage_path(user_id, brand_slug, "posts", f"{post_id}.png")
         try:
@@ -832,7 +834,7 @@ async def schedule_post_image(request: SchedulePostImageRequest, user: dict = De
                 status_code=500,
                 detail=f"Failed to upload cover image to storage: {str(e)}"
             )
-        
+
         # Upload carousel text slide images (if any)
         carousel_paths = []
         for slide_i, slide_b64 in enumerate(request.carousel_images):
@@ -849,20 +851,20 @@ async def schedule_post_image(request: SchedulePostImageRequest, user: dict = De
                 print(f"   ⚠️ Slide {slide_i + 1} upload failed: {e}", flush=True)
                 # Skip failed slides instead of appending empty strings
                 print(f"   ⚠️ Skipping slide {slide_i + 1} (upload failed)")
-        
+
         total_slides = 1 + len(carousel_paths)
         print(f"   📄 Total carousel slides: {total_slides}")
-        
+
         # Parse schedule time
         schedule_dt = datetime.fromisoformat(request.schedule_time.replace('Z', '+00:00'))
         if schedule_dt.tzinfo is None:
             schedule_dt = schedule_dt.replace(tzinfo=__import__('datetime').timezone.utc)
         else:
             schedule_dt = schedule_dt.astimezone(__import__('datetime').timezone.utc)
-        
+
         # Use Supabase URL for thumbnail path
         thumbnail_path_rel = cover_url
-        
+
         # Schedule using existing scheduler (post = image only, no video)
         result = scheduler_service.schedule_reel(
             user_id=user["id"],
@@ -880,10 +882,10 @@ async def schedule_post_image(request: SchedulePostImageRequest, user: dict = De
             carousel_paths=carousel_paths,
             job_id=request.job_id,
         )
-        
+
         print(f"   ✅ Scheduled successfully! ID: {result.get('schedule_id')}")
         print(f"{'='*80}\n")
-        
+
         return {
             "status": "scheduled",
             "post_id": post_id,
@@ -891,7 +893,7 @@ async def schedule_post_image(request: SchedulePostImageRequest, user: dict = De
             "scheduled_for": schedule_dt.isoformat(),
             "schedule_id": result.get("schedule_id")
         }
-        
+
     except Exception as e:
         print(f"   ❌ Failed to schedule post: {str(e)}")
         raise HTTPException(
@@ -908,10 +910,10 @@ async def get_occupied_post_slots(user: dict = Depends(get_current_user)):
     """
     try:
         all_scheduled = scheduler_service.get_all_scheduled(user_id=user["id"])
-        
+
         # Build dict of brand -> list of ISO datetime strings
         occupied: dict[str, list[str]] = {}
-        
+
         for schedule in all_scheduled:
             metadata = schedule.get("metadata", {})
             if metadata.get("variant") != "post":
@@ -929,7 +931,7 @@ async def get_occupied_post_slots(user: dict = Depends(get_current_user)):
                     occupied[brand].append(sched_time.isoformat())
                 else:
                     occupied[brand].append(str(sched_time))
-        
+
         return {"occupied": occupied}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -940,7 +942,7 @@ async def clean_reel_slots(user: dict = Depends(get_current_user)):
     """
     Reel Scheduler Cleaner: ensures every scheduled reel sits on its correct
     brand slot (brand offset + base 4-hour pattern, alternating light/dark).
-    
+
     Two fixes:
     1. Reels on WRONG slots (hour doesn't match brand's valid reel hours) → move to next valid slot
     2. COLLISIONS (multiple reels at same brand+time) → keep first, move extras to next valid slot
@@ -1181,25 +1183,25 @@ async def clean_reel_slots(user: dict = Depends(get_current_user)):
 @router.post("/scheduled/clean-post-slots")
 async def clean_post_slots(posts_per_day: int = 6, user: dict = Depends(get_current_user)):
     """
-    Post Schedule Cleaner: find collisions (multiple posts at exact same 
+    Post Schedule Cleaner: find collisions (multiple posts at exact same
     time for any brand) and re-schedule the duplicates to the next valid
     post slot for that brand.
-    
+
     Post slots are dynamically computed: interleaved with reels (2h offset
     from each reel slot), evenly spaced across 24h based on posts_per_day.
-    
+
     For variant='post' only (images). Reels are handled separately.
     """
     try:
         from datetime import timedelta, datetime as dt
         import math
-        
+
         user_id = user["id"]
-        
+
         # Load brand reel offsets dynamically from DB for this user
         all_brands = brand_resolver.get_all_brands(user_id=user_id)
         BRAND_REEL_OFFSETS = {b.id: b.schedule_offset for b in all_brands}
-        
+
         def get_post_slots_for_brand(brand: str, ppd: int) -> list[tuple[int, int]]:
             """Return list of (hour, minute) for valid post slots for a brand."""
             reel_offset = BRAND_REEL_OFFSETS.get(brand, 0)
@@ -1212,7 +1214,7 @@ async def clean_post_slots(posts_per_day: int = 6, user: dict = Depends(get_curr
                 slots.append((h, m))
             slots.sort(key=lambda s: s[0] * 60 + s[1])
             return slots
-        
+
         def find_next_valid_slot(brand: str, after: dt, occupied: set[str], ppd: int) -> dt:
             """Find next unoccupied valid post slot for brand after given time."""
             slots = get_post_slots_for_brand(brand, ppd)
@@ -1230,12 +1232,12 @@ async def clean_post_slots(posts_per_day: int = 6, user: dict = Depends(get_curr
             tomorrow = after + timedelta(days=1)
             h, m = slots[0]
             return tomorrow.replace(hour=h, minute=m, second=0, microsecond=0)
-        
+
         all_scheduled = scheduler_service.get_all_scheduled(user_id=user_id)
-        
+
         # Collect only post-type scheduled entries that are still pending
         posts_by_slot: dict[str, list[dict]] = {}  # key = "brand|datetime"
-        
+
         for schedule in all_scheduled:
             metadata = schedule.get("metadata", {})
             if metadata.get("variant") != "post":
@@ -1243,27 +1245,27 @@ async def clean_post_slots(posts_per_day: int = 6, user: dict = Depends(get_curr
             status = schedule.get("status", "")
             if status not in ("scheduled", "publishing"):
                 continue
-            
+
             brand = metadata.get("brand", "unknown").lower()
             sched_time = schedule.get("scheduled_time")
             if not sched_time:
                 continue
-            
+
             # Round to minute to find exact collisions
             if hasattr(sched_time, 'strftime'):
                 time_key = sched_time.strftime("%Y-%m-%d %H:%M")
             else:
                 time_key = str(sched_time)[:16]
-            
+
             slot_key = f"{brand}|{time_key}"
             if slot_key not in posts_by_slot:
                 posts_by_slot[slot_key] = []
             posts_by_slot[slot_key].append(schedule)
-        
+
         # Find collisions and reschedule duplicates
         fixed = 0
         collisions_found = 0
-        
+
         # Track all occupied slots per brand to avoid re-collisions
         brand_occupied: dict[str, set[str]] = {}
         for slot_key, entries in posts_by_slot.items():
@@ -1272,38 +1274,38 @@ async def clean_post_slots(posts_per_day: int = 6, user: dict = Depends(get_curr
             if brand not in brand_occupied:
                 brand_occupied[brand] = set()
             brand_occupied[brand].add(time_key)
-        
+
         for slot_key, entries in posts_by_slot.items():
             if len(entries) <= 1:
                 continue
-            
+
             collisions_found += len(entries) - 1
             brand = slot_key.split("|")[0]
-            
+
             # Keep the first one, reschedule the rest to next valid post slot
             for extra in entries[1:]:
                 schedule_id = extra.get("id") or extra.get("schedule_id")
                 sched_time = extra.get("scheduled_time")
                 if not schedule_id or not sched_time:
                     continue
-                
+
                 if not hasattr(sched_time, 'hour'):
                     sched_time = dt.fromisoformat(str(sched_time).replace('Z', '+00:00'))
                     if sched_time.tzinfo is None:
                         sched_time = sched_time.replace(tzinfo=__import__('datetime').timezone.utc)
-                
+
                 # Find next valid post slot for this brand
                 new_time = find_next_valid_slot(
                     brand, sched_time,
                     brand_occupied.get(brand, set()),
                     posts_per_day
                 )
-                
+
                 # Reserve this slot
                 if brand not in brand_occupied:
                     brand_occupied[brand] = set()
                 brand_occupied[brand].add(new_time.strftime("%Y-%m-%d %H:%M"))
-                
+
                 # Update in DB
                 try:
                     scheduler_service.reschedule(schedule_id, new_time, user_id=user_id)
@@ -1311,7 +1313,7 @@ async def clean_post_slots(posts_per_day: int = 6, user: dict = Depends(get_curr
                     print(f"   🔧 Moved {schedule_id} ({brand}) from {sched_time} → {new_time}")
                 except Exception as e:
                     print(f"   ❌ Failed to reschedule {schedule_id}: {e}")
-        
+
         return {
             "status": "ok",
             "collisions_found": collisions_found,
@@ -1319,7 +1321,7 @@ async def clean_post_slots(posts_per_day: int = 6, user: dict = Depends(get_curr
             "posts_per_day": posts_per_day,
             "message": f"Found {collisions_found} collision(s), fixed {fixed}. Using {posts_per_day} posts/day."
         }
-        
+
     except Exception as e:
         print(f"❌ Clean post slots failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

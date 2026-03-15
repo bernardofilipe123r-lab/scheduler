@@ -110,6 +110,8 @@ function Calendar() {
   const [selectedDay, setSelectedDay] = useState<Date | null>(null)
   const [selectedPost, setSelectedPost] = useState<ScheduledPost | null>(null)
   const [detailSlideIndex, setDetailSlideIndex] = useState(0)
+  // Reset slide index whenever a different post is opened
+  useEffect(() => { setDetailSlideIndex(0) }, [selectedPost?.id])
 
   // Filters
   const [showFilters, setShowFilters] = useState(false)
@@ -877,7 +879,16 @@ function Calendar() {
                   <button onClick={() => setSelectedPost(null)} className="p-1 hover:bg-gray-200 rounded-lg transition-colors">
                     <ArrowLeft className="h-5 w-5 text-gray-600" />
                   </button>
-                  <h2 className="text-lg font-bold text-gray-900 flex-1 min-w-0">Post Details</h2>
+                  {(() => {
+                    const v = selectedPost.metadata?.variant
+                    const hasSlides = (selectedPost.metadata?.carousel_paths?.filter(Boolean).length ?? 0) > 0
+                    const hasVideo = !!(selectedPost.video_path || selectedPost.metadata?.video_path)
+                    let label = 'Content Preview'
+                    if (v === 'threads') label = 'Thread Preview'
+                    else if (v === 'post' || hasSlides) label = 'Carousel Preview'
+                    else if (['dark', 'light', 'format_b'].includes(v ?? '') || hasVideo) label = 'Reel Preview'
+                    return <h2 className="text-lg font-bold text-gray-900 flex-1 min-w-0">{label}</h2>
+                  })()}
                   <button onClick={() => { setSelectedDay(null); setSelectedPost(null) }} className="p-1 hover:bg-gray-200 rounded-lg transition-colors">
                     <X className="h-5 w-5 text-gray-600" />
                   </button>
@@ -900,82 +911,96 @@ function Calendar() {
                     </span>
                   </div>
 
-                  {/* Media Preview */}
+                  {/* Media Preview — carousel / reel / thread / fallback */}
                   {(() => {
-                    const carouselPaths: string[] = selectedPost.metadata?.carousel_paths?.filter(Boolean) ?? []
+                    const variant = selectedPost.metadata?.variant
+                    const slides: string[] = (selectedPost.metadata?.carousel_paths ?? []).filter(Boolean)
                     const videoUrl = selectedPost.video_path || selectedPost.metadata?.video_path
                     const thumbUrl = selectedPost.thumbnail_path || selectedPost.metadata?.thumbnail_path
-                    const totalSlides = carouselPaths.length
 
-                    const isPost = selectedPost.metadata?.variant === 'post'
-
-                    if (totalSlides > 0) {
-                      return (
-                        <div className="flex flex-col items-center">
-                          <div className={clsx('relative w-full', isPost ? 'max-w-[220px]' : 'max-w-[180px]')}>
-                            <div className={clsx('rounded-lg overflow-hidden bg-gray-100', isPost ? 'aspect-[4/5]' : 'aspect-[9/16]')}>
-                              <img
-                                key={carouselPaths[detailSlideIndex]}
-                                src={carouselPaths[detailSlideIndex]}
-                                alt={detailSlideIndex === 0 ? 'Cover' : `Slide ${detailSlideIndex}`}
-                                className="w-full h-full object-contain"
-                                draggable={false}
-                              />
-                            </div>
-                            {totalSlides > 1 && (
-                              <>
-                                <button
-                                  onClick={() => setDetailSlideIndex(i => Math.max(0, i - 1))}
-                                  disabled={detailSlideIndex === 0}
-                                  className="absolute left-1 top-1/2 -translate-y-1/2 p-1 rounded-full bg-black/40 hover:bg-black/60 disabled:opacity-20 transition-colors"
-                                >
-                                  <ChevronLeft className="w-4 h-4 text-white" />
-                                </button>
-                                <button
-                                  onClick={() => setDetailSlideIndex(i => Math.min(totalSlides - 1, i + 1))}
-                                  disabled={detailSlideIndex >= totalSlides - 1}
-                                  className="absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded-full bg-black/40 hover:bg-black/60 disabled:opacity-20 transition-colors"
-                                >
-                                  <ChevronRight className="w-4 h-4 text-white" />
-                                </button>
-                              </>
-                            )}
+                    // ── CAROUSEL ──────────────────────────────────────────
+                    if (variant === 'post' || slides.length > 0) {
+                      if (slides.length === 0) {
+                        // Carousel post but no slides yet — fallback thumbnail in 4:5
+                        return thumbUrl ? (
+                          <div className="w-full max-w-[220px] mx-auto aspect-[4/5] rounded-xl overflow-hidden bg-gray-100 shadow">
+                            <img src={thumbUrl} alt="Carousel cover" className="w-full h-full object-cover" />
                           </div>
-                          {totalSlides > 1 && (
-                            <div className="flex items-center gap-2 mt-2">
-                              <div className="flex gap-1">
-                                {carouselPaths.map((_, i) => (
-                                  <button
-                                    key={i}
-                                    onClick={() => setDetailSlideIndex(i)}
-                                    className={clsx(
-                                      'w-1.5 h-1.5 rounded-full transition-all',
-                                      i === detailSlideIndex ? 'bg-emerald-500 scale-125' : 'bg-gray-300 hover:bg-gray-400'
-                                    )}
-                                  />
-                                ))}
-                              </div>
-                              <span className="text-xs text-gray-400">
-                                {detailSlideIndex === 0 ? 'Cover' : `Slide ${detailSlideIndex} of ${totalSlides - 1}`}
-                              </span>
+                        ) : null
+                      }
+                      return (
+                        <div className="relative w-full max-w-[220px] mx-auto aspect-[4/5] rounded-xl overflow-hidden bg-gray-900 shadow">
+                          <img
+                            key={slides[detailSlideIndex]}
+                            src={slides[detailSlideIndex]}
+                            alt={`Slide ${detailSlideIndex + 1}`}
+                            className="w-full h-full object-contain"
+                            draggable={false}
+                          />
+                          {/* Counter badge */}
+                          <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                            {detailSlideIndex + 1} / {slides.length}
+                          </div>
+                          {/* Prev */}
+                          {detailSlideIndex > 0 && (
+                            <button
+                              onClick={() => setDetailSlideIndex(i => i - 1)}
+                              className="absolute left-1.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/70 transition-colors"
+                            >
+                              <ChevronLeft className="w-4 h-4" />
+                            </button>
+                          )}
+                          {/* Next */}
+                          {detailSlideIndex < slides.length - 1 && (
+                            <button
+                              onClick={() => setDetailSlideIndex(i => i + 1)}
+                              className="absolute right-1.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/70 transition-colors"
+                            >
+                              <ChevronRight className="w-4 h-4" />
+                            </button>
+                          )}
+                          {/* Dot indicators */}
+                          {slides.length > 1 && (
+                            <div className="absolute bottom-3 inset-x-0 flex justify-center gap-1.5">
+                              {slides.map((_, i) => (
+                                <button
+                                  key={i}
+                                  onClick={() => setDetailSlideIndex(i)}
+                                  className={clsx(
+                                    'rounded-full transition-all',
+                                    i === detailSlideIndex ? 'w-5 h-1.5 bg-white' : 'w-1.5 h-1.5 bg-white/40 hover:bg-white/60',
+                                  )}
+                                />
+                              ))}
                             </div>
                           )}
                         </div>
                       )
                     }
 
-                    if (videoUrl) {
+                    // ── THREAD ────────────────────────────────────────────
+                    if (variant === 'threads') {
                       return (
-                        <div className="w-full max-w-[200px] mx-auto aspect-[9/16] bg-gray-900 rounded-lg overflow-hidden">
-                          <video src={videoUrl} className="w-full h-full object-cover" controls />
+                        <div className="w-full max-w-[280px] mx-auto rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-700 whitespace-pre-wrap leading-relaxed shadow-sm">
+                          {selectedPost.caption || selectedPost.title || 'No content'}
                         </div>
                       )
                     }
 
+                    // ── REEL ──────────────────────────────────────────────
+                    if (videoUrl) {
+                      return (
+                        <div className="w-full max-w-[200px] mx-auto aspect-[9/16] bg-gray-900 rounded-xl overflow-hidden shadow">
+                          <video src={videoUrl} className="w-full h-full object-cover" controls preload="metadata" />
+                        </div>
+                      )
+                    }
+
+                    // ── THUMBNAIL FALLBACK (reel with no video yet) ────────
                     if (thumbUrl) {
                       return (
-                        <div className="w-full max-w-[200px] mx-auto aspect-[9/16] bg-gray-100 rounded-lg overflow-hidden">
-                          <img src={thumbUrl} alt="Thumbnail" className="w-full h-full object-cover object-top" />
+                        <div className="w-full max-w-[200px] mx-auto aspect-[9/16] bg-gray-100 rounded-xl overflow-hidden shadow">
+                          <img src={thumbUrl} alt="Preview" className="w-full h-full object-cover object-top" />
                         </div>
                       )
                     }
