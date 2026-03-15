@@ -105,7 +105,7 @@ class TobyExperiment(Base):
     user_id = Column(String(100), nullable=False, index=True)
 
     content_dna_id = Column(String(36), nullable=True)  # DNA-scoped experiments
-    content_type = Column(String(10), nullable=False)  # reel | post
+    content_type = Column(String(20), nullable=False)  # reel | post | threads_post
     dimension = Column(String(30), nullable=False)      # personality, topic, hook, etc.
     options = Column(JSON, nullable=False)               # ["educational", "provocative", ...]
     results = Column(JSON, nullable=False, default=dict) # {option: {count, total_score, ...}}
@@ -156,7 +156,7 @@ class TobyStrategyScore(Base):
     user_id = Column(String(100), nullable=False)
     brand_id = Column(String(50), nullable=True)  # NULL = cross-brand
     content_dna_id = Column(String(36), nullable=True)  # DNA-scoped learning
-    content_type = Column(String(10), nullable=False)
+    content_type = Column(String(20), nullable=False)
 
     dimension = Column(String(30), nullable=False)
     option_value = Column(String(100), nullable=False)
@@ -241,7 +241,7 @@ class TobyContentTag(Base):
     content_dna_id = Column(String(36), nullable=True, index=True)
     schedule_id = Column(String(36), nullable=False, index=True)
 
-    content_type = Column(String(10), nullable=False)
+    content_type = Column(String(20), nullable=False)
     personality = Column(String(50), nullable=True)
     topic_bucket = Column(String(50), nullable=True)
     hook_strategy = Column(String(50), nullable=True)

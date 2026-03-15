@@ -68,8 +68,6 @@ def _get_or_create_daily(db, user_id: str, target_date: date) -> UserCostDaily:
             freepik_cost_usd=0.0,
             searchapi_calls=0,
             searchapi_cost_usd=0.0,
-            pexels_calls=0,
-            pexels_cost_usd=0.0,
             reels_generated=0,
             carousels_generated=0,
         )
@@ -143,19 +141,8 @@ def record_searchapi_call(user_id: Optional[str] = None) -> None:
 
 
 def record_pexels_call(user_id: Optional[str] = None) -> None:
-    """Record a Pexels API search call (free, but track for monitoring)."""
-    uid = user_id or get_current_user_id()
-    if not uid:
-        return
-
-    try:
-        with get_db_session() as db:
-            record = _get_or_create_daily(db, uid, date.today())
-            record.pexels_calls = (getattr(record, 'pexels_calls', None) or 0) + 1
-            record.pexels_cost_usd = 0.0  # Pexels is free
-            record.updated_at = datetime.now(timezone.utc)
-    except Exception as e:
-        print(f"⚠️ Cost tracking (pexels) failed: {e}", flush=True)
+    """Legacy — Pexels removed. No-op for backward compatibility."""
+    pass
 
 
 def record_content_generated(

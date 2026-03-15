@@ -280,13 +280,14 @@ You generate ONLY valid JSON. No markdown, no explanations, no extra text."""
         try:
             from app.db_connection import SessionLocal
             from app.models.scheduling import ScheduledReel
+            from sqlalchemy import func
             db = SessionLocal()
             try:
                 row = (
                     db.query(ScheduledReel)
                     .filter(
-                        ScheduledReel.extra_data["brand"].astext == brand_id,
-                        ScheduledReel.extra_data["content_type"].astext == "threads_post",
+                        func.json_extract_path_text(ScheduledReel.extra_data, "brand") == brand_id,
+                        func.json_extract_path_text(ScheduledReel.extra_data, "content_type") == "threads_post",
                     )
                     .order_by(ScheduledReel.created_at.desc())
                     .first()
