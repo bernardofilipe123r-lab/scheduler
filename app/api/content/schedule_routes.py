@@ -5,7 +5,7 @@ import uuid
 import base64
 from typing import List, Optional
 from pydantic import BaseModel
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, status, Depends, Request
 from sqlalchemy import type_coerce
 from sqlalchemy.dialects.postgresql import JSONB
 from app.services.publishing.scheduler import DatabaseSchedulerService
@@ -362,6 +362,7 @@ async def get_scheduled_posts(
                         "video_path": metadata.get("video_path"),
                         "title": metadata.get("title"),
                         "job_id": metadata.get("job_id"),
+                        "original_scheduled_time": metadata.get("original_scheduled_time"),
                     }
                 })
                 continue
@@ -646,24 +647,38 @@ async def reschedule_post(schedule_id: str, request: RescheduleRequest, user: di
 
 
 @router.post("/scheduled/{schedule_id}/publish-now")
-async def publish_scheduled_now(schedule_id: str, user: dict = Depends(get_current_user)):
+async def publish_scheduled_now(schedule_id: str, request: Request, user: dict = Depends(get_current_user)):
     """
     Immediately publish a scheduled post (bypass the scheduled time).
-    
-    This sets the scheduled_time to now so it gets picked up immediately
-    by the auto-publisher on its next check.
+
+    Sets scheduled_time to now and immediately triggers the auto-publisher
+    so the post publishes within seconds instead of waiting for the next
+    5-minute tick. The post stays visible on its original calendar date
+    via the original_scheduled_time stored in metadata.
     """
     try:
         from datetime import datetime, timezone
-        
+
         success = scheduler_service.publish_scheduled_now(schedule_id, user_id=user["id"])
-        
+
         if not success:
             raise HTTPException(
                 status_code=404,
                 detail=f"Scheduled post {schedule_id} not found"
             )
-        
+
+        # Trigger the auto-publisher job immediately so the post publishes now
+        # instead of waiting up to 5 minutes for the next scheduled tick.
+        try:
+            apscheduler = getattr(request.app.state, "scheduler", None)
+            if apscheduler:
+                from datetime import timedelta
+                apscheduler.modify_job("auto_publish", next_run_time=datetime.now(timezone.utc) + timedelta(seconds=1))
+                print(f"⚡ Triggered auto-publish job immediately for {schedule_id}")
+        except Exception as trigger_err:
+            # Non-fatal — post is already queued, will publish on next regular tick
+            print(f"⚠️ Could not trigger immediate publish job: {trigger_err}")
+
         return {
             "success": True,
             "message": f"Post {schedule_id} queued for immediate publishing"

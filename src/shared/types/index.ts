@@ -105,6 +105,7 @@ export interface ScheduledPost {
     carousel_paths?: string[]
     job_id?: string
     post_ids?: Record<string, string>
+    original_scheduled_time?: string
     publish_results?: Record<string, {
       success: boolean
       post_id?: string

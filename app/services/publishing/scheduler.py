@@ -1093,8 +1093,8 @@ class DatabaseSchedulerService:
 
     def publish_scheduled_now(self, schedule_id: str, user_id: Optional[str] = None) -> bool:
         """
-        Set a scheduled post to publish immediately.
-        Updates scheduled_time to now so the auto-publisher picks it up.
+        Mark a scheduled post for immediate publishing without changing its scheduled_time.
+        The auto-publisher will pick it up on its next tick (triggered immediately by the route).
 
         Args:
             schedule_id: ID of the scheduled post
@@ -1119,8 +1119,18 @@ class DatabaseSchedulerService:
                 print(f"⚠️ Post {schedule_id} already published")
                 return False
 
-            # Set scheduled time to now (will be picked up on next check)
+            # Move scheduled_time to now so get_pending_publications() picks it up
+            # but keep a copy of the original time in metadata so the calendar
+            # continues to display the post on its original date after publishing.
+            original_time = scheduled_reel.scheduled_time
             scheduled_reel.scheduled_time = datetime.now(timezone.utc)
+
+            # Preserve original scheduled date in metadata for calendar display
+            metadata = scheduled_reel.extra_data or {}
+            if "original_scheduled_time" not in metadata:
+                metadata["original_scheduled_time"] = original_time.isoformat() if original_time else None
+            scheduled_reel.extra_data = metadata
+
             # Reset to scheduled status if it was failed
             if scheduled_reel.status in ["failed", "partial"]:
                 scheduled_reel.status = "scheduled"

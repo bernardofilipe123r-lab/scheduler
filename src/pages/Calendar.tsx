@@ -316,7 +316,10 @@ function Calendar() {
         if (!postPlatforms.includes(filterPlatform)) continue
       }
 
-      const dateKey = post.scheduled_time.slice(0, 10)
+      // Use original_scheduled_time if set (Post Now moves scheduled_time to now but
+      // the post should still appear on its original calendar date)
+      const displayTime = (post.metadata?.original_scheduled_time as string | undefined) || post.scheduled_time
+      const dateKey = displayTime.slice(0, 10)
       if (!map[dateKey]) map[dateKey] = []
       map[dateKey].push(post)
     }
