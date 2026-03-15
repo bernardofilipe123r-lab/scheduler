@@ -1650,16 +1650,19 @@ class DatabaseSchedulerService:
                 sched_query = sched_query.filter(ScheduledReel.user_id == user_id)
             schedules = sched_query.all()
 
-            # Filter by brand and variant - build set of occupied timestamps
-            check_variant = slot_variant_label or variant
+            # Filter by brand — use CATEGORY matching so that light, dark, and
+            # format_b all share the same "reel" slots (prevents double-booking).
+            from app.services.toby.buffer_manager import variant_to_category
+            check_category = variant_to_category(slot_variant_label or variant)
+
             occupied_slots = set()
             for schedule in schedules:
                 metadata = schedule.extra_data or {}
                 schedule_brand = metadata.get("brand", "").lower()
                 schedule_variant = metadata.get("variant", "light")
 
-                # Match by brand name
-                if schedule_brand == brand_lower and schedule_variant == check_variant:
+                # Match by brand name and category (not exact variant)
+                if schedule_brand == brand_lower and variant_to_category(schedule_variant) == check_category:
                     # Store as timestamp for easy comparison
                     ts = schedule.scheduled_time
                     if ts.tzinfo is None:
