@@ -60,8 +60,17 @@ function Calendar() {
   const queryClient = useQueryClient()
   const deleteScheduled = useDeleteScheduled()
   const { brands } = useDynamicBrands()
-  const { data: ownScheduledPosts = [], isLoading: ownPostsLoading } = useScheduledPosts()
   const { data: connectionsData } = useBrandConnections()
+
+  // Compute visible date range for the current month view (includes week padding)
+  const [currentMonth, setCurrentMonth] = useState(new Date())
+  const calendarFrom = format(startOfWeek(startOfMonth(currentMonth), { weekStartsOn: 0 }), 'yyyy-MM-dd')
+  const calendarTo = format(addDays(endOfWeek(endOfMonth(currentMonth), { weekStartsOn: 0 }), 1), 'yyyy-MM-dd')
+
+  const { data: ownScheduledPosts = [], isLoading: ownPostsLoading } = useScheduledPosts(
+    undefined,
+    { from_date: calendarFrom, to_date: calendarTo, compact: true },
+  )
 
   // Admin view: fetch target user's scheduled posts
   const { data: adminScheduledPosts = [], isLoading: adminPostsLoading } = useQuery<ScheduledPost[]>({
@@ -93,7 +102,6 @@ function Calendar() {
   const scheduledPosts = isAdminView ? adminScheduledPosts : ownScheduledPosts
   const postsLoading = isAdminView ? adminPostsLoading : ownPostsLoading
 
-  const [currentMonth, setCurrentMonth] = useState(new Date())
   const [view, setView] = useState<'month' | 'week'>('month')
   const [showUploadModal, setShowUploadModal] = useState(false)
   const [uploadLoading, setUploadLoading] = useState(false)

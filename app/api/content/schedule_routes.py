@@ -320,6 +320,7 @@ async def get_scheduled_posts(
     from_date: Optional[str] = None,
     to_date: Optional[str] = None,
     limit: int = 500,
+    compact: bool = False,
 ):
     """
     Get scheduled posts with optional date range filtering.
@@ -328,6 +329,7 @@ async def get_scheduled_posts(
       from_date: ISO date string (e.g. 2026-03-01) — only return posts on/after this date
       to_date:   ISO date string (e.g. 2026-04-01) — only return posts before this date
       limit:     max rows (default 500)
+      compact:   if true, return only fields needed for calendar grid (much smaller payload)
     """
     try:
         schedules = scheduler_service.get_all_scheduled(
@@ -339,12 +341,35 @@ async def get_scheduled_posts(
         formatted_schedules = []
         for schedule in schedules:
             metadata = schedule.get("metadata", {})
-            
+
+            if compact:
+                # Lightweight response for calendar grid — skip heavy fields
+                formatted_schedules.append({
+                    "schedule_id": schedule.get("schedule_id"),
+                    "reel_id": schedule.get("reel_id"),
+                    "scheduled_time": schedule.get("scheduled_time"),
+                    "status": schedule.get("status"),
+                    "brand": metadata.get("brand", ""),
+                    "variant": metadata.get("variant", "light"),
+                    "created_by": schedule.get("created_by", "user"),
+                    "published_at": schedule.get("published_at"),
+                    "publish_error": schedule.get("publish_error"),
+                    "metadata": {
+                        "brand": metadata.get("brand"),
+                        "variant": metadata.get("variant"),
+                        "platforms": metadata.get("platforms"),
+                        "thumbnail_path": metadata.get("thumbnail_path"),
+                        "title": metadata.get("title"),
+                        "job_id": metadata.get("job_id"),
+                    }
+                })
+                continue
+
             # All paths are now Supabase URLs — pass as-is
             thumb_url = metadata.get("thumbnail_path")
             video_url = metadata.get("video_path")
             carousel_urls = metadata.get("carousel_paths") or []
-            
+
             formatted_schedules.append({
                 "schedule_id": schedule.get("schedule_id"),
                 "reel_id": schedule.get("reel_id"),

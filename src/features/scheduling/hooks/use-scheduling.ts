@@ -46,10 +46,13 @@ export function useAutoScheduleReel() {
   })
 }
 
-export function useScheduledPosts(refetchIntervalOverride?: number) {
+export function useScheduledPosts(
+  refetchIntervalOverride?: number,
+  params?: { from_date?: string; to_date?: string; compact?: boolean },
+) {
   return useQuery({
-    queryKey: schedulingKeys.scheduled(),
-    queryFn: schedulingApi.getScheduled,
+    queryKey: [...schedulingKeys.scheduled(), params],
+    queryFn: () => schedulingApi.getScheduled(params),
     // Poll faster while publishing; default to 120s as safety fallback
     refetchInterval: refetchIntervalOverride ?? 120_000,
     refetchOnMount: 'always',

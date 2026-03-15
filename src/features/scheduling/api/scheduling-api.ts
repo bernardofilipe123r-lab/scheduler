@@ -84,8 +84,13 @@ export const schedulingApi = {
   autoSchedule: (data: AutoScheduleRequest) =>
     post<{ success: boolean; scheduled_for: string }>('/reels/schedule-auto', data),
   
-  getScheduled: async (): Promise<ScheduledPost[]> => {
-    const response = await get<ScheduledResponse>('/reels/scheduled')
+  getScheduled: async (params?: { from_date?: string; to_date?: string; compact?: boolean }): Promise<ScheduledPost[]> => {
+    const qp = new URLSearchParams()
+    if (params?.from_date) qp.set('from_date', params.from_date)
+    if (params?.to_date) qp.set('to_date', params.to_date)
+    if (params?.compact) qp.set('compact', 'true')
+    const qs = qp.toString()
+    const response = await get<ScheduledResponse>(`/reels/scheduled${qs ? `?${qs}` : ''}`)
     return response.schedules.map(s => ({
       id: s.schedule_id,
       brand: (s.metadata?.brand || s.brand) as BrandName,
@@ -99,7 +104,9 @@ export const schedulingApi = {
       published_at: s.published_at,
       thumbnail_path: s.metadata?.thumbnail_path,
       video_path: s.metadata?.video_path,
-      metadata: s.metadata,      created_by: (s.created_by || 'user') as 'user' | 'toby',    }))
+      metadata: s.metadata,
+      created_by: (s.created_by || 'user') as 'user' | 'toby',
+    }))
   },
   
   deleteScheduled: (id: string) =>
