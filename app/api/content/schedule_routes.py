@@ -359,6 +359,7 @@ async def get_scheduled_posts(
                         "variant": metadata.get("variant"),
                         "platforms": metadata.get("platforms"),
                         "thumbnail_path": metadata.get("thumbnail_path"),
+                        "video_path": metadata.get("video_path"),
                         "title": metadata.get("title"),
                         "job_id": metadata.get("job_id"),
                     }

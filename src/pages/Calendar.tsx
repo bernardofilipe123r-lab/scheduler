@@ -25,10 +25,10 @@ import toast from 'react-hot-toast'
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isToday, addMonths, subMonths, parseISO, addDays } from 'date-fns'
 import { clsx } from 'clsx'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '@/shared/api/client'
 import { useDynamicBrands, useBrandConnections } from '@/features/brands'
-import { useScheduledPosts, schedulingKeys, useDeleteScheduled } from '@/features/scheduling'
+import { useScheduledPosts, schedulingKeys, useDeleteScheduled, usePublishNow } from '@/features/scheduling'
 import { useAuth } from '@/features/auth'
 import type { ScheduledPost } from '@/shared/types'
 
@@ -60,13 +60,7 @@ function Calendar() {
 
   const queryClient = useQueryClient()
   const deleteScheduled = useDeleteScheduled()
-  const publishNow = useMutation({
-    mutationFn: (scheduleId: string) =>
-      apiClient.post(`/api/content/scheduled/${scheduleId}/publish-now`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: schedulingKeys.all })
-    },
-  })
+  const publishNow = usePublishNow()
   const { brands } = useDynamicBrands()
   const { data: connectionsData } = useBrandConnections()
 
