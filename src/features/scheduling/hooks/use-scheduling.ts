@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { schedulingApi } from '../api'
+import { useAdaptivePoll } from '@/shared/hooks/use-adaptive-poll'
 
 // Query keys
 export const schedulingKeys = {
@@ -50,11 +51,16 @@ export function useScheduledPosts(
   refetchIntervalOverride?: number,
   params?: { from_date?: string; to_date?: string; compact?: boolean },
 ) {
+  const adaptiveInterval = useAdaptivePoll({
+    active: 10_000,      // publishing in progress — check often
+    idle: 120_000,       // 2 min
+    background: 600_000, // tab hidden — 10 min
+  })
+
   return useQuery({
     queryKey: [...schedulingKeys.scheduled(), params],
     queryFn: () => schedulingApi.getScheduled(params),
-    // Poll faster while publishing; default to 120s as safety fallback
-    refetchInterval: refetchIntervalOverride ?? 120_000,
+    refetchInterval: refetchIntervalOverride ?? adaptiveInterval,
     refetchOnMount: 'always',
     staleTime: 10_000,
     refetchOnWindowFocus: false,

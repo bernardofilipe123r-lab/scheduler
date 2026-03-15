@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { jobsApi } from '../api'
+import { useAdaptivePoll } from '@/shared/hooks/use-adaptive-poll'
 import type { Job, BrandName, BrandStatus } from '@/shared/types'
 
 // Query keys for caching
@@ -52,15 +53,16 @@ function optimisticPatchDetail(
 // ── Queries ─────────────────────────────────────────────────────────────
 
 export function useJobs() {
+  const pollInterval = useAdaptivePoll({
+    active: 5_000,       // generating — user wants fast updates
+    idle: 120_000,       // nothing happening — 2 min
+    background: 600_000, // tab hidden — 10 min
+  })
+
   return useQuery({
     queryKey: jobKeys.lists(),
     queryFn: jobsApi.list,
-    // Fast poll while any job is generating; slow fallback otherwise
-    refetchInterval: (query) => {
-      const jobs = query.state.data
-      const hasActive = jobs?.some((j: Job) => j.status === 'pending' || j.status === 'generating')
-      return hasActive ? 15_000 : 120_000
-    },
+    refetchInterval: pollInterval,
     refetchOnMount: 'always',
     staleTime: 10_000,
     refetchOnWindowFocus: false,
@@ -68,15 +70,23 @@ export function useJobs() {
 }
 
 export function useJob(id: string) {
+  const queryClient = useQueryClient()
+  // Check if this specific job is active
+  const cachedJob = queryClient.getQueryData<Job>(jobKeys.detail(id))
+  const isJobActive = cachedJob?.status === 'pending' || cachedJob?.status === 'generating'
+
+  const pollInterval = useAdaptivePoll({
+    active: 5_000,
+    idle: 120_000,
+    background: false,
+    isActive: isJobActive,
+  })
+
   return useQuery({
     queryKey: jobKeys.detail(id),
     queryFn: () => jobsApi.get(id),
     enabled: !!id,
-    // Fast poll while job is generating; slow fallback otherwise
-    refetchInterval: (query) => {
-      const job = query.state.data
-      return (job?.status === 'pending' || job?.status === 'generating') ? 15_000 : 120_000
-    },
+    refetchInterval: pollInterval,
     refetchOnWindowFocus: false,
   })
 }

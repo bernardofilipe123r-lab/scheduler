@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { tobyApi } from '../api'
+import { useAdaptivePoll } from '@/shared/hooks/use-adaptive-poll'
 import type { TobyConfig, TobyBrandConfig } from '../types'
 
 export const tobyKeys = {
@@ -18,11 +19,17 @@ export const tobyKeys = {
 }
 
 export function useTobyStatus() {
+  const pollInterval = useAdaptivePoll({
+    active: 30_000,      // Toby is generating — check often
+    idle: 300_000,       // nothing happening — 5 min
+    background: 600_000, // tab hidden — 10 min
+  })
+
   return useQuery({
     queryKey: tobyKeys.status(),
     queryFn: tobyApi.getStatus,
-    refetchInterval: 120_000,
-    staleTime: 30_000,
+    refetchInterval: pollInterval,
+    staleTime: 15_000,
     refetchOnWindowFocus: false,
   })
 }

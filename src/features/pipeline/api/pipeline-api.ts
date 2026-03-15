@@ -5,6 +5,7 @@ import { get, post, patch, del } from '@/shared/api/client'
 import toast from 'react-hot-toast'
 import { jobKeys } from '@/features/jobs/hooks/use-jobs'
 import { schedulingKeys } from '@/features/scheduling'
+import { useAdaptivePoll } from '@/shared/hooks/use-adaptive-poll'
 import type { PipelineFilters, PipelineResponse, PipelineStats, PipelineItem } from '../model/types'
 
 export const pipelineKeys = {
@@ -32,11 +33,18 @@ export function usePipelineItems(filters: PipelineFilters) {
   const isGenerating = filters.status === 'generating'
   const isPending = filters.status === 'pending_review'
 
+  const pollInterval = useAdaptivePoll({
+    active: isGenerating ? 5_000 : isPending ? 10_000 : 60_000,
+    idle: isGenerating ? 30_000 : isPending ? 60_000 : false as unknown as number,
+    background: false,
+    isActive: isGenerating || isPending,
+  })
+
   return useQuery({
     queryKey: pipelineKeys.list(filters),
     queryFn: () => fetchPipelineItems(filters),
     staleTime: 5_000,
-    refetchInterval: isGenerating ? 10_000 : isPending ? 30_000 : false,
+    refetchInterval: pollInterval,
     refetchOnWindowFocus: true,
     placeholderData: (previousData, previousQuery) => {
       // Keep previous page data during same-tab page changes to prevent
@@ -57,11 +65,20 @@ export function usePipelineItems(filters: PipelineFilters) {
 }
 
 export function usePipelineStats() {
+  // Active (generating): 5s — user wants live progress
+  // Idle (nothing happening): 2min — just keeping counts fresh
+  // Background (tab hidden): 10min — near-zero egress
+  const pollInterval = useAdaptivePoll({
+    active: 5_000,
+    idle: 120_000,
+    background: 600_000,
+  })
+
   return useQuery({
     queryKey: pipelineKeys.stats(),
     queryFn: () => get<PipelineStats>('/api/pipeline/stats'),
-    staleTime: 15_000,
-    refetchInterval: 30_000,
+    staleTime: 5_000,
+    refetchInterval: pollInterval,
   })
 }
 

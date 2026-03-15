@@ -9,16 +9,24 @@ import {
   type BrandConnectionsResponse,
   type BrandsListResponse
 } from '../api'
+import { useAdaptivePoll } from '@/shared/hooks/use-adaptive-poll'
 import type { BrandName } from '@/shared/types'
 
 /**
  * Hook to fetch all brand connection statuses
  */
 export function useBrandConnections(options?: { enabled?: boolean }) {
+  // Connections rarely change — poll very slowly; realtime handles OAuth returns
+  const pollInterval = useAdaptivePoll({
+    active: 120_000,
+    idle: 600_000,
+    background: false,
+  })
+
   return useQuery<BrandConnectionsResponse>({
     queryKey: ['brand-connections'],
     queryFn: fetchBrandConnections,
-    refetchInterval: 300_000,
+    refetchInterval: pollInterval,
     staleTime: 60_000,
     refetchOnWindowFocus: true, // Keep true — needed to detect returning from OAuth tab
     enabled: options?.enabled,

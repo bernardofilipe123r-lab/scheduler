@@ -11,6 +11,7 @@ import {
   fetchCumulative,
   fetchSocialHealth,
 } from '../api/analytics-v2-api'
+import { useAdaptivePoll } from '@/shared/hooks/use-adaptive-poll'
 
 export function useOverview(params: { brand?: string; platform?: string; days?: number }) {
   return useQuery({
@@ -72,10 +73,16 @@ export function useCumulative(params?: { brand?: string; platform?: string; mont
 }
 
 export function useSocialHealth() {
+  const pollInterval = useAdaptivePoll({
+    active: 300_000,     // 5 min — social health doesn't change fast
+    idle: 600_000,       // 10 min
+    background: false,
+  })
+
   return useQuery({
     queryKey: ['social-health'],
     queryFn: fetchSocialHealth,
     staleTime: 5 * 60_000,
-    refetchInterval: 5 * 60_000,
+    refetchInterval: pollInterval,
   })
 }

@@ -2,8 +2,8 @@
  * React Query hooks for brand analytics
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { 
-  fetchAnalytics, 
+import {
+  fetchAnalytics,
   refreshAnalytics,
   fetchRateLimitStatus,
   fetchSnapshots,
@@ -16,6 +16,7 @@ import {
   type BackfillResponse,
   type RefreshStatusResponse
 } from '../api'
+import { useAdaptivePoll } from '@/shared/hooks/use-adaptive-poll'
 
 /**
  * Hook to fetch cached analytics data
@@ -62,13 +63,16 @@ export function useSnapshots(params?: {
  * When idle, polls every 30 seconds to catch server-side auto-refreshes.
  */
 export function useRefreshStatus() {
+  const pollInterval = useAdaptivePoll({
+    active: 10_000,      // something generating — check regularly
+    idle: 300_000,       // nothing happening — 5 min
+    background: false,   // tab hidden — don't poll
+  })
+
   return useQuery<RefreshStatusResponse>({
     queryKey: ['analytics-refresh-status'],
     queryFn: fetchRefreshStatus,
-    refetchInterval: (query) => {
-      // Poll faster when refreshing is in progress
-      return query.state.data?.is_refreshing ? 10_000 : 120_000
-    },
+    refetchInterval: pollInterval,
     staleTime: 5000,
     refetchOnWindowFocus: false,
   })
