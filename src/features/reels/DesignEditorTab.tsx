@@ -264,39 +264,18 @@ function ThumbnailPreview({ form, brandDividerLogoUrl, brandDividerLogoText }: {
             }} />
             <div style={{ paddingLeft: `${lineLogoGap}px`, paddingRight: `${lineLogoGap}px` }}>
               {brandDividerLogoText ? (
-                logoShape === 'circular' ? (
-                  <div style={{
-                    width: scaledLogo,
-                    height: scaledLogo,
-                    borderRadius: '50%',
-                    border: `${Math.max(1, scaledLogo / 40)}px solid rgba(255,255,255,0.9)`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    background: 'rgba(0,0,0,0.4)',
-                  }}>
-                    <span style={{
-                      fontSize: `${scaledLogo * 0.38}px`,
-                      fontWeight: 800,
-                      color: '#FFFFFF',
-                      letterSpacing: `${1.5 * s}px`,
-                      lineHeight: 1,
-                      fontFamily: 'Inter, sans-serif',
-                    }}>{brandDividerLogoText}</span>
-                  </div>
-                ) : (
-                  <span style={{
-                    fontSize: `${scaledLogo * 0.45}px`,
-                    fontWeight: 800,
-                    color: '#FFFFFF',
-                    letterSpacing: `${2 * s}px`,
-                    lineHeight: 1,
-                    fontFamily: 'Inter, sans-serif',
-                    textShadow: '0 1px 6px rgba(0,0,0,0.6)',
-                    position: 'relative',
-                    top: `${scaledLogo * 0.04}px`,
-                  }}>{brandDividerLogoText}</span>
-                )
+                // Text logo — always plain text, shape toggle does not apply
+                <span style={{
+                  fontSize: `${scaledLogo * 0.45}px`,
+                  fontWeight: 800,
+                  color: '#FFFFFF',
+                  letterSpacing: `${2 * s}px`,
+                  lineHeight: 1,
+                  fontFamily: 'Inter, sans-serif',
+                  textShadow: '0 1px 6px rgba(0,0,0,0.6)',
+                  position: 'relative',
+                  top: `${scaledLogo * 0.04}px`,
+                }}>{brandDividerLogoText}</span>
               ) : (
                 logoShape === 'circular' ? (
                   <div style={{
@@ -595,6 +574,10 @@ export function DesignEditorTab({ onBack }: { onBack?: () => void }) {
                   if (!selectedBrandId) return
                   setApplyingAll(true)
                   try {
+                    // Save current design settings first
+                    if (formatBRef.current?.hasChanges) {
+                      await formatBRef.current.save()
+                    }
                     const { data: sessionData } = await supabase.auth.getSession()
                     const token = sessionData.session?.access_token
                     const resp = await fetch(
@@ -1067,35 +1050,36 @@ function ContentSettings({ form, update, selectedBrandId, brandContentLogoUrl, b
 
   return (
     <div className="space-y-3">
-      {/* Image Source — Content Slides */}
-      <section className="space-y-1.5">
-        <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Content Slide Images</h4>
-        <div className="flex flex-col gap-1.5">
-          {([
-            { value: 'ai', label: 'AI Generated', desc: 'AI-generated images for video slides' },
-            { value: 'web', label: 'Web Images', desc: 'Real stock photos for video slides' },
-          ] as const).map(opt => (
-            <label key={opt.value} className="flex items-start gap-2 cursor-pointer">
-              <input
-                type="radio"
-                name="image_source_mode"
-                value={opt.value}
-                checked={(form.image_source_mode ?? 'web') === opt.value}
-                onChange={() => update('image_source_mode', opt.value)}
-                className="mt-0.5 w-3 h-3 accent-primary-600"
-              />
-              <div>
-                <span className="text-[11px] text-gray-700 font-medium">{opt.label}</span>
-                <p className="text-[10px] text-gray-400">{opt.desc}</p>
-              </div>
-            </label>
-          ))}
-        </div>
-      </section>
-
-      {/* Web Image Provider — only show when image_source_mode is 'web' */}
-      {(form.image_source_mode ?? 'web') === 'web' && (
+      {/* Image source + provider — 3-column compact row */}
+      <div className="grid grid-cols-3 gap-3">
+        {/* Content Slide Images */}
         <section className="space-y-1.5">
+          <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Content Slide Images</h4>
+          <div className="flex flex-col gap-1.5">
+            {([
+              { value: 'ai', label: 'AI Generated', desc: 'AI-generated images for video slides' },
+              { value: 'web', label: 'Web Images', desc: 'Real stock photos for video slides' },
+            ] as const).map(opt => (
+              <label key={opt.value} className="flex items-start gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="image_source_mode"
+                  value={opt.value}
+                  checked={(form.image_source_mode ?? 'web') === opt.value}
+                  onChange={() => update('image_source_mode', opt.value)}
+                  className="mt-0.5 w-3 h-3 accent-primary-600"
+                />
+                <div>
+                  <span className="text-[11px] text-gray-700 font-medium">{opt.label}</span>
+                  <p className="text-[10px] text-gray-400">{opt.desc}</p>
+                </div>
+              </label>
+            ))}
+          </div>
+        </section>
+
+        {/* Web Image Provider — dimmed when AI mode is active */}
+        <section className={`space-y-1.5 transition-opacity ${(form.image_source_mode ?? 'web') === 'ai' ? 'opacity-40 pointer-events-none' : ''}`}>
           <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Web Image Provider</h4>
           <div className="flex flex-col gap-1.5">
             {([
@@ -1119,33 +1103,33 @@ function ContentSettings({ form, update, selectedBrandId, brandContentLogoUrl, b
             ))}
           </div>
         </section>
-      )}
 
-      {/* Image Source — Thumbnail */}
-      <section className="space-y-1.5">
-        <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Thumbnail Image</h4>
-        <div className="flex flex-col gap-1.5">
-          {([
-            { value: 'ai', label: 'AI Generated', desc: 'AI-generated image for thumbnail' },
-            { value: 'web', label: 'Web Image', desc: 'Real stock photo for thumbnail' },
-          ] as const).map(opt => (
-            <label key={opt.value} className="flex items-start gap-2 cursor-pointer">
-              <input
-                type="radio"
-                name="thumbnail_image_source_mode"
-                value={opt.value}
-                checked={(form.thumbnail_image_source_mode ?? 'ai') === opt.value}
-                onChange={() => update('thumbnail_image_source_mode', opt.value)}
-                className="mt-0.5 w-3 h-3 accent-primary-600"
-              />
-              <div>
-                <span className="text-[11px] text-gray-700 font-medium">{opt.label}</span>
-                <p className="text-[10px] text-gray-400">{opt.desc}</p>
-              </div>
-            </label>
-          ))}
-        </div>
-      </section>
+        {/* Thumbnail Image */}
+        <section className="space-y-1.5">
+          <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Thumbnail Image</h4>
+          <div className="flex flex-col gap-1.5">
+            {([
+              { value: 'ai', label: 'AI Generated', desc: 'AI-generated image for thumbnail' },
+              { value: 'web', label: 'Web Image', desc: 'Real stock photo for thumbnail' },
+            ] as const).map(opt => (
+              <label key={opt.value} className="flex items-start gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="thumbnail_image_source_mode"
+                  value={opt.value}
+                  checked={(form.thumbnail_image_source_mode ?? 'ai') === opt.value}
+                  onChange={() => update('thumbnail_image_source_mode', opt.value)}
+                  className="mt-0.5 w-3 h-3 accent-primary-600"
+                />
+                <div>
+                  <span className="text-[11px] text-gray-700 font-medium">{opt.label}</span>
+                  <p className="text-[10px] text-gray-400">{opt.desc}</p>
+                </div>
+              </label>
+            ))}
+          </div>
+        </section>
+      </div>
 
       {/* Content Logo — inline row */}
       <section className="space-y-1">
