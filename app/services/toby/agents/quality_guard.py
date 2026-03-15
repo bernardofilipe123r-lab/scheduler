@@ -240,8 +240,13 @@ def quality_guard_sweep(db: Session, user_id: str) -> dict:
         old_key = (brand, type_group, old_hk)
         occupied[old_key] = max(0, occupied.get(old_key, 0) - 1)
 
+        # Search from near the item's original time (not from now) so items
+        # months in the future find slots near their original position.
+        # Use 1 day before original time to allow same-day repositioning,
+        # but never search into the past.
+        search_from = max(now, reel.scheduled_time - timedelta(days=1))
         new_slot = _find_next_valid_slot(
-            valid_hours, occupied, brand, type_group, now, max_days=90
+            valid_hours, occupied, brand, type_group, search_from, max_days=90
         )
         if new_slot:
             _reposition_reel(
@@ -256,7 +261,7 @@ def quality_guard_sweep(db: Session, user_id: str) -> dict:
         else:
             _cancel_reel(
                 db, reel,
-                reason=f"Quality Guard: wrong slot hour {current_hour:02d}, no valid slot available within 90 days",
+                reason=f"Quality Guard: wrong slot hour {current_hour:02d}, no valid slot available within 90 days of {reel.scheduled_time.strftime('%Y-%m-%d')}",
                 layer="E"
             )
             summary["fallbacks_cancelled"] += 1
