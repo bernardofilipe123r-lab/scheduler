@@ -63,9 +63,6 @@ export function useJobs() {
     queryKey: jobKeys.lists(),
     queryFn: jobsApi.list,
     refetchInterval: pollInterval,
-    refetchOnMount: 'always',
-    staleTime: 10_000,
-    refetchOnWindowFocus: false,
   })
 }
 
@@ -87,7 +84,6 @@ export function useJob(id: string) {
     queryFn: () => jobsApi.get(id),
     enabled: !!id,
     refetchInterval: pollInterval,
-    refetchOnWindowFocus: false,
   })
 }
 

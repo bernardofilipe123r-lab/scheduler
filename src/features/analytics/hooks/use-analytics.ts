@@ -25,8 +25,6 @@ export function useAnalytics() {
   return useQuery<AnalyticsResponse>({
     queryKey: ['analytics'],
     queryFn: fetchAnalytics,
-    staleTime: 60000, // Consider data stale after 1 minute test
-    refetchOnWindowFocus: false, // Don't auto-refetch - user controls refresh
   })
 }
 
@@ -37,7 +35,6 @@ export function useRateLimitStatus() {
   return useQuery<RateLimitInfo>({
     queryKey: ['analytics-rate-limit'],
     queryFn: fetchRateLimitStatus,
-    staleTime: 30000, // Check every 30 seconds
   })
 }
 
@@ -52,8 +49,6 @@ export function useSnapshots(params?: {
   return useQuery<SnapshotsResponse>({
     queryKey: ['analytics-snapshots', params],
     queryFn: () => fetchSnapshots(params),
-    staleTime: 60000,
-    refetchOnWindowFocus: false,
   })
 }
 
@@ -73,8 +68,6 @@ export function useRefreshStatus() {
     queryKey: ['analytics-refresh-status'],
     queryFn: fetchRefreshStatus,
     refetchInterval: pollInterval,
-    staleTime: 5000,
-    refetchOnWindowFocus: false,
   })
 }
 

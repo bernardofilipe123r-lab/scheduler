@@ -61,9 +61,6 @@ export function useScheduledPosts(
     queryKey: [...schedulingKeys.scheduled(), params],
     queryFn: () => schedulingApi.getScheduled(params),
     refetchInterval: refetchIntervalOverride ?? adaptiveInterval,
-    refetchOnMount: 'always',
-    staleTime: 10_000,
-    refetchOnWindowFocus: false,
   })
 }
 

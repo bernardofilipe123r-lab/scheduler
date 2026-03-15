@@ -43,9 +43,9 @@ export function usePipelineItems(filters: PipelineFilters) {
   return useQuery({
     queryKey: pipelineKeys.list(filters),
     queryFn: () => fetchPipelineItems(filters),
-    staleTime: 5_000,
+    // Short staleTime for generating/pending tabs so they feel live
+    staleTime: isGenerating ? 3_000 : isPending ? 10_000 : undefined,
     refetchInterval: pollInterval,
-    refetchOnWindowFocus: true,
     placeholderData: (previousData, previousQuery) => {
       // Keep previous page data during same-tab page changes to prevent
       // skeleton flash. Don't keep across tab/filter changes (wrong data).
@@ -77,7 +77,8 @@ export function usePipelineStats() {
   return useQuery({
     queryKey: pipelineKeys.stats(),
     queryFn: () => get<PipelineStats>('/api/pipeline/stats'),
-    staleTime: 5_000,
+    // Stats are lightweight (SQL COUNT) — short staleTime is fine
+    staleTime: 10_000,
     refetchInterval: pollInterval,
   })
 }

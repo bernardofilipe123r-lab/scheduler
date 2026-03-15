@@ -29,8 +29,6 @@ export function useTobyStatus() {
     queryKey: tobyKeys.status(),
     queryFn: tobyApi.getStatus,
     refetchInterval: pollInterval,
-    staleTime: 15_000,
-    refetchOnWindowFocus: false,
   })
 }
 

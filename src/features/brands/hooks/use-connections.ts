@@ -27,8 +27,8 @@ export function useBrandConnections(options?: { enabled?: boolean }) {
     queryKey: ['brand-connections'],
     queryFn: fetchBrandConnections,
     refetchInterval: pollInterval,
-    staleTime: 60_000,
-    refetchOnWindowFocus: true, // Keep true — needed to detect returning from OAuth tab
+    // Override global default: need refetch on focus to detect OAuth return
+    refetchOnWindowFocus: true,
     enabled: options?.enabled,
   })
 }
