@@ -347,6 +347,8 @@ def recover_approved_unscheduled_jobs():
     even if the server never restarts.
     """
     from collections import defaultdict
+    from app.db_connection import SessionLocal
+    from app.models import GenerationJob
     db = SessionLocal()
     try:
         orphans = (

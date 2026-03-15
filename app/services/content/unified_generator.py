@@ -273,6 +273,7 @@ def generate_format_b_content(
             "content_philosophy": ctx.content_philosophy,
             "format_b_story_tone": ctx.format_b_story_tone,
             "format_b_story_niches": ctx.format_b_story_niches,
+            "format_b_reel_examples": ctx.format_b_reel_examples,
         }
 
     # 6. Generate
@@ -307,13 +308,20 @@ def _get_brand_avoidance_context(brand_id: str, content_type: str) -> str:
 
 
 def _get_recent_format_b_titles(brand_id: str, limit: int = 10, db=None) -> List[str]:
-    """Get recent Format B titles for a brand to avoid repetition."""
+    """Get recent Format B titles to avoid repetition.
+
+    Combines:
+      1. This brand's last N titles (avoid self-repetition)
+      2. ALL brands' titles from the last 2 hours (cross-brand dedup for batch generation)
+    """
     try:
         from app.models.jobs import GenerationJob
         from sqlalchemy import Text
+        from datetime import datetime, timezone, timedelta
 
         def _query(session):
-            rows = (
+            # This brand's history
+            brand_rows = (
                 session.query(GenerationJob.title)
                 .filter(
                     GenerationJob.brands.cast(Text).contains(brand_id),
@@ -323,7 +331,23 @@ def _get_recent_format_b_titles(brand_id: str, limit: int = 10, db=None) -> List
                 .limit(limit)
                 .all()
             )
-            return [r.title for r in rows if r.title]
+            titles = [r.title for r in brand_rows if r.title]
+
+            # Cross-brand: all format_b titles from last 2 hours (catches concurrent batch)
+            cutoff = datetime.now(timezone.utc) - timedelta(hours=2)
+            recent_rows = (
+                session.query(GenerationJob.title)
+                .filter(
+                    GenerationJob.content_format == "format_b",
+                    GenerationJob.created_at >= cutoff,
+                )
+                .all()
+            )
+            for r in recent_rows:
+                if r.title and r.title not in titles:
+                    titles.append(r.title)
+
+            return titles
 
         if db:
             return _query(db)

@@ -388,6 +388,36 @@ def _build_content_dna_block(dna: dict) -> str:
     return "\nCONTENT DNA (brand identity — follow these rules):\n" + "\n".join(f"• {l}" for l in lines) + "\n"
 
 
+def _format_format_b_examples(examples: list[dict]) -> str:
+    """Format Format B reel examples as few-shot prompt block.
+
+    Each example should have: {"title": "...", "post": "..."}
+    We select a random subset (max 5) to keep prompts short and varied.
+    """
+    if not examples:
+        return ""
+
+    import random
+    # Random subset of max 5 examples — different each generation for variety
+    subset = random.sample(examples, min(5, len(examples)))
+
+    parts = []
+    for i, ex in enumerate(subset, 1):
+        title = ex.get("title", "")
+        post = ex.get("post", "")
+        if title and post:
+            parts.append(f"EXAMPLE {i}:\nTITLE:\n{title}\n\nPOST:\n{post}")
+
+    if not parts:
+        return ""
+
+    return (
+        "\n--- FEW-SHOT EXAMPLES (study the style, tone, and variety — then generate something COMPLETELY DIFFERENT) ---\n\n"
+        + "\n\n---\n\n".join(parts)
+        + "\n\n--- END EXAMPLES — Now generate NEW, ORIGINAL content on a DIFFERENT topic. ---\n"
+    )
+
+
 def _get_deepseek_client() -> OpenAI:
     return OpenAI(
         api_key=os.getenv("DEEPSEEK_API_KEY", ""),
@@ -512,12 +542,21 @@ class StoryPolisher:
             tone_list = content_dna.get("content_tone", [])
             tone_directive = ", ".join(tone_list) if tone_list else "concise, analytical, authoritative"
 
+            # Few-shot examples from Content DNA (teaches style + variety)
+            examples_block = _format_format_b_examples(
+                content_dna.get("format_b_reel_examples", [])
+            )
+
             prompt = TEXT_PROMPT.format(
                 niche=niche,
                 diversity_block=diversity_block,
                 content_dna_block=content_dna_block,
                 tone_directive=tone_directive,
             )
+
+            # Prepend examples before the main prompt (like Format A does)
+            if examples_block:
+                prompt = examples_block + "\n" + prompt
 
             response = self.client.chat.completions.create(
                 model="deepseek-chat",
