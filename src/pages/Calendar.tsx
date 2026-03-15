@@ -19,12 +19,13 @@ import {
   Video,
   FileText,
   AlertTriangle,
+  Send,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isToday, addMonths, subMonths, parseISO, addDays } from 'date-fns'
 import { clsx } from 'clsx'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import { apiClient } from '@/shared/api/client'
 import { useDynamicBrands, useBrandConnections } from '@/features/brands'
 import { useScheduledPosts, schedulingKeys, useDeleteScheduled } from '@/features/scheduling'
@@ -59,6 +60,13 @@ function Calendar() {
 
   const queryClient = useQueryClient()
   const deleteScheduled = useDeleteScheduled()
+  const publishNow = useMutation({
+    mutationFn: (scheduleId: string) =>
+      apiClient.post(`/api/content/scheduled/${scheduleId}/publish-now`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: schedulingKeys.all })
+    },
+  })
   const { brands } = useDynamicBrands()
   const { data: connectionsData } = useBrandConnections()
 
@@ -1075,25 +1083,44 @@ function Calendar() {
                     {selectedPost.published_at && <p>Published: {format(parseISO(selectedPost.published_at), 'HH:mm · MMM d, yyyy')}</p>}
                   </div>
 
-                  {/* Delete button — only for scheduled (not yet published) */}
+                  {/* Action buttons — only for scheduled (not yet published) */}
                   {selectedPost.status === 'scheduled' && (
-                    <button
-                      onClick={() => {
-                        if (!confirm('Are you sure you want to delete this scheduled post?')) return
-                        deleteScheduled.mutate(selectedPost.id, {
-                          onSuccess: () => {
-                            toast.success('Scheduled post deleted')
-                            setSelectedPost(null)
-                          },
-                          onError: () => toast.error('Failed to delete scheduled post'),
-                        })
-                      }}
-                      disabled={deleteScheduled.isPending}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      {deleteScheduled.isPending ? 'Deleting...' : 'Delete Scheduled Post'}
-                    </button>
+                    <div className="flex flex-col gap-2">
+                      <button
+                        onClick={() => {
+                          if (!confirm('Post this now to all configured platforms?')) return
+                          publishNow.mutate(selectedPost.id, {
+                            onSuccess: () => {
+                              toast.success('Publishing triggered — check back in a moment')
+                              setSelectedPost(null)
+                            },
+                            onError: () => toast.error('Failed to trigger publish'),
+                          })
+                        }}
+                        disabled={publishNow.isPending}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                      >
+                        <Send className="h-4 w-4" />
+                        {publishNow.isPending ? 'Publishing...' : 'Post Now'}
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (!confirm('Are you sure you want to delete this scheduled post?')) return
+                          deleteScheduled.mutate(selectedPost.id, {
+                            onSuccess: () => {
+                              toast.success('Scheduled post deleted')
+                              setSelectedPost(null)
+                            },
+                            onError: () => toast.error('Failed to delete scheduled post'),
+                          })
+                        }}
+                        disabled={deleteScheduled.isPending}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        {deleteScheduled.isPending ? 'Deleting...' : 'Delete Scheduled Post'}
+                      </button>
+                    </div>
                   )}
                 </div>
               </>
