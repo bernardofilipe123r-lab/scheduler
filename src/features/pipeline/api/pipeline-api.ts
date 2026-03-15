@@ -35,8 +35,8 @@ export function usePipelineItems(filters: PipelineFilters) {
   return useQuery({
     queryKey: pipelineKeys.list(filters),
     queryFn: () => fetchPipelineItems(filters),
-    staleTime: 0,
-    refetchInterval: isGenerating ? 3_000 : isPending ? 10_000 : false,
+    staleTime: 5_000,
+    refetchInterval: isGenerating ? 10_000 : isPending ? 30_000 : false,
     refetchOnWindowFocus: true,
     placeholderData: (previousData, previousQuery) => {
       // Keep previous page data during same-tab page changes to prevent
@@ -60,8 +60,8 @@ export function usePipelineStats() {
   return useQuery({
     queryKey: pipelineKeys.stats(),
     queryFn: () => get<PipelineStats>('/api/pipeline/stats'),
-    staleTime: 5_000,
-    refetchInterval: 5_000,
+    staleTime: 15_000,
+    refetchInterval: 30_000,
   })
 }
 

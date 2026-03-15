@@ -59,7 +59,7 @@ export function useJobs() {
     refetchInterval: (query) => {
       const jobs = query.state.data
       const hasActive = jobs?.some((j: Job) => j.status === 'pending' || j.status === 'generating')
-      return hasActive ? 5_000 : 120_000
+      return hasActive ? 15_000 : 120_000
     },
     refetchOnMount: 'always',
     staleTime: 10_000,
@@ -75,7 +75,7 @@ export function useJob(id: string) {
     // Fast poll while job is generating; slow fallback otherwise
     refetchInterval: (query) => {
       const job = query.state.data
-      return (job?.status === 'pending' || job?.status === 'generating') ? 5_000 : 120_000
+      return (job?.status === 'pending' || job?.status === 'generating') ? 15_000 : 120_000
     },
     refetchOnWindowFocus: false,
   })

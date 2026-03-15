@@ -67,7 +67,7 @@ export function useRefreshStatus() {
     queryFn: fetchRefreshStatus,
     refetchInterval: (query) => {
       // Poll faster when refreshing is in progress
-      return query.state.data?.is_refreshing ? 5000 : 60_000
+      return query.state.data?.is_refreshing ? 10_000 : 120_000
     },
     staleTime: 5000,
     refetchOnWindowFocus: false,

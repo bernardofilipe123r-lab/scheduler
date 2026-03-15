@@ -154,28 +154,59 @@ async def get_pipeline_stats(
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    """Get pipeline stats grouped by lifecycle stage."""
-    all_jobs = (
-        db.query(GenerationJob)
+    """Get pipeline stats grouped by lifecycle stage.
+
+    Uses lightweight SQL queries instead of loading all job objects to minimize
+    database egress.
+    """
+    from sqlalchemy import func, case, and_
+
+    # Single query to count jobs by (status, pipeline_status, variant) — no JSONB loaded
+    rows = (
+        db.query(
+            GenerationJob.status,
+            GenerationJob.pipeline_status,
+            GenerationJob.variant,
+            func.count().label("cnt"),
+        )
         .filter(GenerationJob.user_id == user["id"])
+        .group_by(
+            GenerationJob.status,
+            GenerationJob.pipeline_status,
+            GenerationJob.variant,
+        )
         .all()
     )
 
     counts = {"pending_review": 0, "generating": 0, "scheduled": 0, "published": 0, "rejected": 0, "failed": 0}
     content_breakdown = {"reels": 0, "carousels": 0, "threads": 0}
-    for job in all_jobs:
-        lifecycle = _compute_lifecycle(job)
+
+    for status, pipeline_status, variant, cnt in rows:
+        # Mirror _compute_lifecycle logic
+        if status in ("pending", "generating"):
+            lifecycle = "generating"
+        elif status in ("failed", "cancelled"):
+            lifecycle = "failed"
+        elif pipeline_status == "pending":
+            lifecycle = "pending_review"
+        elif pipeline_status == "rejected":
+            lifecycle = "rejected"
+        elif pipeline_status == "approved" or status == "completed":
+            lifecycle = "scheduled"
+        else:
+            lifecycle = "generating"
+
         if lifecycle in counts:
-            counts[lifecycle] += 1
-        # Count scheduled + pending_review by content type
+            counts[lifecycle] += cnt
+
         if lifecycle in ("scheduled", "pending_review"):
-            v = job.variant or ""
+            v = variant or ""
             if v in ("light", "dark", "format_b"):
-                content_breakdown["reels"] += 1
+                content_breakdown["reels"] += cnt
             elif v == "post":
-                content_breakdown["carousels"] += 1
+                content_breakdown["carousels"] += cnt
             elif v == "threads":
-                content_breakdown["threads"] += 1
+                content_breakdown["threads"] += cnt
 
     # Get the latest scheduled_time for this user
     latest_scheduled = (

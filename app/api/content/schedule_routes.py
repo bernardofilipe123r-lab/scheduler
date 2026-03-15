@@ -315,12 +315,27 @@ async def schedule_auto(request: AutoScheduleRequest, user: dict = Depends(get_c
 
 
 @router.get("/scheduled")
-async def get_scheduled_posts(user: dict = Depends(get_current_user)):
+async def get_scheduled_posts(
+    user: dict = Depends(get_current_user),
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
+    limit: int = 500,
+):
     """
-    Get all scheduled posts (reels and posts from all sources).
+    Get scheduled posts with optional date range filtering.
+
+    Query params:
+      from_date: ISO date string (e.g. 2026-03-01) — only return posts on/after this date
+      to_date:   ISO date string (e.g. 2026-04-01) — only return posts before this date
+      limit:     max rows (default 500)
     """
     try:
-        schedules = scheduler_service.get_all_scheduled(user_id=user["id"])
+        schedules = scheduler_service.get_all_scheduled(
+            user_id=user["id"],
+            from_date=from_date,
+            to_date=to_date,
+            limit=limit,
+        )
         formatted_schedules = []
         for schedule in schedules:
             metadata = schedule.get("metadata", {})

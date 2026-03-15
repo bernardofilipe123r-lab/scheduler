@@ -21,8 +21,8 @@ export function useTobyStatus() {
   return useQuery({
     queryKey: tobyKeys.status(),
     queryFn: tobyApi.getStatus,
-    refetchInterval: 60_000,
-    staleTime: 10_000,
+    refetchInterval: 120_000,
+    staleTime: 30_000,
     refetchOnWindowFocus: false,
   })
 }

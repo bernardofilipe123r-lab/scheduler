@@ -436,23 +436,45 @@ class DatabaseSchedulerService:
 
             return result
 
-    def get_all_scheduled(self, user_id: Optional[str] = None) -> list[Dict[str, Any]]:
+    def get_all_scheduled(
+        self,
+        user_id: Optional[str] = None,
+        from_date: Optional[str] = None,
+        to_date: Optional[str] = None,
+        limit: int = 500,
+    ) -> list[Dict[str, Any]]:
         """
-        Get all scheduled reels, optionally filtered by user.
+        Get scheduled reels with optional date-range filtering.
 
         Args:
             user_id: Optional user filter
-
-        Returns:
-            List of all schedules
+            from_date: ISO date string — only rows on/after this date
+            to_date: ISO date string — only rows before this date
+            limit: Maximum rows to return (default 500)
         """
+        from datetime import datetime as dt
+
         with get_db_session() as db:
             query = db.query(ScheduledReel)
 
             if user_id:
                 query = query.filter(ScheduledReel.user_id == user_id)
 
-            schedules = query.order_by(ScheduledReel.scheduled_time.desc()).limit(500).all()
+            if from_date:
+                try:
+                    start = dt.fromisoformat(from_date)
+                    query = query.filter(ScheduledReel.scheduled_time >= start)
+                except ValueError:
+                    pass
+
+            if to_date:
+                try:
+                    end = dt.fromisoformat(to_date)
+                    query = query.filter(ScheduledReel.scheduled_time < end)
+                except ValueError:
+                    pass
+
+            schedules = query.order_by(ScheduledReel.scheduled_time.desc()).limit(limit).all()
             return [reel.to_dict() for reel in schedules]
 
     def delete_scheduled(self, schedule_id: str, user_id: Optional[str] = None) -> bool:
