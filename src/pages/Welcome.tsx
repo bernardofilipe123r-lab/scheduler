@@ -1016,7 +1016,10 @@ export function WelcomePage() {
                 <span className="text-[16px] sm:text-[18px] font-bold text-violet-300">Meet Toby — Your AI Agent</span>
               </div>
               <h2 className="text-[26px] sm:text-[38px] font-extrabold tracking-tight text-white">Six steps. Fully autonomous.</h2>
-              <p className="mt-4 text-[15px] sm:text-[16px] text-gray-400 max-w-2xl mx-auto">Toby runs this cycle every 5 minutes — finding, creating, scoring, and scheduling. You review and approve content before it publishes.</p>
+              <p className="mt-4 text-[15px] sm:text-[16px] text-gray-400 max-w-2xl mx-auto">
+                Toby runs this cycle every 5 minutes — finding, creating, scoring, and scheduling.<br />
+                You review and approve content before it publishes.
+              </p>
             </div>
           </Reveal>
 
