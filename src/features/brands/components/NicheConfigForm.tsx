@@ -593,9 +593,9 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
           {/* ── FORMAT A SUB-TAB ── */}
           {reelsSubTab === 'format_a' && (
             <div>
-              <h4 className="text-sm font-medium text-gray-700 mb-1">Reel Examples ({formatACount}/10 minimum)</h4>
+              <h4 className="text-sm font-medium text-gray-700 mb-1">Format A Reel Examples ({formatACount})</h4>
               <p className="text-xs text-gray-400 mb-3">
-                Format A reels are <strong className="text-gray-600">line-based</strong> — each has a title + punchy content lines. You need at least <strong className="text-gray-600">10 examples</strong>. More = better.
+                Format A reels are <strong className="text-gray-600">line-based</strong> — each has a title + punchy content lines. Add at least <strong className="text-gray-600">10 examples</strong> for the AI to learn your style. You choose which format Toby generates in <strong className="text-gray-600">Toby Settings</strong>.
               </p>
               {formatACount < 10 && formatACount > 0 && (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
@@ -728,7 +728,7 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
             <div>
               <h4 className="text-sm font-medium text-gray-700 mb-1">Format B Reel Examples ({formatBCount})</h4>
               <p className="text-xs text-gray-400 mb-3">
-                Format B reels are <strong className="text-gray-600">story-based</strong> — each has a title and a paragraph narration (3-6 sentences). The AI learns your storytelling style from these. Aim for <strong className="text-gray-600">50 examples</strong> for best results.
+                Format B reels are <strong className="text-gray-600">story-based</strong> — each has a title and a paragraph narration (3-6 sentences). Add at least <strong className="text-gray-600">10 examples</strong> for the AI to learn your style. You choose which format Toby generates in <strong className="text-gray-600">Toby Settings</strong>.
               </p>
               {formatBCount < 10 && formatBCount > 0 && (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
