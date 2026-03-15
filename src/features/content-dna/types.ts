@@ -49,7 +49,7 @@ export interface ContentDNAProfile {
   follow_section_text: string
   save_section_text: string
   disclaimer_text: string
-  format_b_reel_examples: Array<{ title: string; content_lines: string[] }>
+  format_b_reel_examples: Array<{ title: string; post: string }>
   format_b_story_niches: string[]
   format_b_story_tone: string
   format_b_preferred_categories: string[]

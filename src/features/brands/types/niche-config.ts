@@ -3,6 +3,11 @@ export interface ReelExample {
   content_lines: string[]
 }
 
+export interface FormatBReelExample {
+  title: string
+  post: string
+}
+
 export interface PostExample {
   title: string
   slides: string[]
@@ -40,6 +45,7 @@ export interface NicheConfig {
   // Examples
   reel_examples: ReelExample[]
   post_examples: PostExample[]
+  format_b_reel_examples: FormatBReelExample[]
 
   // Visual
   image_style_description: string

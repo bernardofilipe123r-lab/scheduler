@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef, forwardRef, useImperativeHandle } from 'react'
-import { Save, Loader2, Dna, Sparkles, Film, LayoutGrid, Plus, Trash2, RefreshCw, ChevronDown, Check, Instagram, Download } from 'lucide-react'
+import { Save, Loader2, Dna, Sparkles, Film, LayoutGrid, Plus, Trash2, RefreshCw, ChevronDown, ChevronRight, Check, Instagram, Download } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useNicheConfig, useUpdateNicheConfig, useAiUnderstanding, useReelPreview, useSuggestYtTitles, useImportFromInstagram } from '../api/use-niche-config'
 import { useContentDNAProfile, useUpdateContentDNA } from '@/features/content-dna'
@@ -7,7 +7,7 @@ import { useBrands } from '../api/use-brands'
 import { apiClient } from '@/shared/api/client'
 import { getConfigStrength } from '../types/niche-config'
 import { ContentExamplesSection } from './ContentExamplesSection'
-import type { NicheConfig } from '../types/niche-config'
+import type { NicheConfig, FormatBReelExample } from '../types/niche-config'
 import { PostCanvas, DEFAULT_GENERAL_SETTINGS, getBrandConfig } from '@/shared/components/PostCanvas'
 import { CarouselTextSlide } from '@/shared/components/CarouselTextSlide'
 import { NicheConfigSkeleton } from '@/shared/components'
@@ -37,6 +37,7 @@ const DEFAULT_CONFIG: NicheConfig = {
   hook_themes: [],
   reel_examples: [],
   post_examples: [],
+  format_b_reel_examples: [],
   image_style_description: '',
   image_palette_keywords: [],
   brand_personality: null,
@@ -115,6 +116,70 @@ function buildSanitizedConfigPayload(values: NicheConfig): NicheConfig {
     ...values,
     cta_options: sanitizedCtas,
   }
+}
+
+function FormatBExampleCard({
+  example,
+  index,
+  onChange,
+  onDelete,
+}: {
+  example: FormatBReelExample
+  index: number
+  onChange: (updated: FormatBReelExample) => void
+  onDelete: () => void
+}) {
+  const [expanded, setExpanded] = useState(false)
+
+  return (
+    <div className="border border-gray-200 rounded-lg overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors"
+      >
+        <div className="flex items-center gap-2 text-sm">
+          {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+          <span className="font-medium text-gray-700">Example {index + 1}</span>
+          {!expanded && example.title && (
+            <span className="text-gray-400 truncate max-w-[300px]">&mdash; {example.title}</span>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onDelete() }}
+          className="text-gray-400 hover:text-red-500 transition-colors"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </button>
+
+      {expanded && (
+        <div className="p-4 space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Title</label>
+            <input
+              value={example.title}
+              onChange={(e) => onChange({ ...example, title: e.target.value })}
+              placeholder="e.g. The Hidden Tax That's Draining Your Paycheck"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Reel Text (paragraph)</label>
+            <textarea
+              value={example.post}
+              onChange={(e) => onChange({ ...example, post: e.target.value })}
+              placeholder="Write the full reel narration as a paragraph. This is the story-based text that appears in the reel frames..."
+              rows={6}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-y"
+            />
+            <p className="text-[10px] text-gray-400 mt-1">{(example.post || '').split(/\s+/).filter(Boolean).length} words</p>
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 // Preload fonts needed by Konva canvas components via Google Fonts CSS API
@@ -639,6 +704,55 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
               onBeforeGenerate={flushSave}
               onGeneratingChange={onGeneratingChange}
             />
+          </div>
+
+          {/* Format B Reel Examples */}
+          <div className="border-t border-gray-100 pt-5">
+            <h4 className="text-sm font-medium text-gray-700 mb-1">📰 Format B Reel Examples ({(values.format_b_reel_examples || []).length})</h4>
+            <p className="text-xs text-gray-400 mb-3">
+              Format B reels are <strong className="text-gray-600">story-based</strong> — each example has a title and a paragraph of text (not line-by-line like Format A). The AI learns your storytelling style from these examples.
+            </p>
+            {(values.format_b_reel_examples || []).length === 0 ? (
+              <div className="text-center py-6 border border-dashed border-gray-300 rounded-lg">
+                <p className="text-gray-500 text-sm mb-1">No Format B examples yet</p>
+                <p className="text-gray-400 text-xs mb-3">Add examples to teach the AI your story-based reel style.</p>
+                <button
+                  type="button"
+                  onClick={() => update('format_b_reel_examples', [...(values.format_b_reel_examples || []), { title: '', post: '' }])}
+                  className="text-sm text-primary-600 hover:text-primary-700 flex items-center gap-1 mx-auto"
+                >
+                  <Plus className="w-4 h-4" /> Add Format B Example
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  {(values.format_b_reel_examples || []).map((ex: FormatBReelExample, i: number) => (
+                    <FormatBExampleCard
+                      key={i}
+                      example={ex}
+                      index={i}
+                      onChange={(updated) => {
+                        const examples = [...(values.format_b_reel_examples || [])]
+                        examples[i] = updated
+                        update('format_b_reel_examples', examples)
+                      }}
+                      onDelete={() => {
+                        update('format_b_reel_examples', (values.format_b_reel_examples || []).filter((_: FormatBReelExample, j: number) => j !== i))
+                      }}
+                    />
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => update('format_b_reel_examples', [...(values.format_b_reel_examples || []), { title: '', post: '' }])}
+                  disabled={(values.format_b_reel_examples || []).length >= 50}
+                  className="mt-2 text-sm text-primary-600 hover:text-primary-700 flex items-center gap-1 disabled:opacity-50"
+                >
+                  <Plus className="w-4 h-4" /> Add Format B Example
+                </button>
+              </>
+            )}
           </div>
 
           {/* Reel CTAs */}
