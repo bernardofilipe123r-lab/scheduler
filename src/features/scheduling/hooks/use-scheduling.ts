@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { schedulingApi } from '../api'
 import { useAdaptivePoll } from '@/shared/hooks/use-adaptive-poll'
 
@@ -23,7 +23,7 @@ export function useGenerateCaptions() {
 
 export function useScheduleReel() {
   const queryClient = useQueryClient()
-  
+
   return useMutation({
     mutationFn: schedulingApi.schedule,
     onSuccess: () => {
@@ -36,7 +36,7 @@ export function useScheduleReel() {
 
 export function useAutoScheduleReel() {
   const queryClient = useQueryClient()
-  
+
   return useMutation({
     mutationFn: schedulingApi.autoSchedule,
     onSuccess: () => {
@@ -61,12 +61,13 @@ export function useScheduledPosts(
     queryKey: [...schedulingKeys.scheduled(), params],
     queryFn: () => schedulingApi.getScheduled(params),
     refetchInterval: refetchIntervalOverride ?? adaptiveInterval,
+    placeholderData: keepPreviousData,
   })
 }
 
 export function useDeleteScheduled() {
   const queryClient = useQueryClient()
-  
+
   return useMutation({
     mutationFn: schedulingApi.deleteScheduled,
     onSuccess: () => {
@@ -77,7 +78,7 @@ export function useDeleteScheduled() {
 
 export function useDeleteScheduledForDay() {
   const queryClient = useQueryClient()
-  
+
   return useMutation({
     mutationFn: (params: { date: string; variant?: 'reel' | 'post' }) => schedulingApi.deleteScheduledForDay(params),
     onSuccess: () => {
@@ -88,7 +89,7 @@ export function useDeleteScheduledForDay() {
 
 export function useRetryFailed() {
   const queryClient = useQueryClient()
-  
+
   return useMutation({
     mutationFn: schedulingApi.retryFailed,
     onSuccess: () => {
@@ -99,7 +100,7 @@ export function useRetryFailed() {
 
 export function useReschedule() {
   const queryClient = useQueryClient()
-  
+
   return useMutation({
     mutationFn: ({ id, scheduledTime }: { id: string; scheduledTime: string }) =>
       schedulingApi.reschedule(id, scheduledTime),
@@ -111,7 +112,7 @@ export function useReschedule() {
 
 export function usePublishNow() {
   const queryClient = useQueryClient()
-  
+
   return useMutation({
     mutationFn: schedulingApi.publishNow,
     onSuccess: () => {
