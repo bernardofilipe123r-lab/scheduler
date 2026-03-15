@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import {
-  BarChart3, Users, Eye, Zap, MessageSquare, RefreshCw,
+  BarChart3, Users, Eye, Zap, RefreshCw,
 } from 'lucide-react'
 import {
   useAnalytics,
@@ -13,14 +13,12 @@ import { OverviewTab } from '@/features/analytics/components/OverviewTab'
 import { PostsTab } from '@/features/analytics/components/PostsTab'
 import { AnswersTab } from '@/features/analytics/components/AnswersTab'
 import { AudienceTab } from '@/features/analytics/components/AudienceTab'
-import { CommunityTab } from '@/features/analytics/components/CommunityTab'
 
 const TABS = [
   { key: 'overview', label: 'Overview', icon: BarChart3 },
   { key: 'posts', label: 'Posts', icon: Eye },
   { key: 'answers', label: 'Answers', icon: Zap },
   { key: 'audience', label: 'Audience', icon: Users },
-  { key: 'community', label: 'Community', icon: MessageSquare },
 ] as const
 
 type TabKey = (typeof TABS)[number]['key']
@@ -109,9 +107,6 @@ export function AnalyticsPage() {
       )}
       {activeTab === 'audience' && (
         <AudienceTab brand={selectedBrand} />
-      )}
-      {activeTab === 'community' && (
-        <CommunityTab brand={selectedBrand} platform={selectedPlatform} />
       )}
     </div>
   )
