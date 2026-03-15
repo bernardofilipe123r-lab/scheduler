@@ -70,10 +70,14 @@ const BASE_SLOTS: Array<{ hour: number; variant: Variant }> = [
 
 function getBrandSlots(brand: BrandName, brandOffsets: Record<string, number>): Array<{ hour: number; variant: Variant }> {
   const offset = brandOffsets[brand] || 0
-  return BASE_SLOTS.map(slot => ({
-    hour: (slot.hour + offset) % 24,
-    variant: slot.variant
-  }))
+  // Backend schedules in UTC — convert slot hours to local for matching
+  const now = new Date()
+  const utcDayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+  return BASE_SLOTS.map(slot => {
+    const utcHour = (slot.hour + offset) % 24
+    const slotTime = new Date(utcDayStart); slotTime.setUTCHours(utcHour, 0, 0, 0)
+    return { hour: slotTime.getHours(), variant: slot.variant }
+  })
 }
 
 function formatHour(hour: number): string {

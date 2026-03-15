@@ -144,13 +144,14 @@ export function HomePage() {
     .sort((a, b) => new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime())
 
   // Today's slot coverage per brand
+  // Backend schedules in UTC hours — convert slot hours to local for matching
   const coverage = useMemo(() => {
     const n = new Date()
-    const dayStart = new Date(n)
-    dayStart.setHours(0, 0, 0, 0)
+    // UTC midnight for today (used to convert UTC slot hours → local)
+    const utcDayStart = new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate()))
     return dynamicBrands.filter(b => b.active).map(brand => {
       const brandToday = todayPosts.filter(p => p.brand === brand.id)
-      // Map of hour → actual variant from scheduled post metadata
+      // Map of LOCAL hour → actual variant from scheduled post metadata
       // Only count actual reels (light/dark/format_b) — NOT threads
       const reelsByHour = new Map<number, string>()
       brandToday.filter(p => {
@@ -164,23 +165,26 @@ export function HomePage() {
       )
       const offset = brand.scheduleOffset || 0
       const reelSlots = BASE_REEL_SLOTS.map(({ hour: base, variant: expectedVariant }) => {
-        const hour = (base + offset) % 24
-        const t = new Date(dayStart); t.setHours(hour, 0, 0, 0)
-        const isPast = t < n
-        const isSoon = !isPast && t.getTime() - n.getTime() < 7_200_000
-        const filled = reelsByHour.has(hour)
+        const utcHour = (base + offset) % 24
+        // Convert UTC slot time to a proper Date → extract local hour
+        const slotTime = new Date(utcDayStart); slotTime.setUTCHours(utcHour, 0, 0, 0)
+        const localHour = slotTime.getHours()
+        const isPast = slotTime < n
+        const isSoon = !isPast && slotTime.getTime() - n.getTime() < 7_200_000
+        const filled = reelsByHour.has(localHour)
         // Use actual variant from scheduled post, or the expected pattern variant
         const slotVariant: 'light' | 'dark' = filled
-          ? (reelsByHour.get(hour) === 'dark' ? 'dark' : 'light')
+          ? (reelsByHour.get(localHour) === 'dark' ? 'dark' : 'light')
           : expectedVariant
-        return { hour, filled, isPast, isSoon, variant: slotVariant }
+        return { hour: localHour, filled, isPast, isSoon, variant: slotVariant }
       })
       const postSlots = BASE_POST_HOURS_DAY.map(base => {
-        const h = (base + offset) % 24
-        const t = new Date(dayStart); t.setHours(h, 0, 0, 0)
-        const isPast = t < n
-        const isSoon = !isPast && t.getTime() - n.getTime() < 7_200_000
-        return { hour: h, filled: postHours.has(h), isPast, isSoon }
+        const utcHour = (base + offset) % 24
+        const slotTime = new Date(utcDayStart); slotTime.setUTCHours(utcHour, 0, 0, 0)
+        const localHour = slotTime.getHours()
+        const isPast = slotTime < n
+        const isSoon = !isPast && slotTime.getTime() - n.getTime() < 7_200_000
+        return { hour: localHour, filled: postHours.has(localHour), isPast, isSoon }
       })
       const openReels    = reelSlots.filter(s => !s.filled && !s.isPast).length
       const openPosts    = postSlots.filter(s => !s.filled && !s.isPast).length
