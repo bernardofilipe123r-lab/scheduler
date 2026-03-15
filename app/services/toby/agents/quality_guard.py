@@ -252,9 +252,11 @@ def quality_guard_sweep(db: Session, user_id: str) -> dict:
     # Re-fetch active list
     active = [r for r in scheduled if r.status == "scheduled"]
 
-    # ── Layer C: Time-slot collisions (same brand + same content type + ±1h) ─
-    # Keeps the first item (earliest created_at) and REPOSITIONS later ones
-    # to the next valid available slot instead of cancelling.
+    # ── Layer C: Time-slot collisions (same brand + same content type + same hour) ─
+    # Keeps the first item (earliest created_at), CANCELS later ones.
+    # Repositioning collisions instead of cancelling cascades slots forward —
+    # the quality guard keeps moving displaced items onto the nearest future slots,
+    # which creates a pile-up effect that grows on every tick.
     seen_slots: dict[tuple, ScheduledReel] = {}  # (brand, type_group, hour_key) -> first reel
     for reel in active:
         ed = reel.extra_data or {}
@@ -268,32 +270,13 @@ def quality_guard_sweep(db: Session, user_id: str) -> dict:
 
         if key in seen_slots:
             original = seen_slots[key]
-            # Try to reposition instead of cancel
-            offset = brand_offsets.get(brand, 0)
-            valid_hours = _get_valid_hours(offset, type_group)
-            new_slot = _find_next_valid_slot(
-                valid_hours, occupied, brand, type_group, now
+            _cancel_reel(
+                db, reel,
+                reason=f"Quality Guard: slot collision with {original.schedule_id} "
+                       f"at {hour_key} — cancelling duplicate",
+                layer="C"
             )
-            if new_slot:
-                old_key = (brand, type_group, hour_key)
-                occupied[old_key] = max(0, occupied.get(old_key, 0) - 1)
-                _reposition_reel(
-                    db, reel, new_slot,
-                    reason=f"Quality Guard: slot collision with {original.schedule_id} "
-                           f"at {hour_key} — repositioned to {new_slot.strftime('%Y-%m-%d %H:%M')}",
-                    layer="C"
-                )
-                new_hk = new_slot.strftime("%Y-%m-%d %H")
-                occupied[(brand, type_group, new_hk)] = occupied.get((brand, type_group, new_hk), 0) + 1
-                summary["slots_repositioned"] += 1
-            else:
-                _cancel_reel(
-                    db, reel,
-                    reason=f"Quality Guard: slot collision with {original.schedule_id} "
-                           f"at {hour_key}, no valid slot available",
-                    layer="C"
-                )
-                summary["slot_dupes_cancelled"] += 1
+            summary["slot_dupes_cancelled"] += 1
         else:
             seen_slots[key] = reel
 
