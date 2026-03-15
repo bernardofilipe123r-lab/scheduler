@@ -233,6 +233,86 @@ async def get_pipeline_stats(
     }
 
 
+def _resolve_slot_time(
+    scheduler,
+    brand_name: str,
+    variant: str,
+    user_id: str,
+    brand_data: dict,
+    created_by: str | None = None,
+) -> datetime:
+    """Resolve the scheduling slot for a pipeline item.
+
+    For Toby-created content: uses the intended_scheduled_time the buffer
+    manager picked. If that exact slot is taken, searches within ±7 days
+    of the intended time. This prevents the feedback loop where content
+    cascades months into the future.
+
+    For user-created content: searches for the next available slot within
+    30 days (capped to prevent runaway scheduling).
+    """
+    from datetime import timedelta
+
+    intended = brand_data.get("intended_scheduled_time")
+    is_toby = (created_by == "toby") and intended
+
+    if is_toby:
+        # Parse intended time
+        if isinstance(intended, str):
+            intended_dt = datetime.fromisoformat(intended)
+        else:
+            intended_dt = intended
+        if intended_dt.tzinfo is None:
+            intended_dt = intended_dt.replace(tzinfo=timezone.utc)
+
+        # Try the exact intended slot first
+        if variant == "threads":
+            slot = scheduler.get_next_available_post_slot(
+                brand=brand_name, reference_date=intended_dt - timedelta(hours=1),
+                user_id=user_id, max_days_ahead=14,
+            )
+        else:
+            slot = scheduler.get_next_available_slot(
+                brand=brand_name, variant=variant, user_id=user_id,
+                reference_date=intended_dt - timedelta(hours=1),
+                max_days_ahead=14,
+            )
+        if slot:
+            return slot
+
+        # Fallback: search from now with buffer-sized cap
+        if variant == "threads":
+            slot = scheduler.get_next_available_post_slot(
+                brand=brand_name, user_id=user_id, max_days_ahead=30,
+            )
+        else:
+            slot = scheduler.get_next_available_slot(
+                brand=brand_name, variant=variant, user_id=user_id,
+                max_days_ahead=30,
+            )
+        if slot:
+            return slot
+
+        # Absolute last resort — tomorrow at first valid slot hour
+        return datetime.now(timezone.utc) + timedelta(days=1)
+
+    # User-created content: search from now with 30-day cap
+    if variant == "threads":
+        slot = scheduler.get_next_available_post_slot(
+            brand=brand_name, user_id=user_id, max_days_ahead=30,
+        )
+    else:
+        slot = scheduler.get_next_available_slot(
+            brand=brand_name, variant=variant, user_id=user_id,
+            max_days_ahead=30,
+        )
+    if slot:
+        return slot
+
+    # Fallback
+    return datetime.now(timezone.utc) + timedelta(days=1)
+
+
 def _approve_single_job(
     job: GenerationJob,
     db: Session,
@@ -269,15 +349,10 @@ def _approve_single_job(
             if brand_data.get("status") not in ("completed", "scheduled"):
                 continue
 
-            # Threads content uses post slots, not reel slots
-            if variant == "threads":
-                slot_time = scheduler.get_next_available_post_slot(brand=brand_name)
-            else:
-                slot_time = scheduler.get_next_available_slot(
-                    brand=brand_name,
-                    variant=variant,
-                    user_id=user["id"],
-                )
+            slot_time = _resolve_slot_time(
+                scheduler, brand_name, variant, user["id"],
+                brand_data, created_by=job.created_by,
+            )
 
             caption = caption_override or job.caption or brand_data.get("caption", "")
 
@@ -402,16 +477,10 @@ def _bulk_schedule_background(job_ids: list[str], user: dict):
                         ):
                             continue
 
-                        if variant == "threads":
-                            slot_time = scheduler.get_next_available_post_slot(
-                                brand=brand_name
-                            )
-                        else:
-                            slot_time = scheduler.get_next_available_slot(
-                                brand=brand_name,
-                                variant=variant,
-                                user_id=user["id"],
-                            )
+                        slot_time = _resolve_slot_time(
+                            scheduler, brand_name, variant, user["id"],
+                            brand_data, created_by=job.created_by,
+                        )
 
                         caption = job.caption or brand_data.get("caption", "")
                         slide_texts = brand_data.get("slide_texts") or job.content_lines

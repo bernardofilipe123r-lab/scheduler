@@ -1695,8 +1695,8 @@ class DatabaseSchedulerService:
         # Find next available slot starting from base_date
         current_day = base_date.replace(hour=0, minute=0, second=0, microsecond=0)
 
-        # Search up to max_days_ahead days (default 365)
-        search_range = max_days_ahead if max_days_ahead is not None else 365
+        # Search up to max_days_ahead days (default 30 — prevents runaway scheduling)
+        search_range = max_days_ahead if max_days_ahead is not None else 30
         for day_offset in range(search_range):
             check_date = current_day + timedelta(days=day_offset)
 
@@ -1713,15 +1713,9 @@ class DatabaseSchedulerService:
                     print(f"📅 Found next slot for {brand}/{label}: {candidate.isoformat()}")
                     return candidate
 
-        # If max_days_ahead was set, return None (no slot within window)
-        if max_days_ahead is not None:
-            label = slot_variant_label or variant
-            print(f"📅 No slot available for {brand}/{label} within {max_days_ahead} days")
-            return None
-
-        # Fallback: just return tomorrow at first matching slot
-        tomorrow = now + timedelta(days=1)
-        return tomorrow.replace(hour=matching_slots[0], minute=0, second=0, microsecond=0)
+        label = slot_variant_label or variant
+        print(f"📅 No slot available for {brand}/{label} within {search_range} days")
+        return None
 
     def get_next_slots_for_job(
         self,
@@ -1871,7 +1865,7 @@ class DatabaseSchedulerService:
         # Find next available slot
         current_day = base_date.replace(hour=0, minute=0, second=0, microsecond=0)
 
-        search_range = max_days_ahead if max_days_ahead is not None else 365
+        search_range = max_days_ahead if max_days_ahead is not None else 30
         for day_offset in range(search_range):
             check_date = current_day + timedelta(days=day_offset)
 
@@ -1885,11 +1879,5 @@ class DatabaseSchedulerService:
                     print(f"📅 Found next POST slot for {brand}: {candidate.isoformat()}")
                     return candidate
 
-        # If max_days_ahead was set, return None (no slot within window)
-        if max_days_ahead is not None:
-            print(f"📅 No POST slot available for {brand} within {max_days_ahead} days")
-            return None
-
-        # Fallback
-        tomorrow = now + timedelta(days=1)
-        return tomorrow.replace(hour=brand_post_slots[0], minute=0, second=0, microsecond=0)
+        print(f"📅 No POST slot available for {brand} within {search_range} days")
+        return None

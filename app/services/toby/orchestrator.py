@@ -643,6 +643,9 @@ def _execute_content_plan(db: Session, plan, batch_id: str = None):
         "content_lines": slide_texts,
         "ai_prompt": result.get("image_prompt", ""),
         "status": "pending",
+        # Preserve the intended slot so pipeline approval schedules here
+        # instead of searching 365 days for the next free slot.
+        "intended_scheduled_time": plan.scheduled_time,
     }
     if variant == "post":
         brand_output_data["slide_texts"] = slide_texts
