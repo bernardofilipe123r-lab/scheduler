@@ -213,7 +213,8 @@ class DatabaseLogHandler(logging.Handler):
             current_user_id = get_user_id()
             if current_user_id:
                 entry['details']['user_id'] = current_user_id
-            
+                entry['user_id'] = current_user_id
+
             # Capture exception info if present
             if record.exc_info and record.exc_info[1]:
                 entry['category'] = 'error'
@@ -307,6 +308,7 @@ class LoggingService:
                         'details': details,
                         'request_id': get_request_id(),
                         'deployment_id': DEPLOYMENT_ID,
+                        'user_id': current_user_id,
                     }
                     _log_buffer.add(entry)
                 except Exception:
@@ -355,6 +357,7 @@ class LoggingService:
             'http_method': http_method,
             'http_path': http_path,
             'http_status': http_status,
+            'user_id': current_user_id,
         }
         _log_buffer.add(entry)
     

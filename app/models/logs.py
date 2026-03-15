@@ -55,6 +55,9 @@ class LogEntry(Base):
     # Duration in milliseconds (for timed operations)
     duration_ms = Column(Integer, nullable=True)
     
+    # User who generated this log (denormalized from details JSON for fast filtering)
+    user_id = Column(String(100), nullable=True, index=True)
+
     # HTTP-specific fields (denormalized for fast queries)
     http_method = Column(String(10), nullable=True)
     http_path = Column(String(500), nullable=True, index=True)
@@ -73,6 +76,7 @@ class LogEntry(Base):
             "request_id": self.request_id,
             "deployment_id": self.deployment_id,
             "duration_ms": self.duration_ms,
+            "user_id": self.user_id,
             "http_method": self.http_method,
             "http_path": self.http_path,
             "http_status": self.http_status,

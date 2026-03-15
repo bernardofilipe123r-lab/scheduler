@@ -1117,12 +1117,12 @@ async def startup_event():
     scheduler.add_job(refresh_audience_demographics, 'interval', hours=12, id='audience_refresh')
     scheduler.add_job(refresh_audience_demographics, 'date', run_date=datetime.now() + timedelta(seconds=60), id='audience_startup')
 
-    # Auto-cleanup old logs every 6 hours (keep 48 hours of logs)
+    # Auto-cleanup old logs every 4 hours (keep 24 hours of logs)
     def cleanup_old_logs():
-        """Cleanup logs older than 48 hours to prevent unbounded DB growth."""
+        """Cleanup logs older than 24 hours to prevent unbounded DB growth."""
         try:
             log_svc = get_logging_service()
-            deleted = log_svc.cleanup_old_logs(retention_hours=48)
+            deleted = log_svc.cleanup_old_logs(retention_hours=24)
             if deleted > 0:
                 print(f"Cleaned up {deleted} old log entries", flush=True)
         except Exception as e:
@@ -1208,7 +1208,7 @@ async def startup_event():
         finally:
             db.close()
 
-    scheduler.add_job(cleanup_old_logs, 'interval', hours=6, id='log_cleanup')
+    scheduler.add_job(cleanup_old_logs, 'interval', hours=4, id='log_cleanup')
     scheduler.add_job(cleanup_published_jobs, 'interval', hours=6, id='published_cleanup')
 
     # Auto-cleanup old processed webhook records (keep 7 days)

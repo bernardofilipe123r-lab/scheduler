@@ -43,9 +43,12 @@ def _require_admin(user: dict) -> None:
 
 
 def _apply_user_scope(query, user_id: str):
-    """Scope logs to records tagged with the authenticated user_id."""
-    marker = f'"user_id": "{user_id}"'
-    return query.filter(cast(LogEntry.details, String).ilike(f"%{marker}%"))
+    """Scope logs to records tagged with the authenticated user_id.
+
+    Uses the denormalized user_id column (indexed) instead of scanning the
+    full JSON details blob, which caused ~63 GB of sequential-scan egress.
+    """
+    return query.filter(LogEntry.user_id == user_id)
 
 
 @router.get("/api/logs", summary="Query logs with filtering")
@@ -203,7 +206,7 @@ def get_log_stats(
     level_counts = (
         db.query(LogEntry.level, func.count(LogEntry.id))
         .filter(LogEntry.timestamp >= cutoff)
-        .filter(cast(LogEntry.details, String).ilike(f'%"user_id": "{user.get("id", "")}"%'))
+        .filter(LogEntry.user_id == user.get("id", ""))
         .group_by(LogEntry.level)
         .all()
     )
@@ -212,7 +215,7 @@ def get_log_stats(
     category_counts = (
         db.query(LogEntry.category, func.count(LogEntry.id))
         .filter(LogEntry.timestamp >= cutoff)
-        .filter(cast(LogEntry.details, String).ilike(f'%"user_id": "{user.get("id", "")}"%'))
+        .filter(LogEntry.user_id == user.get("id", ""))
         .group_by(LogEntry.category)
         .all()
     )
@@ -221,7 +224,7 @@ def get_log_stats(
     recent_errors = (
         db.query(LogEntry)
         .filter(LogEntry.timestamp >= cutoff, LogEntry.level.in_(['ERROR', 'CRITICAL']))
-        .filter(cast(LogEntry.details, String).ilike(f'%"user_id": "{user.get("id", "")}"%'))
+        .filter(LogEntry.user_id == user.get("id", ""))
         .order_by(LogEntry.timestamp.desc())
         .limit(10)
         .all()
@@ -236,7 +239,7 @@ def get_log_stats(
         .filter(
             LogEntry.timestamp >= cutoff,
             LogEntry.category == 'http_request',
-            cast(LogEntry.details, String).ilike(f'%"user_id": "{user.get("id", "")}"%'),
+            LogEntry.user_id == user.get("id", ""),
         )
         .first()
     )
@@ -248,7 +251,7 @@ def get_log_stats(
             LogEntry.timestamp >= cutoff,
             LogEntry.category == 'http_request',
             LogEntry.http_status.isnot(None),
-            cast(LogEntry.details, String).ilike(f'%"user_id": "{user.get("id", "")}"%'),
+            LogEntry.user_id == user.get("id", ""),
         )
         .group_by(LogEntry.http_status)
         .all()
@@ -263,7 +266,7 @@ def get_log_stats(
             func.count(LogEntry.id).label('log_count'),
         )
         .filter(LogEntry.timestamp >= cutoff)
-        .filter(cast(LogEntry.details, String).ilike(f'%"user_id": "{user.get("id", "")}"%'))
+        .filter(LogEntry.user_id == user.get("id", ""))
         .group_by(LogEntry.deployment_id)
         .order_by(func.max(LogEntry.timestamp).desc())
         .all()
@@ -272,7 +275,7 @@ def get_log_stats(
     # Total log count
     total_logs = (
         db.query(func.count(LogEntry.id))
-        .filter(cast(LogEntry.details, String).ilike(f'%"user_id": "{user.get("id", "")}"%'))
+        .filter(LogEntry.user_id == user.get("id", ""))
         .scalar()
     )
     

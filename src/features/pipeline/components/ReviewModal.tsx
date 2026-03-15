@@ -300,7 +300,7 @@ function PostContent({ item }: { item: PipelineItem }) {
       {thumbnail ? (
         <img src={thumbnail} alt={item.title} className="w-full h-full object-contain" />
       ) : videoUrl ? (
-        <video src={videoUrl} className="w-full h-full object-contain" autoPlay playsInline loop muted preload="auto" />
+        <video src={videoUrl} className="w-full h-full object-contain" autoPlay playsInline loop muted preload="metadata" />
       ) : (
         <div className="w-full h-full flex items-center justify-center text-white/30 text-sm">
           No preview available
@@ -331,28 +331,27 @@ export function ReviewModal({ items: externalItems, initialIndex, onApprove, onR
   const contentMode = item ? getContentMode(item) : 'unknown'
   const isPending = item?.lifecycle === 'pending_review'
 
-  // Preload next 2 items' videos + thumbnails in background
+  // Preload next item's thumbnail only (metadata for video)
+  // Using preload="metadata" downloads ~100KB headers instead of full video (~5-20MB)
   useEffect(() => {
-    // Clean up old preload elements
     preloadRef.current.forEach(v => { v.src = ''; v.load() })
     preloadRef.current = []
 
-    const upcoming = queue.slice(currentIdx + 1, currentIdx + 3)
-    for (const next of upcoming) {
-      const videoUrl = getVideoUrl(next)
-      if (videoUrl) {
-        const v = document.createElement('video')
-        v.preload = 'auto'
-        v.muted = true
-        v.src = videoUrl
-        v.load()
-        preloadRef.current.push(v)
-      }
-      const thumb = getThumbnail(next)
-      if (thumb) {
-        const img = new Image()
-        img.src = thumb
-      }
+    const next = queue[currentIdx + 1]
+    if (!next) return
+
+    const videoUrl = getVideoUrl(next)
+    if (videoUrl) {
+      const v = document.createElement('video')
+      v.preload = 'metadata'
+      v.muted = true
+      v.src = videoUrl
+      preloadRef.current.push(v)
+    }
+    const thumb = getThumbnail(next)
+    if (thumb) {
+      const img = new Image()
+      img.src = thumb
     }
     return () => {
       preloadRef.current.forEach(v => { v.src = ''; v.load() })
