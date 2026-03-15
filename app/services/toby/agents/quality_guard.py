@@ -27,7 +27,8 @@ WHY THIS IS AN AGENT (not an external script):
 DETECTION LAYERS:
     Layer A: Fallback/placeholder content rejection
     Layer B: Title duplicate detection (same brand, 5-day window)
-    Layer C: Time-slot collision detection (same brand+type, ±1 hour)
+    Layer E: Wrong-slot repair (repositions items at non-valid hours)
+    Layer C: Time-slot collision repair (repositions duplicates to next valid slot)
     Layer D: Caption near-duplicate detection (same brand, 3-day window)
 """
 from datetime import datetime, timedelta, timezone
@@ -43,6 +44,59 @@ FORBIDDEN_TITLE_PATTERNS = [
     "content generation temporarily unavailable",
     "temporarily unavailable",
 ]
+
+# ── Slot schedule definitions (must match buffer_manager.py / scheduler.py) ──
+BASE_REEL_HOURS = [0, 4, 8, 12, 16, 20]
+BASE_POST_HOURS = [8, 14]
+BASE_THREAD_HOURS = [0, 4, 8, 12, 16, 20]
+
+
+def _get_type_group(variant: str) -> str:
+    """Normalize variant to content type group for slot matching."""
+    if variant in ("light", "dark"):
+        return "reel"
+    if variant == "format_b":
+        return "format_b"
+    if variant == "post":
+        return "post"
+    if variant == "threads":
+        return "threads"
+    return variant or "reel"
+
+
+def _get_valid_hours(offset: int, type_group: str) -> list[int]:
+    """Get valid scheduling hours for a brand+content_type combination."""
+    if type_group in ("reel", "format_b"):
+        base = BASE_REEL_HOURS
+    elif type_group == "post":
+        base = BASE_POST_HOURS
+    elif type_group == "threads":
+        base = BASE_THREAD_HOURS
+    else:
+        base = BASE_REEL_HOURS
+    return [(h + offset) % 24 for h in base]
+
+
+def _find_next_valid_slot(
+    valid_hours: list[int],
+    occupied: dict[tuple[str, str, str], int],
+    brand: str,
+    type_group: str,
+    after: datetime,
+    max_days: int = 10,
+) -> datetime | None:
+    """Find the next valid unoccupied slot for a brand+type after a given time."""
+    current_day = after.replace(hour=0, minute=0, second=0, microsecond=0)
+    for day_offset in range(max_days):
+        check_date = current_day + timedelta(days=day_offset)
+        for hour in sorted(valid_hours):
+            candidate = check_date.replace(hour=hour, minute=0, second=0, microsecond=0)
+            if candidate <= after:
+                continue
+            hk = candidate.strftime("%Y-%m-%d %H")
+            if occupied.get((brand, type_group, hk), 0) == 0:
+                return candidate
+    return None
 
 
 def quality_guard_sweep(db: Session, user_id: str) -> dict:
@@ -67,7 +121,9 @@ def quality_guard_sweep(db: Session, user_id: str) -> dict:
         "title_dupes_cancelled": 0,
         "slot_dupes_cancelled": 0,
         "caption_dupes_cancelled": 0,
+        "slots_repositioned": 0,
         "total_cancelled": 0,
+        "total_repositioned": 0,
     }
 
     # Get all future scheduled posts for this user
@@ -85,6 +141,31 @@ def quality_guard_sweep(db: Session, user_id: str) -> dict:
 
     if not scheduled:
         return summary
+
+    # Load brand offsets for slot validation (Layer E + Layer C repositioning)
+    from app.models.brands import Brand
+    brands = db.query(Brand).filter(Brand.user_id == user_id, Brand.active == True).all()
+    brand_offsets = {b.id: (b.schedule_offset or 0) for b in brands}
+
+    # Build master occupied map from ALL non-failed future reels (for repositioning)
+    # Uses counts so we correctly handle multiple items at the same slot
+    all_future = (
+        db.query(ScheduledReel)
+        .filter(
+            ScheduledReel.user_id == user_id,
+            ScheduledReel.status.in_(["scheduled", "publishing", "partial", "published"]),
+            ScheduledReel.scheduled_time > now,
+        )
+        .all()
+    )
+    occupied: dict[tuple[str, str, str], int] = {}
+    for r in all_future:
+        ed = r.extra_data or {}
+        b = ed.get("brand", "")
+        tg = _get_type_group(ed.get("variant", ""))
+        hk = r.scheduled_time.strftime("%Y-%m-%d %H")
+        key = (b, tg, hk)
+        occupied[key] = occupied.get(key, 0) + 1
 
     # ── Layer A: Fallback/placeholder content ────────────────────────────────
     for reel in scheduled:
@@ -126,22 +207,60 @@ def quality_guard_sweep(db: Session, user_id: str) -> dict:
     # Re-fetch active list
     active = [r for r in scheduled if r.status == "scheduled"]
 
+    # ── Layer E: Wrong-slot repair (item at non-valid hour for its brand) ────
+    # Detects items scheduled at hours that don't match the brand's slot pattern
+    # (BASE hours + schedule_offset). Repositions to next valid available slot.
+    for reel in active:
+        ed = reel.extra_data or {}
+        brand = ed.get("brand", "")
+        variant = ed.get("variant", "")
+        type_group = _get_type_group(variant)
+
+        offset = brand_offsets.get(brand, 0)
+        valid_hours = _get_valid_hours(offset, type_group)
+
+        current_hour = reel.scheduled_time.hour
+        if current_hour in valid_hours:
+            continue
+
+        # This reel is at a wrong slot time → reposition
+        old_hk = reel.scheduled_time.strftime("%Y-%m-%d %H")
+        old_key = (brand, type_group, old_hk)
+        occupied[old_key] = max(0, occupied.get(old_key, 0) - 1)
+
+        new_slot = _find_next_valid_slot(
+            valid_hours, occupied, brand, type_group, now
+        )
+        if new_slot:
+            _reposition_reel(
+                db, reel, new_slot,
+                reason=f"Quality Guard: wrong slot hour {current_hour:02d} "
+                       f"(valid: {valid_hours}) — repositioned to {new_slot.strftime('%Y-%m-%d %H:%M')}",
+                layer="E"
+            )
+            new_hk = new_slot.strftime("%Y-%m-%d %H")
+            occupied[(brand, type_group, new_hk)] = occupied.get((brand, type_group, new_hk), 0) + 1
+            summary["slots_repositioned"] += 1
+        else:
+            _cancel_reel(
+                db, reel,
+                reason=f"Quality Guard: wrong slot hour {current_hour:02d}, no valid slot available within 10 days",
+                layer="E"
+            )
+            summary["fallbacks_cancelled"] += 1
+
+    # Re-fetch active list
+    active = [r for r in scheduled if r.status == "scheduled"]
+
     # ── Layer C: Time-slot collisions (same brand + same content type + ±1h) ─
+    # Keeps the first item (earliest created_at) and REPOSITIONS later ones
+    # to the next valid available slot instead of cancelling.
     seen_slots: dict[tuple, ScheduledReel] = {}  # (brand, type_group, hour_key) -> first reel
     for reel in active:
         ed = reel.extra_data or {}
         brand = ed.get("brand", "")
         variant = ed.get("variant", "")
-
-        # Normalize variant to content type group
-        if variant in ("light", "dark"):
-            type_group = "reel"
-        elif variant == "format_b":
-            type_group = "format_b"
-        elif variant == "post":
-            type_group = "post"
-        else:
-            type_group = variant
+        type_group = _get_type_group(variant)
 
         # Round to nearest hour for collision detection
         hour_key = reel.scheduled_time.strftime("%Y-%m-%d %H")
@@ -149,13 +268,32 @@ def quality_guard_sweep(db: Session, user_id: str) -> dict:
 
         if key in seen_slots:
             original = seen_slots[key]
-            _cancel_reel(
-                db, reel,
-                reason=f"Quality Guard: time-slot collision with {original.schedule_id} "
-                       f"for {brand} ({type_group}) at {hour_key}",
-                layer="C"
+            # Try to reposition instead of cancel
+            offset = brand_offsets.get(brand, 0)
+            valid_hours = _get_valid_hours(offset, type_group)
+            new_slot = _find_next_valid_slot(
+                valid_hours, occupied, brand, type_group, now
             )
-            summary["slot_dupes_cancelled"] += 1
+            if new_slot:
+                old_key = (brand, type_group, hour_key)
+                occupied[old_key] = max(0, occupied.get(old_key, 0) - 1)
+                _reposition_reel(
+                    db, reel, new_slot,
+                    reason=f"Quality Guard: slot collision with {original.schedule_id} "
+                           f"at {hour_key} — repositioned to {new_slot.strftime('%Y-%m-%d %H:%M')}",
+                    layer="C"
+                )
+                new_hk = new_slot.strftime("%Y-%m-%d %H")
+                occupied[(brand, type_group, new_hk)] = occupied.get((brand, type_group, new_hk), 0) + 1
+                summary["slots_repositioned"] += 1
+            else:
+                _cancel_reel(
+                    db, reel,
+                    reason=f"Quality Guard: slot collision with {original.schedule_id} "
+                           f"at {hour_key}, no valid slot available",
+                    layer="C"
+                )
+                summary["slot_dupes_cancelled"] += 1
         else:
             seen_slots[key] = reel
 
@@ -192,6 +330,7 @@ def quality_guard_sweep(db: Session, user_id: str) -> dict:
         + summary["slot_dupes_cancelled"]
         + summary["caption_dupes_cancelled"]
     )
+    summary["total_repositioned"] = summary["slots_repositioned"]
 
     return summary
 
@@ -207,3 +346,17 @@ def _cancel_reel(db: Session, reel: ScheduledReel, reason: str, layer: str):
 
     reel.status = "failed"
     reel.publish_error = reason
+
+
+def _reposition_reel(db: Session, reel: ScheduledReel, new_time: datetime, reason: str, layer: str):
+    """Reposition a scheduled reel to a new time slot and log the action."""
+    ed = reel.extra_data or {}
+    brand = ed.get("brand", "unknown")
+    title = (ed.get("title") or "")[:60]
+    old_time = reel.scheduled_time.strftime("%Y-%m-%d %H:%M") if reel.scheduled_time else "unknown"
+
+    print(f"[TOBY-QG] Layer {layer}: Repositioning {reel.schedule_id} "
+          f"| brand={brand} | {old_time} → {new_time.strftime('%Y-%m-%d %H:%M')} "
+          f"| title={title}", flush=True)
+
+    reel.scheduled_time = new_time

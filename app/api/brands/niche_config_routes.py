@@ -964,6 +964,22 @@ _SEED_FORMAT_B_EXAMPLES = [
         "title": "Private islands are money pits disguised as paradise",
         "post": "Richard Branson's Necker Island costs $100 million to buy, then bleeds cash through staff salaries, generator fuel, storm repairs, and boat maintenance that never stops. Islands create infrastructure problems that mansions avoid because you're responsible for water, power, waste, and emergency systems that governments normally handle. Buying the island is cheap compared to funding it forever.",
     },
+    {
+        "title": "Nike just lost its identity trying to chase every trend",
+        "post": "The company that built a trillion-dollar brand on elite athletes and aspirational storytelling spent the last three years pivoting to direct-to-consumer, cutting wholesale partners, and chasing hype drops instead of building product loyalty. Revenue stalled, stock cratered, and the brand that once defined culture is now scrambling to win back the retailers it abandoned. Nike forgot that trends fade but brand identity is forever.",
+    },
+    {
+        "title": "The world's largest ocean cleanup just hit a turning point",
+        "post": "The Ocean Cleanup project has now removed over 25 million pounds of plastic from the Great Pacific Garbage Patch using a fleet of autonomous systems that collect debris without harming marine life. What started as a crowdfunded idea from a 19-year-old Dutch inventor is now operating at industrial scale across three oceans. The technology is proving that the damage we did to the oceans in 50 years can start being reversed in 10.",
+    },
+    {
+        "title": "Japan is paying families $7,500 per child to leave Tokyo",
+        "post": "The Japanese government is now offering direct cash incentives to families willing to relocate from Tokyo to rural prefectures facing population collapse. Towns that once had thriving economies are down to a few hundred elderly residents with no schools, no hospitals, and no future unless young families move in. It is the most aggressive domestic migration program any developed nation has ever attempted, and it is rewriting what rural revival looks like.",
+    },
+    {
+        "title": "One company controls 92% of the world's advanced chip production",
+        "post": "TSMC in Taiwan manufactures nearly every cutting-edge semiconductor that powers your phone, your car, your medical devices, and the AI models reshaping every industry on the planet. No other company on Earth can produce chips at this level of precision, and the geopolitical tension surrounding Taiwan means the entire global technology supply chain sits on a single point of failure that no government has figured out how to replicate.",
+    },
 ]
 
 
@@ -1016,7 +1032,7 @@ async def generate_format_b_examples_batch(
 
 {brand_ctx}
 
-Here are 4 examples from the Business/Tech niche to show you the EXACT format and style. Adapt the same format, energy, and structure for the brand's niche described above:
+Here are 8 examples from the Business/Tech niche to show you the EXACT format and style. Adapt the same format, energy, and structure for the brand's niche described above:
 
 {seed}{exclusion}
 

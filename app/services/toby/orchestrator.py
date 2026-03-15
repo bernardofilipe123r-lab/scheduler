@@ -127,17 +127,21 @@ def _process_user(db: Session, state: TobyState):
     try:
         from app.services.toby.agents.quality_guard import quality_guard_sweep
         qg_result = quality_guard_sweep(db, user_id)
-        if qg_result.get("total_cancelled", 0) > 0:
-            print(f"[TOBY] Quality Guard cancelled {qg_result['total_cancelled']} issue(s) for {user_id}", flush=True)
+        total_actions = qg_result.get("total_cancelled", 0) + qg_result.get("total_repositioned", 0)
+        if total_actions > 0:
+            print(f"[TOBY] Quality Guard: {qg_result.get('total_cancelled', 0)} cancelled, "
+                  f"{qg_result.get('total_repositioned', 0)} repositioned for {user_id}", flush=True)
             db.add(TobyActivityLog(
                 user_id=user_id,
                 action_type="quality_guard",
                 description=(
-                    f"Quality Guard self-check: cancelled {qg_result['total_cancelled']} problematic post(s) "
+                    f"Quality Guard: cancelled {qg_result['total_cancelled']}, "
+                    f"repositioned {qg_result.get('total_repositioned', 0)} "
                     f"(fallbacks={qg_result['fallbacks_cancelled']}, "
                     f"title_dupes={qg_result['title_dupes_cancelled']}, "
                     f"slot_dupes={qg_result['slot_dupes_cancelled']}, "
-                    f"caption_dupes={qg_result['caption_dupes_cancelled']})"
+                    f"caption_dupes={qg_result['caption_dupes_cancelled']}, "
+                    f"repositioned={qg_result.get('slots_repositioned', 0)})"
                 ),
                 level="warning",
                 action_metadata=qg_result,

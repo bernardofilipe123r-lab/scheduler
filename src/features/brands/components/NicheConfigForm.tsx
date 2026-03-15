@@ -410,7 +410,7 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
   }, [flushSave, values.format_b_reel_examples])
 
   const [dnaTab, setDnaTab] = useState<'general' | 'reels' | 'posts'>('general')
-  const [reelsSubTab, setReelsSubTab] = useState<'format_a' | 'format_b' | 'ctas'>('format_a')
+  const [reelsSubTab, setReelsSubTab] = useState<'format_a' | 'format_b'>('format_a')
 
   if (isLoading) return <NicheConfigSkeleton />
 
@@ -557,7 +557,6 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
             {([
               { key: 'format_a' as const, label: 'Format A', count: formatACount },
               { key: 'format_b' as const, label: 'Format B', count: formatBCount },
-              { key: 'ctas' as const, label: 'CTAs', count: null },
             ]).map(({ key, label, count }) => (
               <button
                 key={key}
@@ -617,6 +616,110 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
                 onBeforeGenerate={flushSave}
                 onGeneratingChange={onGeneratingChange}
               />
+
+              {/* Reel CTAs — at the end of Format A */}
+              <div className="border-t border-gray-100 pt-5 mt-5">
+                <h4 className="text-sm font-medium text-gray-700 mb-1">Reel CTAs & Captions</h4>
+                <p className="text-xs text-gray-400 mb-4">
+                  These CTAs are used for <strong>Format A reels only</strong>. The AI randomly picks one based on the weights you assign.
+                  Placeholders like <code className="text-xs bg-gray-100 px-1 rounded">{'{cta_topic}'}</code> are auto-resolved on save based on your niche/topic keywords.
+                </p>
+                <div className="space-y-4">
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-sm font-medium text-gray-700">CTA Options ({values.cta_options.length}/10)</label>
+                      <div className="flex gap-2">
+                        {values.cta_options.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const equalWeight = Math.floor(100 / values.cta_options.length)
+                              const remainder = 100 - equalWeight * values.cta_options.length
+                              update('cta_options', values.cta_options.map((opt, i) => ({
+                                ...opt,
+                                weight: equalWeight + (i === 0 ? remainder : 0),
+                              })))
+                            }}
+                            className="text-xs text-indigo-600 hover:text-indigo-700 font-medium"
+                          >
+                            Auto-distribute
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (values.cta_options.length >= 10) return
+                            update('cta_options', [...values.cta_options, { text: '', weight: 0 }])
+                          }}
+                          disabled={values.cta_options.length >= 10}
+                          className="flex items-center gap-1 text-xs text-primary-600 hover:text-primary-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <Plus className="w-3 h-3" />
+                          Add CTA
+                        </button>
+                      </div>
+                    </div>
+
+                    {values.cta_options.length === 0 && (
+                      <div className="text-xs text-gray-400 italic py-3 text-center border border-dashed border-gray-200 rounded-lg">
+                        No CTAs configured. Add CTA variants that will be randomly selected for your content.
+                      </div>
+                    )}
+
+                    <div className="space-y-2">
+                      {values.cta_options.map((opt, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <input
+                            value={opt.text}
+                            onChange={(e) => {
+                              const updated = [...values.cta_options]
+                              updated[i] = { ...updated[i], text: e.target.value }
+                              update('cta_options', updated)
+                            }}
+                            placeholder="e.g. If you want to improve your health, follow our page"
+                            className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                          />
+                          <div className="flex items-center gap-1 shrink-0">
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              value={opt.weight}
+                              onChange={(e) => {
+                                const updated = [...values.cta_options]
+                                updated[i] = { ...updated[i], weight: Math.max(0, Math.min(100, parseInt(e.target.value) || 0)) }
+                                update('cta_options', updated)
+                              }}
+                              className="w-16 px-2 py-2 border border-gray-200 rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-primary-500"
+                            />
+                            <span className="text-xs text-gray-400">%</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              update('cta_options', values.cta_options.filter((_, j) => j !== i))
+                            }}
+                            className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    {values.cta_options.length > 0 && (() => {
+                      const totalWeight = values.cta_options.reduce((sum, opt) => sum + opt.weight, 0)
+                      return totalWeight !== 100 ? (
+                        <p className="text-xs text-amber-600 mt-1">
+                          Weights sum to {totalWeight}% — should be 100%
+                        </p>
+                      ) : (
+                        <p className="text-xs text-green-600 mt-1">Weights sum to 100%</p>
+                      )
+                    })()}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
@@ -717,111 +820,6 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
             </div>
           )}
 
-          {/* ── CTAs SUB-TAB ── */}
-          {reelsSubTab === 'ctas' && (
-            <div>
-              <h4 className="text-sm font-medium text-gray-700 mb-1">Reel CTAs & Captions</h4>
-              <p className="text-xs text-gray-400 mb-4">
-                These CTAs are used for <strong>reels only</strong>. The AI randomly picks one based on the weights you assign. Carousel post CTAs are configured separately in the Carousel Posts section.
-                Placeholders like <code className="text-xs bg-gray-100 px-1 rounded">{'{cta_topic}'}</code> are auto-resolved on save based on your niche/topic keywords.
-              </p>
-              <div className="space-y-4">
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="block text-sm font-medium text-gray-700">CTA Options ({values.cta_options.length}/10)</label>
-                    <div className="flex gap-2">
-                      {values.cta_options.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const equalWeight = Math.floor(100 / values.cta_options.length)
-                            const remainder = 100 - equalWeight * values.cta_options.length
-                            update('cta_options', values.cta_options.map((opt, i) => ({
-                              ...opt,
-                              weight: equalWeight + (i === 0 ? remainder : 0),
-                            })))
-                          }}
-                          className="text-xs text-indigo-600 hover:text-indigo-700 font-medium"
-                        >
-                          Auto-distribute
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (values.cta_options.length >= 10) return
-                          update('cta_options', [...values.cta_options, { text: '', weight: 0 }])
-                        }}
-                        disabled={values.cta_options.length >= 10}
-                        className="flex items-center gap-1 text-xs text-primary-600 hover:text-primary-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <Plus className="w-3 h-3" />
-                        Add CTA
-                      </button>
-                    </div>
-                  </div>
-
-                  {values.cta_options.length === 0 && (
-                    <div className="text-xs text-gray-400 italic py-3 text-center border border-dashed border-gray-200 rounded-lg">
-                      No CTAs configured. Add CTA variants that will be randomly selected for your content.
-                    </div>
-                  )}
-
-                  <div className="space-y-2">
-                    {values.cta_options.map((opt, i) => (
-                      <div key={i} className="flex items-center gap-2">
-                        <input
-                          value={opt.text}
-                          onChange={(e) => {
-                            const updated = [...values.cta_options]
-                            updated[i] = { ...updated[i], text: e.target.value }
-                            update('cta_options', updated)
-                          }}
-                          placeholder="e.g. If you want to improve your health, follow our page"
-                          className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                        />
-                        <div className="flex items-center gap-1 shrink-0">
-                          <input
-                            type="number"
-                            min={0}
-                            max={100}
-                            value={opt.weight}
-                            onChange={(e) => {
-                              const updated = [...values.cta_options]
-                              updated[i] = { ...updated[i], weight: Math.max(0, Math.min(100, parseInt(e.target.value) || 0)) }
-                              update('cta_options', updated)
-                            }}
-                            className="w-16 px-2 py-2 border border-gray-200 rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-primary-500"
-                          />
-                          <span className="text-xs text-gray-400">%</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            update('cta_options', values.cta_options.filter((_, j) => j !== i))
-                          }}
-                          className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-
-                  {values.cta_options.length > 0 && (() => {
-                    const totalWeight = values.cta_options.reduce((sum, opt) => sum + opt.weight, 0)
-                    return totalWeight !== 100 ? (
-                      <p className="text-xs text-amber-600 mt-1">
-                        Weights sum to {totalWeight}% — should be 100%
-                      </p>
-                    ) : (
-                      <p className="text-xs text-green-600 mt-1">Weights sum to 100%</p>
-                    )
-                  })()}
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </div>}
 
