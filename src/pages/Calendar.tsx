@@ -69,7 +69,7 @@ function Calendar() {
   const calendarFrom = format(startOfWeek(startOfMonth(currentMonth), { weekStartsOn: 0 }), 'yyyy-MM-dd')
   const calendarTo = format(addDays(endOfWeek(endOfMonth(currentMonth), { weekStartsOn: 0 }), 1), 'yyyy-MM-dd')
 
-  const { data: ownScheduledPosts = [], isLoading: ownPostsLoading } = useScheduledPosts(
+  const { data: ownScheduledPosts = [], isLoading: ownPostsLoading, isPlaceholderData: ownIsPlaceholder } = useScheduledPosts(
     undefined,
     { from_date: calendarFrom, to_date: calendarTo, compact: true },
   )
@@ -101,7 +101,10 @@ function Calendar() {
     staleTime: 120_000,
   })
 
-  const scheduledPosts = isAdminView ? adminScheduledPosts : ownScheduledPosts
+  // isMonthTransition: keepPreviousData is serving stale data for a *different* month range.
+  // Use empty array for the grid so old-month posts don't bleed into the new month's cells.
+  const isMonthTransition = !isAdminView && ownIsPlaceholder
+  const scheduledPosts = isMonthTransition ? [] : (isAdminView ? adminScheduledPosts : ownScheduledPosts)
   const postsLoading = isAdminView ? adminPostsLoading : ownPostsLoading
 
   const [view, setView] = useState<'month' | 'week'>('month')
@@ -538,8 +541,9 @@ function Calendar() {
               >
                 <ChevronLeft className="h-5 w-5 text-gray-700" />
               </button>
-              <h2 className="text-lg font-semibold text-gray-900 px-4">
+              <h2 className="text-lg font-semibold text-gray-900 px-4 flex items-center gap-2">
                 {format(currentMonth, 'MMMM yyyy')}
+                {isMonthTransition && <Loader2 className="h-4 w-4 text-gray-400 animate-spin" />}
               </h2>
               <button
                 onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
