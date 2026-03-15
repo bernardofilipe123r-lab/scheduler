@@ -287,7 +287,7 @@ export function WelcomePage() {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#6C5CE7] opacity-75" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-[#6C5CE7]" />
               </span>
-              <span className="text-[13px] font-semibold text-[#a78bfa]">AI-powered social media autopilot</span>
+              <span className="text-[13px] font-semibold text-[#a78bfa]">You're the visionary. Toby does the work.</span>
             </motion.div>
 
             {/* Headline */}
@@ -298,7 +298,7 @@ export function WelcomePage() {
                 transition={{ duration: 0.6, delay: 0.2 }}
                 className="block text-white"
               >
-                Your Social Media.
+                You Set the Vision.
               </motion.span>
               <motion.span
                 initial={{ opacity: 0, y: 20 }}
@@ -306,7 +306,7 @@ export function WelcomePage() {
                 transition={{ duration: 0.6, delay: 0.5 }}
                 className="block mt-1 sm:mt-2"
               >
-                <GradientText>On Autopilot.</GradientText>
+                <GradientText>Toby Makes It Happen.</GradientText>
               </motion.span>
             </h1>
 
@@ -318,16 +318,16 @@ export function WelcomePage() {
               className="mt-6 sm:mt-8 text-[15px] sm:text-[17px] md:text-[19px] text-gray-400 leading-relaxed max-w-[820px] mx-auto"
             >
               <span className="block">
-                AI that{' '}
+                You define your brand's voice and direction. Toby{' '}
                 <WordRotate
-                  words={['creates', 'schedules', 'publishes', 'learns']}
+                  words={['researches', 'creates', 'scores', 'publishes']}
                   className="text-white font-semibold"
                   duration={2200}
                 />{' '}
-                — across 6 platforms,
+                — across 6 platforms.
               </span>
               <span className="block mt-1">
-                so you don't have to.
+                You approve every piece before anything goes live.
               </span>
             </motion.div>
 
@@ -649,7 +649,7 @@ export function WelcomePage() {
             <div className="text-center mb-14 sm:mb-18">
               <SectionLabel>Everything you need</SectionLabel>
               <h2 className="text-[26px] sm:text-[38px] font-extrabold tracking-tight text-white mt-3">Three pillars. One platform.</h2>
-              <p className="mt-4 text-[16px] sm:text-[18px] text-gray-400 max-w-3xl mx-auto">Whether you want full control or full autopilot — ViralToby adapts to how you work.</p>
+              <p className="mt-4 text-[16px] sm:text-[18px] text-gray-400 max-w-3xl mx-auto">You're the content visionary — Toby is the analyst who figures out what goes viral in your niche and handles the boring part of making it.</p>
             </div>
           </Reveal>
 
@@ -662,7 +662,7 @@ export function WelcomePage() {
                     <MousePointerClick className="w-6 h-6 text-white" />
                   </div>
                   <h3 className="text-[20px] font-bold text-white mb-2">Create in Seconds</h3>
-                  <p className="text-[14px] text-gray-400 leading-relaxed mb-6">One click for autopilot. Or choose your topic, format, and style for full creative control.</p>
+                  <p className="text-[14px] text-gray-400 leading-relaxed mb-6">Set your Content DNA once — your brand voice, niche, and style. Toby takes it from there and creates content that sounds like you.</p>
 
                   <div className="bg-white/[0.04] rounded-xl p-4 space-y-3 border border-white/[0.06]">
                     {[
@@ -811,7 +811,7 @@ export function WelcomePage() {
             <Reveal>
               <div className="text-center mb-14 sm:mb-18">
                 <SectionLabel color="text-emerald-400">Real Results</SectionLabel>
-                <h2 className="text-[26px] sm:text-[38px] font-extrabold text-white tracking-tight mt-3">Creators growing on autopilot.</h2>
+                <h2 className="text-[26px] sm:text-[38px] font-extrabold text-white tracking-tight mt-3">Creators who work smarter, not harder.</h2>
               </div>
             </Reveal>
           </div>
@@ -852,14 +852,14 @@ export function WelcomePage() {
                     <div className="flex-1 text-center sm:text-left">
                       <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 mb-4">
                         <Crown className="w-3 h-3 text-emerald-400" />
-                        <span className="text-[11px] font-semibold text-emerald-400">Full Autopilot · Hero Story</span>
+                        <span className="text-[11px] font-semibold text-emerald-400">Visionary + Toby · Hero Story</span>
                       </div>
                       <h3 className="text-[28px] sm:text-[34px] font-extrabold text-white leading-tight">
                         0 → 100K<br />
                         <span className="text-emerald-400">in 2 months</span>
                       </h3>
                       <p className="mt-3 text-[14px] text-gray-400 leading-relaxed">
-                        <strong className="text-white">@thelongevitycollege</strong> connected their brand, set their Content DNA, and let Toby run. Zero manual content creation.
+                        <strong className="text-white">@thelongevitycollege</strong> set their Content DNA, defined their brand voice, and let Toby figure out what goes viral in their niche. They approve content in the Pipeline — Toby handles everything else.
                       </p>
                       <div className="mt-6 flex items-start gap-6">
                         <div className="text-center sm:text-left">
@@ -1335,10 +1335,10 @@ export function WelcomePage() {
         <div className="relative text-center max-w-2xl mx-auto z-10">
           <Reveal>
             <h2 className="text-[28px] sm:text-[42px] font-extrabold text-white tracking-tight leading-tight">
-              Ready to put your social<br />media on <GradientText>autopilot?</GradientText>
+              You focus on the vision.<br /><GradientText>Toby handles the rest.</GradientText>
             </h2>
             <p className="mt-5 text-[16px] sm:text-[18px] text-gray-400">
-              Join <strong className="text-white">2,917+</strong> creators who let Toby handle their content.
+              Join <strong className="text-white">2,917+</strong> creators who let Toby do the heavy lifting.
             </p>
             <p className="mt-1 text-[16px] sm:text-[18px] text-gray-400">
               Start free — <strong className="text-[#a78bfa]">7 days on us</strong>. No credit card required.
@@ -1372,7 +1372,7 @@ export function WelcomePage() {
                 <img src={vaLogo} alt="ViralToby" className="w-7 h-7 rounded-lg" />
                 <span className="text-[16px] font-bold text-white">ViralToby</span>
               </div>
-              <p className="text-[13px] text-gray-500 max-w-xs">AI-powered social media autopilot. Create, schedule, publish, and learn — across 6 platforms.</p>
+              <p className="text-[13px] text-gray-500 max-w-xs">You're the visionary. Toby researches, creates, scores, and publishes — across 6 platforms.</p>
             </div>
             <div className="flex gap-12">
               <div>
