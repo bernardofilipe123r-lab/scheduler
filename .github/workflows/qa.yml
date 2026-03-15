@@ -36,6 +36,9 @@ jobs:
         env:
           PIP_DISABLE_PIP_VERSION_CHECK: "1"
 
+      - name: Install system dependencies
+        run: sudo apt-get install -y ffmpeg
+
       # ── Fast checks ────────────────────────────────────
       - name: TypeScript build
         run: npm run build
