@@ -3,10 +3,10 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.db_connection import get_db
+from app.db_connection import get_db, SessionLocal
 from app.api.auth.middleware import get_current_user
 from app.models.jobs import GenerationJob
 from app.models.scheduling import ScheduledReel
@@ -333,13 +333,104 @@ async def reject_pipeline_item(
     return {"rejected": True, "job_id": job_id}
 
 
+def _bulk_schedule_background(job_ids: list[str], user: dict):
+    """Background task: schedule approved jobs sequentially (slot allocation)."""
+    db = SessionLocal()
+    try:
+        from app.services.publishing.scheduler import DatabaseSchedulerService
+
+        jobs = (
+            db.query(GenerationJob)
+            .filter(
+                GenerationJob.job_id.in_(job_ids),
+                GenerationJob.user_id == user["id"],
+                GenerationJob.pipeline_status == "approved",
+            )
+            .all()
+        )
+
+        for job in jobs:
+            try:
+                scheduler = DatabaseSchedulerService()
+                variant = job.variant or "light"
+
+                for brand_name in (job.brands or []):
+                    raw_brand_data = (job.brand_outputs or {}).get(brand_name, {})
+                    brand_items: list[dict] = (
+                        raw_brand_data
+                        if isinstance(raw_brand_data, list)
+                        else [raw_brand_data]
+                    )
+
+                    for brand_data in brand_items:
+                        if not isinstance(brand_data, dict):
+                            continue
+                        if brand_data.get("status") not in (
+                            "completed",
+                            "scheduled",
+                        ):
+                            continue
+
+                        if variant == "threads":
+                            slot_time = scheduler.get_next_available_post_slot(
+                                brand=brand_name
+                            )
+                        else:
+                            slot_time = scheduler.get_next_available_slot(
+                                brand=brand_name,
+                                variant=variant,
+                                user_id=user["id"],
+                            )
+
+                        caption = job.caption or brand_data.get("caption", "")
+                        slide_texts = brand_data.get("slide_texts") or job.content_lines
+
+                        item_idx = brand_data.get("content_index")
+                        base_reel_id = brand_data.get(
+                            "reel_id", f"{job.job_id}_{brand_name}"
+                        )
+                        reel_id = (
+                            f"{base_reel_id}_{item_idx}"
+                            if item_idx is not None
+                            else base_reel_id
+                        )
+
+                        scheduler.schedule_reel(
+                            user_id=user["id"],
+                            reel_id=reel_id,
+                            scheduled_time=slot_time,
+                            caption=caption,
+                            platforms=job.platforms or ["instagram"],
+                            video_path=brand_data.get("video_path"),
+                            thumbnail_path=brand_data.get("thumbnail_path"),
+                            yt_thumbnail_path=brand_data.get("yt_thumbnail_path"),
+                            brand=brand_name,
+                            variant=variant,
+                            post_title=job.title,
+                            slide_texts=slide_texts,
+                            carousel_paths=brand_data.get("carousel_paths"),
+                            job_id=job.job_id,
+                            created_by=job.created_by or "user",
+                        )
+            except Exception as e:
+                logger.error("Background scheduling failed for %s: %s", job.job_id, e)
+
+        db.commit()
+    except Exception as e:
+        logger.error("Background bulk-schedule task failed: %s", e)
+    finally:
+        db.close()
+
+
 @router.post("/bulk-approve")
 async def bulk_approve_pipeline_items(
     body: BulkApproveRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    """Approve multiple pipeline items. Processes sequentially to avoid slot collision."""
+    """Approve multiple pipeline items. Returns immediately; scheduling runs in background."""
+    now = datetime.now(timezone.utc)
     jobs = (
         db.query(GenerationJob)
         .filter(
@@ -353,18 +444,19 @@ async def bulk_approve_pipeline_items(
     if not jobs:
         raise HTTPException(status_code=404, detail="No pending pipeline items found")
 
-    results = []
+    # Mark all jobs as approved immediately
+    approved_ids = []
     for job in jobs:
-        try:
-            result = _approve_single_job(job, db, user)
-            results.append({"job_id": job.job_id, "approved": True, **result})
-        except Exception as e:
-            logger.error("Failed to approve %s: %s", job.job_id, e)
-            results.append({"job_id": job.job_id, "approved": False, "error": str(e)})
+        job.pipeline_status = "approved"
+        job.pipeline_reviewed_at = now
+        approved_ids.append(job.job_id)
 
     db.commit()
-    approved_count = sum(1 for r in results if r.get("approved"))
-    return {"approved": approved_count, "total": len(body.job_ids), "results": results}
+
+    # Schedule the actual slot allocation + reel creation in the background
+    background_tasks.add_task(_bulk_schedule_background, approved_ids, user)
+
+    return {"approved": len(approved_ids), "total": len(body.job_ids), "results": []}
 
 
 @router.post("/bulk-reject")

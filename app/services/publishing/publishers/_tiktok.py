@@ -108,22 +108,23 @@ class TikTokMixin:
             )
 
             error_block = init_data.get("error", {})
-            error_code = error_block.get("code", "")
-            error_msg_raw = error_block.get("message", "")
+            error_code = str(error_block.get("code", ""))
+            error_msg_raw = str(error_block.get("message", ""))
+            combined_error = f"{error_code} {error_msg_raw}".lower()
 
-            # Handle unaudited app
-            if (error_code != "ok" and
-                    "unaudited_client" in str(error_msg_raw).lower()):
-                print(f"   ⚠️ TikTok app is UNAUDITED — cannot post publicly. "
-                      f"Retrying with SELF_ONLY privacy. "
-                      f"Submit your app for audit at https://developers.tiktok.com/",
+            # Handle unaudited app — Direct Post audit is separate from app review
+            if (error_code != "ok" and "unaudited_client" in combined_error):
+                print(f"   ⚠️ TikTok Direct Post audit pending — cannot post publicly. "
+                      f"Retrying with SELF_ONLY privacy (posts to creator's account only). "
+                      f"Apply for Direct Post audit at TikTok Developer Portal → "
+                      f"Content Posting API → Direct Post → Apply",
                       flush=True)
                 privacy_level = "SELF_ONLY"
                 init_data = self._tiktok_init_publish(
                     fresh_token, tiktok_api, caption, video_size, privacy_level
                 )
                 error_block = init_data.get("error", {})
-                error_code = error_block.get("code", "")
+                error_code = str(error_block.get("code", ""))
 
             if error_code != "ok":
                 error_msg = f"TikTok init failed: {error_block.get('message', init_data)}"
@@ -194,7 +195,12 @@ class TikTokMixin:
     def _tiktok_init_publish(self, token: str, tiktok_api: str,
                              caption: str, video_size: int,
                              privacy_level: str) -> dict:
-        """Initialize a TikTok video publish with FILE_UPLOAD. Returns the JSON response."""
+        """Initialize a TikTok video publish with FILE_UPLOAD. Returns the JSON response.
+        
+        NOTE: Does NOT raise on HTTP errors — returns the JSON body so the
+        caller can inspect TikTok-specific error codes (e.g. unaudited_client)
+        and decide whether to retry with a different privacy_level.
+        """
         print(f"   📱 TikTok: Initializing video publish (FILE_UPLOAD, privacy={privacy_level})...", flush=True)
         init_resp = requests.post(
             f"{tiktok_api}/post/publish/video/init/",
@@ -220,8 +226,13 @@ class TikTokMixin:
             },
             timeout=30,
         )
-        init_resp.raise_for_status()
-        return init_resp.json()
+        # Always try to return JSON so caller can inspect TikTok error codes.
+        # Only raise for non-JSON responses (e.g. 5xx HTML error pages).
+        try:
+            return init_resp.json()
+        except ValueError:
+            init_resp.raise_for_status()
+            return {"error": {"code": "unknown", "message": init_resp.text[:500]}}
 
     def _poll_tiktok_status(self, publish_id: str, token: str, timeout_s: int = 180):
         """Poll TikTok video processing status until PUBLISH_COMPLETE."""
