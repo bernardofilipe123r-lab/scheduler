@@ -20,13 +20,11 @@ import {
 } from 'lucide-react'
 import { useAuth } from '@/features/auth'
 import { PlatformIcon } from '@/shared/components/PlatformIcon'
-import { ShimmerButton } from '@/shared/components/magicui/ShimmerButton'
 import { Marquee } from '@/shared/components/magicui/Marquee'
 import { Safari } from '@/shared/components/magicui/Safari'
 import { NumberTicker } from '@/shared/components/magicui/NumberTicker'
 import { WordRotate } from '@/shared/components/magicui/WordRotate'
 import { Particles } from '@/shared/components/magicui/Particles'
-import { BorderBeam } from '@/shared/components/magicui/BorderBeam'
 import { BackgroundBeams } from '@/shared/components/aceternity/BackgroundBeams'
 import vaLogo from '@/assets/icons/va-logo.svg'
 
@@ -148,7 +146,7 @@ const TIMELINE_STEPS = [
   { icon: Wand2, title: 'Create', desc: 'Generates scroll-stopping reels & carousels in your brand style', color: 'bg-blue-500', glow: 'shadow-blue-500/30' },
   { icon: Gauge, title: 'Score', desc: 'Quality-checks every piece across 5 dimensions. Only 80+ gets published', color: 'bg-violet-500', glow: 'shadow-violet-500/30' },
   { icon: Calendar, title: 'Schedule', desc: 'Picks optimal posting times based on your audience behavior', color: 'bg-emerald-500', glow: 'shadow-emerald-500/30' },
-  { icon: Send, title: 'Publish', desc: 'Posts across all 6 platforms simultaneously', color: 'bg-pink-500', glow: 'shadow-pink-500/30' },
+  { icon: Send, title: 'Publish', desc: 'Posts across all 6 platforms — after you review and approve content in your Pipeline. Nothing goes live without your sign-off.', color: 'bg-pink-500', glow: 'shadow-pink-500/30' },
   { icon: Brain, title: 'Learn', desc: 'Analyzes what worked, updates strategy, gets smarter every cycle', color: 'bg-amber-500', glow: 'shadow-amber-500/30' },
 ]
 
@@ -176,9 +174,9 @@ const TESTIMONIALS_ROW_2 = [
 
 const FAQS = [
   { q: 'What can I create with ViralToby?', a: 'Branded Reels (Instagram, Facebook, TikTok, YouTube Shorts), Carousel posts, and Threads. You define the format, choose your brand colors, set the content style — ViralToby renders everything with professional typography and visuals.' },
-  { q: 'What exactly does Toby do?', a: 'Toby is your autonomous AI agent. He researches trends in your niche, generates content ideas, creates reels and carousels, scores them for quality, schedules them, and publishes across all 6 platforms. He runs 24/7 — you don\'t need to lift a finger.' },
+  { q: 'What exactly does Toby do?', a: 'Toby is your AI content engine. He researches trends, generates content ideas, creates reels and carousels, and scores every piece for quality. Content lands in your Pipeline for human review — you approve, edit, or reject before anything goes live. Once approved, Toby handles scheduling and publishing across all 6 platforms.' },
   { q: 'How does Toby learn and get smarter?', a: 'Toby uses Thompson Sampling — a multi-armed bandit algorithm — to test different hooks, visual styles, and topics. Every piece he publishes teaches him more about what works for YOUR specific niche. He gets measurably better every week.' },
-  { q: 'Do I need to approve content before it goes live?', a: 'You\'re always in control. Content is quality-scored across 5 dimensions before it reaches your calendar. You can review, edit, reschedule, or regenerate anything. Or let Toby run fully autonomous — your choice.' },
+  { q: 'Do I need to approve content before it goes live?', a: 'Yes — always. Toby generates and quality-scores content, but nothing is ever published automatically. Every piece goes to your Pipeline for human review first. You approve, edit, reschedule, or reject it before anything goes live. ViralToby never posts to any platform without your explicit sign-off.' },
   { q: 'Which platforms are supported?', a: 'Instagram (Reels & Carousels), Facebook (Reels & Carousels), YouTube Shorts, TikTok, Threads, and Bluesky. Connect any combination per brand.' },
   { q: 'Can I manage multiple brands?', a: 'Yes. Each brand gets its own Content DNA, connected platforms, color scheme, posting schedule, and its own learning engine. Toby learns independently for each brand.' },
   { q: 'How is this different from Buffer or Hootsuite?', a: 'Those tools are calendars — you still create everything yourself. ViralToby creates the content, scores it, schedules it, publishes it, and learns from the results. It\'s an entire content team, not a posting tool.' },
@@ -241,9 +239,8 @@ export function WelcomePage() {
               ) : (
                 <>
                   <Link to="/login" className="text-[14px] font-medium text-gray-400 hover:text-white px-4 py-2 transition-colors">Sign In</Link>
-                  <Link to="/login" className="relative overflow-hidden bg-gradient-to-r from-[#6C5CE7] to-[#4834D4] hover:from-[#7C6CF7] hover:to-[#5844E4] text-white text-[14px] font-semibold px-5 py-2.5 rounded-xl shadow-lg shadow-[#6C5CE7]/25 transition-all hover:-translate-y-0.5 hover:shadow-[#6C5CE7]/40">
-                    <span className="absolute inset-0 overflow-hidden rounded-xl"><span className="absolute inset-[-100%] bg-gradient-to-r from-transparent via-white/20 to-transparent" style={{ animation: 'shimmer-btn 2s infinite' }} /></span>
-                    <span className="relative flex items-center gap-1.5"><Gift className="w-3.5 h-3.5" /> 7 Days Free</span>
+                  <Link to="/login" className="inline-flex items-center gap-1.5 bg-gradient-to-r from-[#6C5CE7] to-[#4834D4] hover:from-[#7C6CF7] hover:to-[#5844E4] text-white text-[14px] font-semibold px-5 py-2.5 rounded-xl shadow-lg shadow-[#6C5CE7]/25 transition-all hover:-translate-y-0.5">
+                    <Gift className="w-3.5 h-3.5" /> 7 Days Free
                   </Link>
                 </>
               )}
@@ -294,7 +291,7 @@ export function WelcomePage() {
             </motion.div>
 
             {/* Headline */}
-            <h1 className="text-[42px] sm:text-[56px] md:text-[72px] lg:text-[84px] font-extrabold tracking-[-0.04em] leading-[1.02]">
+            <h1 className="text-[32px] sm:text-[44px] md:text-[56px] lg:text-[66px] font-extrabold tracking-[-0.04em] leading-[1.02]">
               <motion.span
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -318,7 +315,7 @@ export function WelcomePage() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.8 }}
-              className="mt-6 sm:mt-8 text-[17px] sm:text-[20px] md:text-[22px] text-gray-400 leading-relaxed max-w-[820px] mx-auto"
+              className="mt-6 sm:mt-8 text-[15px] sm:text-[17px] md:text-[19px] text-gray-400 leading-relaxed max-w-[820px] mx-auto"
             >
               <span className="block">
                 AI that{' '}
@@ -367,7 +364,6 @@ export function WelcomePage() {
                   <Gift className="w-5 h-5" />
                   {ctaLabel}
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-                  <BorderBeam size={150} duration={8} colorFrom="#6C5CE7" colorTo="#00D2FF" />
                 </div>
               </Link>
               <button
@@ -377,6 +373,16 @@ export function WelcomePage() {
                 <Play className="w-4 h-4" /> See How It Works
               </button>
             </motion.div>
+
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.6, delay: 1.3 }}
+              className="mt-2 flex items-center justify-center gap-1.5 text-[11px] text-gray-600"
+            >
+              <Shield className="w-3 h-3" />
+              Human review required before any content is published
+            </motion.p>
 
             {/* Social proof with NumberTicker */}
             <motion.div
@@ -642,7 +648,7 @@ export function WelcomePage() {
           <Reveal>
             <div className="text-center mb-14 sm:mb-18">
               <SectionLabel>Everything you need</SectionLabel>
-              <h2 className="text-[32px] sm:text-[48px] font-extrabold tracking-tight text-white mt-3">Three pillars. One platform.</h2>
+              <h2 className="text-[26px] sm:text-[38px] font-extrabold tracking-tight text-white mt-3">Three pillars. One platform.</h2>
               <p className="mt-4 text-[16px] sm:text-[18px] text-gray-400 max-w-3xl mx-auto">Whether you want full control or full autopilot — ViralToby adapts to how you work.</p>
             </div>
           </Reveal>
@@ -747,7 +753,7 @@ export function WelcomePage() {
                     <Brain className="w-6 h-6 text-white" />
                   </div>
                   <h3 className="text-[20px] font-bold text-white mb-2">Toby Learns Your Brand</h3>
-                  <p className="text-[14px] text-gray-400 leading-relaxed mb-6">An AI agent that runs the entire cycle — and gets smarter every single day.</p>
+                  <p className="text-[14px] text-gray-400 leading-relaxed mb-6">An AI agent that runs the entire creation cycle — you review and approve every piece before it publishes.</p>
 
                   <div className="bg-white/[0.04] rounded-xl p-4 space-y-3 border border-white/[0.06]">
                     <div className="flex items-center justify-between">
@@ -805,7 +811,7 @@ export function WelcomePage() {
             <Reveal>
               <div className="text-center mb-14 sm:mb-18">
                 <SectionLabel color="text-emerald-400">Real Results</SectionLabel>
-                <h2 className="text-[32px] sm:text-[48px] font-extrabold text-white tracking-tight mt-3">Creators growing on autopilot.</h2>
+                <h2 className="text-[26px] sm:text-[38px] font-extrabold text-white tracking-tight mt-3">Creators growing on autopilot.</h2>
               </div>
             </Reveal>
           </div>
@@ -1009,8 +1015,8 @@ export function WelcomePage() {
                 <Bot className="w-5 h-5 text-violet-400" />
                 <span className="text-[16px] sm:text-[18px] font-bold text-violet-300">Meet Toby — Your AI Agent</span>
               </div>
-              <h2 className="text-[32px] sm:text-[48px] font-extrabold tracking-tight text-white">Six steps. Fully autonomous.</h2>
-              <p className="mt-4 text-[16px] sm:text-[18px] text-gray-400 max-w-2xl mx-auto">Toby runs this cycle every 5 minutes — finding, creating, scoring, scheduling, publishing, and learning from results.</p>
+              <h2 className="text-[26px] sm:text-[38px] font-extrabold tracking-tight text-white">Six steps. Fully autonomous.</h2>
+              <p className="mt-4 text-[15px] sm:text-[16px] text-gray-400 max-w-2xl mx-auto">Toby runs this cycle every 5 minutes — finding, creating, scoring, and scheduling. You review and approve content before it publishes.</p>
             </div>
           </Reveal>
 
@@ -1146,7 +1152,7 @@ export function WelcomePage() {
           <Reveal>
             <div className="text-center mb-14 sm:mb-18">
               <SectionLabel color="text-pink-400">Why ViralToby</SectionLabel>
-              <h2 className="text-[32px] sm:text-[48px] font-extrabold tracking-tight text-white mt-3">Your entire content team — in one AI.</h2>
+              <h2 className="text-[26px] sm:text-[38px] font-extrabold tracking-tight text-white mt-3">Your entire content team — in one AI.</h2>
               <p className="mt-4 text-[16px] sm:text-[18px] text-gray-400 max-w-4xl mx-auto">Professional content rendered in seconds — with your brand colors, typography, and voice. No designers, no copywriters, no scheduling tools.</p>
             </div>
           </Reveal>
@@ -1191,7 +1197,7 @@ export function WelcomePage() {
           <Reveal>
             <div className="text-center mb-14 sm:mb-18">
               <SectionLabel>Pricing</SectionLabel>
-              <h2 className="text-[32px] sm:text-[48px] font-extrabold tracking-tight text-white mt-3">The old way vs. The Toby way</h2>
+              <h2 className="text-[26px] sm:text-[38px] font-extrabold tracking-tight text-white mt-3">The old way vs. The Toby way</h2>
               <p className="mt-4 text-[16px] text-gray-400">Replace your agency, VA, and scheduling tool — for a fraction of the cost.</p>
             </div>
           </Reveal>
@@ -1222,11 +1228,8 @@ export function WelcomePage() {
 
           <Reveal delay={0.2}>
             <div className="text-center mt-10">
-              <Link to={ctaLink} className="relative group inline-block">
-                <div className="absolute -inset-1 bg-gradient-to-r from-[#6C5CE7] to-[#00D2FF] rounded-2xl blur-lg opacity-30 group-hover:opacity-60 transition-opacity" />
-                <ShimmerButton className="relative text-[16px]" background="linear-gradient(135deg, #6C5CE7, #4834D4)">
-                  <Gift className="w-4 h-4" /> {ctaLabel} <ArrowRight className="w-4 h-4" />
-                </ShimmerButton>
+              <Link to={ctaLink} className="inline-flex items-center gap-2.5 bg-gradient-to-r from-[#6C5CE7] to-[#4834D4] hover:from-[#7C6CF7] hover:to-[#5844E4] text-white text-[16px] font-semibold px-8 py-3.5 rounded-xl shadow-lg shadow-[#6C5CE7]/25 transition-all hover:-translate-y-0.5">
+                <Gift className="w-4 h-4" /> {ctaLabel} <ArrowRight className="w-4 h-4" />
               </Link>
               <p className="mt-3 text-[13px] text-gray-500">No credit card required</p>
             </div>
@@ -1242,7 +1245,7 @@ export function WelcomePage() {
           <Reveal>
             <div className="text-center mb-12 px-5 sm:px-8">
               <SectionLabel color="text-violet-400">Testimonials</SectionLabel>
-              <h2 className="text-[32px] sm:text-[44px] font-extrabold tracking-tight text-white mt-3">Loved by creators worldwide</h2>
+              <h2 className="text-[26px] sm:text-[36px] font-extrabold tracking-tight text-white mt-3">Loved by creators worldwide</h2>
             </div>
           </Reveal>
 
@@ -1308,7 +1311,7 @@ export function WelcomePage() {
         <div className="max-w-[700px] mx-auto relative">
           <Reveal>
             <div className="text-center mb-12 sm:mb-14">
-              <h2 className="text-[32px] sm:text-[44px] font-extrabold tracking-tight text-white">Frequently asked questions</h2>
+              <h2 className="text-[26px] sm:text-[36px] font-extrabold tracking-tight text-white">Frequently asked questions</h2>
             </div>
           </Reveal>
 
@@ -1331,7 +1334,7 @@ export function WelcomePage() {
 
         <div className="relative text-center max-w-2xl mx-auto z-10">
           <Reveal>
-            <h2 className="text-[34px] sm:text-[52px] font-extrabold text-white tracking-tight leading-tight">
+            <h2 className="text-[28px] sm:text-[42px] font-extrabold text-white tracking-tight leading-tight">
               Ready to put your social<br />media on <GradientText>autopilot?</GradientText>
             </h2>
             <p className="mt-5 text-[16px] sm:text-[18px] text-gray-400">
@@ -1343,11 +1346,10 @@ export function WelcomePage() {
             <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link to={ctaLink} className="relative group">
                 <div className="absolute -inset-1.5 bg-gradient-to-r from-[#6C5CE7] to-[#00D2FF] rounded-2xl blur-xl opacity-40 group-hover:opacity-70 transition-opacity" />
-                <div className="relative overflow-hidden bg-gradient-to-r from-[#6C5CE7] to-[#4834D4] text-white text-[17px] sm:text-[19px] font-bold px-10 py-4.5 sm:px-12 sm:py-5 rounded-xl shadow-2xl shadow-[#6C5CE7]/30 transition-all hover:-translate-y-0.5 flex items-center gap-3">
+                <div className="relative overflow-hidden bg-gradient-to-r from-[#6C5CE7] to-[#4834D4] text-white text-[16px] sm:text-[17px] font-bold px-10 py-4 sm:px-12 sm:py-4.5 rounded-xl shadow-2xl shadow-[#6C5CE7]/30 transition-all hover:-translate-y-0.5 flex items-center gap-3">
                   <Gift className="w-5 h-5" />
                   {ctaLabel}
                   <ArrowRight className="w-5 h-5 group-hover:translate-x-0.5 transition-transform" />
-                  <BorderBeam size={150} duration={8} colorFrom="#6C5CE7" colorTo="#00D2FF" />
                 </div>
               </Link>
             </div>
