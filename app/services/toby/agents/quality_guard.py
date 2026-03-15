@@ -259,12 +259,12 @@ def quality_guard_sweep(db: Session, user_id: str) -> dict:
             occupied[(brand, type_group, new_hk)] = occupied.get((brand, type_group, new_hk), 0) + 1
             summary["slots_repositioned"] += 1
         else:
-            _cancel_reel(
-                db, reel,
-                reason=f"Quality Guard: wrong slot hour {current_hour:02d}, no valid slot available within 90 days of {reel.scheduled_time.strftime('%Y-%m-%d')}",
-                layer="E"
-            )
-            summary["fallbacks_cancelled"] += 1
+            # No valid slot found — leave the item in place rather than failing it.
+            # It will be retried on the next tick when slots may have freed up.
+            old_key_restore = (brand, type_group, old_hk)
+            occupied[old_key_restore] = occupied.get(old_key_restore, 0) + 1
+            print(f"[TOBY-QG] Layer E: No valid slot for {reel.schedule_id} "
+                  f"(hour {current_hour:02d}), leaving in place", flush=True)
 
     # ── Layer C: Time-slot collisions (same brand + same content type + same hour) ─
     # Uses repair_candidates (90-day window). Keeps the first item (earliest
@@ -283,13 +283,30 @@ def quality_guard_sweep(db: Session, user_id: str) -> dict:
 
         if key in seen_slots:
             original = seen_slots[key]
-            _cancel_reel(
-                db, reel,
-                reason=f"Quality Guard: slot collision with {original.schedule_id} "
-                       f"at {hour_key} — cancelling duplicate",
-                layer="C"
+            # Collision — try to reposition the duplicate to next valid slot
+            offset = brand_offsets.get(brand, 0)
+            valid_hours = _get_valid_hours(offset, type_group)
+            # Free the current slot in occupied map
+            occupied[key] = max(0, occupied.get(key, 0) - 1)
+            search_from = max(now, reel.scheduled_time - timedelta(days=1))
+            new_slot = _find_next_valid_slot(
+                valid_hours, occupied, brand, type_group, search_from, max_days=90
             )
-            summary["slot_dupes_cancelled"] += 1
+            if new_slot:
+                _reposition_reel(
+                    db, reel, new_slot,
+                    reason=f"Quality Guard: slot collision with {original.schedule_id} "
+                           f"at {hour_key} — repositioned to {new_slot.strftime('%Y-%m-%d %H:%M')}",
+                    layer="C"
+                )
+                new_hk = new_slot.strftime("%Y-%m-%d %H")
+                occupied[(brand, type_group, new_hk)] = occupied.get((brand, type_group, new_hk), 0) + 1
+                summary["slots_repositioned"] += 1
+            else:
+                # No slot available — leave in place, retry next tick
+                occupied[key] = occupied.get(key, 0) + 1
+                print(f"[TOBY-QG] Layer C: No valid slot for collision {reel.schedule_id} "
+                      f"at {hour_key}, leaving in place", flush=True)
         else:
             seen_slots[key] = reel
 
