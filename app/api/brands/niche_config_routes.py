@@ -945,6 +945,141 @@ OUTPUT FORMAT (JSON only):
     raise HTTPException(status_code=500, detail="Failed to generate reel examples")
 
 
+# --- Generate Format B reel examples endpoint ---
+
+_SEED_FORMAT_B_EXAMPLES = [
+    {
+        "title": "Uber just put a flying taxi in your pocket",
+        "post": "Uber Air is now letting users book fully electric aerial rides directly through the same app already on your phone, bringing silent, clean, and fast air travel to cities in a way that was considered science fiction less than a decade ago. No fuel, no noise, no traffic, just a 100% electric aircraft lifting you above the gridlock. The sky is no longer reserved for the wealthy. The era of aerial commuting just became bookable.",
+    },
+    {
+        "title": "Gas prices are exploding across the entire country",
+        "post": "Los Angeles just gave everyone a preview of what is coming. One LA station has already flipped its sign to $8 a gallon. A number that would have been unthinkable just weeks ago, and the rest of the country is following the same trajectory as the Iran conflict continues to strangle global oil supply. This is not isolated to California, this is a national repricing of energy happening in real time.",
+    },
+    {
+        "title": "Gen Z is getting hired and fired faster than any generation before them",
+        "post": "Companies across the country are bringing on young workers and cutting them loose within weeks, with managers citing poor communication, lack of work ethic, inability to handle feedback, and an entitlement mindset that clashes with every professional environment they enter. Some employers are now openly admitting they regret hiring Gen Z candidates at all.",
+    },
+    {
+        "title": "Private islands are money pits disguised as paradise",
+        "post": "Richard Branson's Necker Island costs $100 million to buy, then bleeds cash through staff salaries, generator fuel, storm repairs, and boat maintenance that never stops. Islands create infrastructure problems that mansions avoid because you're responsible for water, power, waste, and emergency systems that governments normally handle. Buying the island is cheap compared to funding it forever.",
+    },
+]
+
+
+class GenerateFormatBExamplesBatchRequest(BaseModel):
+    count: int = Field(default=10, ge=1, le=50)
+
+
+@router.post("/generate-format-b-examples-batch")
+async def generate_format_b_examples_batch(
+    request: GenerateFormatBExamplesBatchRequest,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Generate Format B reel examples via DeepSeek using seed examples + user's brand config."""
+    user_id = user["id"]
+    rate_limit(user_id, "generate-format-b-examples-batch", max_requests=3, window_seconds=60)
+    service = get_niche_config_service()
+    ctx = service.get_context(user_id=user_id, db=db)
+
+    # Require General section to be filled
+    if not ctx.content_brief and not ctx.niche_name:
+        raise HTTPException(status_code=400, detail="Fill in the General section first (niche name and content brief)")
+
+    api_key = os.getenv("DEEPSEEK_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="AI service not configured")
+
+    # Build brand context from General info
+    brand_context_parts = []
+    if ctx.niche_name:
+        brand_context_parts.append(f"Niche: {ctx.niche_name}")
+    if ctx.content_brief:
+        brand_context_parts.append(f"Content brief: {ctx.content_brief}")
+    if ctx.content_tone:
+        brand_context_parts.append(f"Tone: {', '.join(ctx.content_tone)}")
+    brand_context = "\n".join(brand_context_parts)
+
+    # Format seed examples
+    seed_block = ""
+    for ex in _SEED_FORMAT_B_EXAMPLES:
+        seed_block += f"\nTitle: {ex['title']}\nPost: {ex['post']}\n"
+
+    def _build_format_b_prompt(count: int, brand_ctx: str, seed: str, exclude_titles: list[str] | None = None) -> str:
+        exclusion = ""
+        if exclude_titles:
+            exclusion = "\n\nALREADY GENERATED TITLES (do NOT repeat or rephrase any of these):\n"
+            for t in exclude_titles:
+                exclusion += f"- {t}\n"
+        return f"""You are a viral short-form content expert specializing in story-based narration posts. Generate {count} Format B reel content ideas in the format Title + Post for a brand with this identity:
+
+{brand_ctx}
+
+Here are 4 examples from the Business/Tech niche to show you the EXACT format and style. Adapt the same format, energy, and structure for the brand's niche described above:
+
+{seed}{exclusion}
+
+RULES:
+- Each reel has a Title (attention-grabbing, sentence case — NOT all caps, 6-14 words) and a Post (a single paragraph of story-based narration, 3-6 sentences)
+- The post should read like a compelling micro-story or news-style narration — not a list of facts
+- The post should be informative, dramatic, and engaging — each sentence builds on the previous one
+- Do NOT include CTAs like "Follow for more" — those are added automatically
+- Titles must vary in opening patterns: use revelations, warnings, surprising claims, bold statements
+- Every idea must be unique — never repeat a topic across the {count} posts
+- Adapt the TOPICS to match the brand's niche, but keep the same viral storytelling format
+
+OUTPUT FORMAT (JSON only):
+{{{{
+    "examples": [
+        {{{{
+            "title": "Title in sentence case",
+            "post": "A single paragraph of 3-6 sentences of story-based narration..."
+        }}}},
+        ...
+    ]
+}}}}"""
+
+    async def _generate_format_b_batch(count: int, exclude_titles: list[str] | None = None) -> list[dict]:
+        prompt = _build_format_b_prompt(count, brand_context, seed_block, exclude_titles)
+        response = await asyncio.to_thread(_deepseek_call, api_key, prompt, 0.9, 8192, 120)
+        if response.status_code != 200:
+            logger.error("DeepSeek Format B batch returned %s: %s", response.status_code, response.text[:500])
+            raise HTTPException(status_code=502, detail=f"AI service returned {response.status_code}")
+        result = _parse_deepseek_json(response)
+        return result.get("examples", [])
+
+    try:
+        # Split into 2 batches to stay within DeepSeek's 8K output token limit
+        batch_size = 25
+        first_count = min(batch_size, request.count)
+        first_batch = await _generate_format_b_batch(first_count)
+
+        all_examples = first_batch[:first_count]
+
+        remaining = request.count - len(all_examples)
+        if remaining > 0:
+            used_titles = [r.get("title", "") for r in all_examples]
+            second_batch = await _generate_format_b_batch(remaining, exclude_titles=used_titles)
+            all_examples.extend(second_batch[:remaining])
+
+        return {
+            "examples": [
+                {
+                    "title": ex.get("title", ""),
+                    "post": ex.get("post", ""),
+                }
+                for ex in all_examples
+            ]
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Format B examples batch generation failed: %s", e, exc_info=True)
+
+    raise HTTPException(status_code=500, detail="Failed to generate Format B examples")
+
+
 # --- Suggest YouTube Titles endpoint ---
 
 @router.post("/suggest-yt-titles")

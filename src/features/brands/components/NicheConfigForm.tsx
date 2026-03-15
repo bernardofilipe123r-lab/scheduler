@@ -1,15 +1,13 @@
 import { useState, useEffect, useCallback, useMemo, useRef, forwardRef, useImperativeHandle } from 'react'
-import { Save, Loader2, Dna, Sparkles, Film, LayoutGrid, Plus, Trash2, RefreshCw, ChevronDown, ChevronRight, Check, Instagram, Download } from 'lucide-react'
+import { Save, Loader2, Dna, Sparkles, Plus, Trash2, ChevronDown, ChevronRight, Check, Instagram } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { useNicheConfig, useUpdateNicheConfig, useAiUnderstanding, useReelPreview, useSuggestYtTitles, useImportFromInstagram } from '../api/use-niche-config'
+import { useNicheConfig, useUpdateNicheConfig, useImportFromInstagram } from '../api/use-niche-config'
 import { useContentDNAProfile, useUpdateContentDNA } from '@/features/content-dna'
 import { useBrands } from '../api/use-brands'
 import { apiClient } from '@/shared/api/client'
 import { getConfigStrength } from '../types/niche-config'
 import { ContentExamplesSection } from './ContentExamplesSection'
 import type { NicheConfig, FormatBReelExample } from '../types/niche-config'
-import { PostCanvas, DEFAULT_GENERAL_SETTINGS, getBrandConfig } from '@/shared/components/PostCanvas'
-import { CarouselTextSlide } from '@/shared/components/CarouselTextSlide'
 import { NicheConfigSkeleton } from '@/shared/components'
 
 const CONTENT_BRIEF_PLACEHOLDER = `Example for Health & Wellness (@thelongevitycollege):
@@ -182,27 +180,6 @@ function FormatBExampleCard({
   )
 }
 
-// Preload fonts needed by Konva canvas components via Google Fonts CSS API
-function useFontPreload() {
-  const [loaded, setLoaded] = useState(false)
-  useEffect(() => {
-    // Inject Google Fonts stylesheet (avoids hardcoded woff2 URLs that 404)
-    const linkId = 'konva-preview-fonts'
-    if (!document.getElementById(linkId)) {
-      const link = document.createElement('link')
-      link.id = linkId
-      link.rel = 'stylesheet'
-      link.href = 'https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;600&display=swap'
-      document.head.appendChild(link)
-    }
-    // Wait for all fonts (including Google Fonts) to finish loading
-    document.fonts.ready.then(() => {
-      setTimeout(() => setLoaded(true), 150)
-    })
-  }, [])
-  return loaded
-}
-
 export interface NicheConfigFormProps {
   /** When set, only render this single section (no save bar, no strength meter, no AI block). */
   section?: 'general' | 'reels' | 'posts'
@@ -223,7 +200,7 @@ export interface NicheConfigFormHandle {
   saveNow: () => Promise<void>
 }
 
-export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigFormProps>(function NicheConfigForm({ section, onGeneratingChange, onYtValidChange, ytConnected, onNicheNameChange, dnaId } = {}, ref) {
+export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigFormProps>(function NicheConfigForm({ section, onGeneratingChange, onYtValidChange, onNicheNameChange, dnaId } = {}, ref) {
   // Legacy NicheConfig hooks (used when no dnaId)
   const nicheQuery = useNicheConfig()
   // Content DNA hooks (used when dnaId is provided)
@@ -239,76 +216,25 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
   const updateMutation = dnaId
     ? { mutateAsync: async (payload: Record<string, unknown>) => { await updateDnaMutation.mutateAsync({ dnaId, data: payload }); return payload }, isPending: updateDnaMutation.isPending }
     : legacyUpdateMutation
-  const aiMutation = useAiUnderstanding()
-  const reelPreviewMutation = useReelPreview()
-  const ytSuggestMutation = useSuggestYtTitles()
   const importIgMutation = useImportFromInstagram()
-  const fontsReady = useFontPreload()
 
   const [values, setValues] = useState<NicheConfig>(DEFAULT_CONFIG)
   const [dirty, setDirty] = useState(false)
-  const [aiResult, setAiResult] = useState<{
-    understanding: string
-    example_reel: { title: string; content_lines: string[] } | null
-    example_post: { title: string; slides: string[]; study_ref?: string } | null
-  } | null>(null)
-  const [reelImages, setReelImages] = useState<{
-    thumbnail_base64: string
-    content_base64: string
-  } | null>(null)
-  const [skipYt, setSkipYt] = useState(false)
   const [importAttempts, setImportAttempts] = useState(0)
   const [importCooldownUntil, setImportCooldownUntil] = useState<number>(0)
+  const [formatBGenerating, setFormatBGenerating] = useState(false)
 
   // Report niche_name state to parent (e.g. Onboarding step 4 validation)
   useEffect(() => {
     if (onNicheNameChange) onNicheNameChange(Boolean(values.niche_name?.trim()))
   }, [values.niche_name, onNicheNameChange])
 
-  // Auto-skip YouTube section during onboarding when YT is not connected
-  useEffect(() => {
-    if (section === 'reels' && ytConnected === false) setSkipYt(true)
-  }, [section, ytConnected])
-
-  // Report reels step validity to parent (YT titles valid AND enough reel examples)
+  // Report reels step validity to parent (enough reel examples)
   useEffect(() => {
     if (section !== 'reels' || !onYtValidChange) return
-    const ytHidden = section === 'reels' && ytConnected === false
-    const hasGoodTitles = (values.yt_title_examples || []).some(t => t.trim().length > 0)
     const hasEnoughReels = values.reel_examples.length >= 10
-    onYtValidChange((ytHidden || skipYt || hasGoodTitles) && hasEnoughReels)
-  }, [skipYt, values.yt_title_examples, values.reel_examples.length, section, onYtValidChange, ytConnected])
-
-  // Pick a random brand for carousel previews — stable for the whole component lifetime
-  const previewBrand = useMemo(() => {
-    const available = brandsData?.map(b => b.id) || []
-    return available[Math.floor(Math.random() * available.length)] || ''
-  }, [brandsData])
-
-  // Effective brand for reel preview API
-  const effectiveBrand = previewBrand
-
-  // Brand data from DB for the effective brand (handle, display name, color)
-  const effectiveBrandData = useMemo(
-    () => brandsData?.find(b => b.id === effectiveBrand),
-    [brandsData, effectiveBrand]
-  )
-
-  // Fetch brand logo URL from theme endpoint
-  const [brandLogoUrl, setBrandLogoUrl] = useState<string | null>(null)
-  useEffect(() => {
-    if (!effectiveBrand) { setBrandLogoUrl(null); return }
-    apiClient.get<{ theme?: { logo?: string } }>(`/api/brands/${effectiveBrand}/theme`)
-      .then(data => {
-        const logo = data.theme?.logo
-        if (logo) {
-          setBrandLogoUrl(logo.startsWith('http') ? logo : `/brand-logos/${logo}`)
-        } else {
-          setBrandLogoUrl(null)
-        }
-      })
-      .catch(() => setBrandLogoUrl(null))
-  }, [effectiveBrand])
+    onYtValidChange(hasEnoughReels)
+  }, [values.reel_examples.length, section, onYtValidChange])
 
   useEffect(() => {
     if (data) {
@@ -327,32 +253,6 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
       setDirty(false)
     }
   }, [data])
-
-  // On mount: restore persisted AI result from localStorage
-  useEffect(() => {
-    const storageKey = 'ai-understanding-global'
-    try {
-      const saved = localStorage.getItem(storageKey)
-      if (!saved) return
-      const parsed = JSON.parse(saved)
-      setAiResult(parsed)
-      setReelImages(null)
-      // Re-render reel images from cached result (fast, no AI call needed)
-      if (parsed.example_reel) {
-        reelPreviewMutation.mutate(
-          {
-            brand_id: effectiveBrand,
-            title: parsed.example_reel.title,
-            content_lines: parsed.example_reel.content_lines,
-          },
-          { onSuccess: setReelImages },
-        )
-      }
-    } catch {
-      localStorage.removeItem(storageKey)
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
   const update = <K extends keyof NicheConfig>(key: K, value: NicheConfig[K]) => {
     setValues((prev) => ({ ...prev, [key]: value }))
@@ -410,15 +310,13 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
   )
   const reelsComplete = Boolean(
     values.reel_examples.length >= 5 &&
-    values.cta_options.some(o => o.text?.trim()) &&
-    values.yt_title_examples?.length
+    values.cta_options.some(o => o.text?.trim())
   )
   const postsComplete = Boolean(
     values.post_examples.length >= 1 &&
     values.carousel_cta_options.some(o => o.text?.trim()) &&
     values.citation_style && values.citation_style !== 'none'
   )
-  const aiComplete = Boolean(aiResult)
 
   // Find first brand with Instagram connected (for "Import from Instagram" feature)
   const igBrand = useMemo(
@@ -486,49 +384,33 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
   // Expose saveNow so parent (e.g. Onboarding) can flush before unmounting this form
   useImperativeHandle(ref, () => ({ saveNow: flushSave }), [flushSave])
 
-  const handleAiUnderstanding = useCallback(async () => {
-    // Flush unsaved changes before AI reads from DB
+  // Generate Format B examples via AI
+  const handleGenerateFormatB = useCallback(async (count: number) => {
     await flushSave()
-    setAiResult(null)
-    setReelImages(null)
-    const storageKey = 'ai-understanding-global'
+    setFormatBGenerating(true)
     try {
-      // Step 1: AI text generation (~15–30s)
-      const result = await aiMutation.mutateAsync()
-
-      // Persist immediately so results survive if user navigates away during reel render
-      localStorage.setItem(storageKey, JSON.stringify(result))
-      setAiResult(result)
-
-      // Step 2: Reel image rendering (non-blocking — result already visible)
-      if (result.example_reel) {
-        try {
-          const preview = await reelPreviewMutation.mutateAsync({
-            brand_id: effectiveBrand,
-            title: result.example_reel.title,
-            content_lines: result.example_reel.content_lines,
-          })
-          setReelImages(preview)
-        } catch {
-          toast.error('Reel render failed — showing text results only')
-        }
+      const result = await apiClient.post<{ examples: FormatBReelExample[] }>(
+        '/api/v2/brands/niche-config/generate-format-b-examples-batch',
+        { count },
+        { timeout: 180_000 },
+      )
+      const newExamples = result.examples || []
+      if (newExamples.length > 0) {
+        update('format_b_reel_examples', [...(values.format_b_reel_examples || []), ...newExamples])
+        toast.success(`${newExamples.length} Format B examples generated — you now have ${(values.format_b_reel_examples || []).length + newExamples.length} total`)
+      } else {
+        toast.error('AI returned no examples — try again')
       }
     } catch {
-      toast.error('Failed to generate AI understanding')
+      toast.error('Format B AI generation failed — try again')
+    } finally {
+      setFormatBGenerating(false)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveBrand])
+  }, [flushSave, values.format_b_reel_examples])
 
-  const handleRegenerate = useCallback(() => {
-    localStorage.removeItem('ai-understanding-global')
-    setAiResult(null)
-    setReelImages(null)
-    handleAiUnderstanding()
-  }, [handleAiUnderstanding])
-
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({ general: false, reels: false, posts: false, ai: false })
-  const toggleSection = (key: string) => setCollapsed(prev => ({ ...prev, [key]: !prev[key] }))
   const [dnaTab, setDnaTab] = useState<'general' | 'reels' | 'posts'>('general')
+  const [reelsSubTab, setReelsSubTab] = useState<'format_a' | 'format_b' | 'ctas'>('format_a')
 
   if (isLoading) return <NicheConfigSkeleton />
 
@@ -536,6 +418,9 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
   const showGeneral = section ? section === 'general' : dnaTab === 'general'
   const showReels = section ? section === 'reels' : dnaTab === 'reels'
   const showPosts = section ? section === 'posts' : dnaTab === 'posts'
+
+  const formatACount = values.reel_examples.length
+  const formatBCount = (values.format_b_reel_examples || []).length
 
   return (
     <div className="space-y-4 min-w-0">
@@ -579,9 +464,9 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
         <div className="px-6 border-t border-gray-100">
           <nav className="flex gap-1">
             {([
-              { key: 'general' as const, label: '🧬 General', complete: generalComplete },
-              { key: 'reels' as const, label: '🎬 Reels', complete: reelsComplete },
-              { key: 'posts' as const, label: '📱 Carousel', complete: postsComplete },
+              { key: 'general' as const, label: 'General', complete: generalComplete },
+              { key: 'reels' as const, label: 'Reels', complete: reelsComplete },
+              { key: 'posts' as const, label: 'Carousel', complete: postsComplete },
             ]).map(({ key, label, complete }) => (
               <button
                 key={key}
@@ -619,20 +504,15 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
                 <button
                   type="button"
                   onClick={handleImportFromInstagram}
-                  disabled={importIgMutation.isPending || importCooldownUntil > Date.now()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-medium transition-colors"
+                  disabled={importIgMutation.isPending || (importCooldownUntil > Date.now())}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-purple-700 bg-white border border-purple-300 rounded-lg hover:bg-purple-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {importIgMutation.isPending ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      Analysing…
-                    </>
+                    <Loader2 className="w-3 h-3 animate-spin" />
                   ) : (
-                    <>
-                      <Download className="w-3.5 h-3.5" />
-                      Import
-                    </>
+                    <Sparkles className="w-3 h-3" />
                   )}
+                  {importIgMutation.isPending ? 'Analysing...' : 'Import'}
                 </button>
               </div>
             </div>
@@ -640,28 +520,27 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
 
           {/* Niche Name */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Niche Name</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Niche Name <span className="text-red-500">*</span></label>
             <input
               value={values.niche_name}
               onChange={(e) => update('niche_name', e.target.value)}
-              placeholder="Example: Health & Wellness"
+              placeholder="e.g. Health & Wellness"
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
-            <p className="text-xs text-gray-400 mt-1">A short label for your niche (e.g. "Health & Wellness", "Personal Finance")</p>
           </div>
 
           {/* Content Brief */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Content Brief</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Content Brief <span className="text-red-500">*</span></label>
             <textarea
               value={values.content_brief}
               onChange={(e) => update('content_brief', e.target.value)}
               placeholder={CONTENT_BRIEF_PLACEHOLDER}
-              rows={10}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-y font-mono"
+              rows={8}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-y"
             />
             <p className="text-xs text-gray-400 mt-1">
-              Describe everything the AI needs to know: topics, tone, audience, style, philosophy. This goes directly into every prompt.
+              Describe your brand's content in detail. Include topics, tone, target audience, and what to avoid.
             </p>
           </div>
 
@@ -669,278 +548,279 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
       </div>}
 
       {/* ═══════════════════════════════════════════════════════════════════
-          BLOCK 2: REELS
+          BLOCK 2: REELS — with sub-tabs (Format A | Format B | CTAs)
          ═══════════════════════════════════════════════════════════════════ */}
       {showReels && <div className="bg-white rounded-xl border border-gray-200">
+        {/* Sub-tab navigation */}
+        <div className="px-6 pt-4 border-b border-gray-100">
+          <nav className="flex gap-1">
+            {([
+              { key: 'format_a' as const, label: 'Format A', count: formatACount },
+              { key: 'format_b' as const, label: 'Format B', count: formatBCount },
+              { key: 'ctas' as const, label: 'CTAs', count: null },
+            ]).map(({ key, label, count }) => (
+              <button
+                key={key}
+                onClick={() => setReelsSubTab(key)}
+                className={`flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                  reelsSubTab === key
+                    ? 'border-primary-500 text-primary-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                {label}
+                {count !== null && (
+                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
+                    count >= 10 ? 'bg-emerald-100 text-emerald-700' :
+                    count > 0 ? 'bg-amber-100 text-amber-700' :
+                    'bg-gray-100 text-gray-500'
+                  }`}>
+                    {count}
+                  </span>
+                )}
+              </button>
+            ))}
+          </nav>
+        </div>
+
         <div className="px-6 py-5 space-y-6">
           {!generalFilled && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-center">
               <p className="text-sm text-amber-700 font-medium">Fill in the General section first</p>
-              <p className="text-xs text-amber-600 mt-0.5">Add your niche name and content brief to unlock AI-powered reel generation.</p>
+              <p className="text-xs text-amber-600 mt-0.5">Add your niche name and content brief to unlock AI-powered generation.</p>
             </div>
           )}
-          {/* Reel Examples */}
-          <div>
-            <h4 className="text-sm font-medium text-gray-700 mb-1">📝 Reel Examples ({values.reel_examples.length}/10 minimum)</h4>
-            <p className="text-xs text-gray-400 mb-3">
-              You need at least <strong className="text-gray-600">10 reel examples</strong> to continue. The AI learns directly from your examples — more examples means better content.
-            </p>
-            {values.reel_examples.length < 10 && values.reel_examples.length > 0 && (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
-                <p className="text-xs text-amber-700">
-                  <strong>{10 - values.reel_examples.length} more</strong> reel example{10 - values.reel_examples.length === 1 ? '' : 's'} needed to continue. Use "Generate 10 reels with AI" for a quick start.
-                </p>
-              </div>
-            )}
-            <ContentExamplesSection
-              reelExamples={values.reel_examples}
-              postExamples={values.post_examples}
-              onReelExamplesChange={(v) => update('reel_examples', v)}
-              onPostExamplesChange={(v) => update('post_examples', v)}
-              showOnly="reels"
-              generalFilled={generalFilled}
-              nicheName={values.niche_name}
-              contentBrief={values.content_brief}
-              onBeforeGenerate={flushSave}
-              onGeneratingChange={onGeneratingChange}
-            />
-          </div>
 
-          {/* Format B Reel Examples */}
-          <div className="border-t border-gray-100 pt-5">
-            <h4 className="text-sm font-medium text-gray-700 mb-1">📰 Format B Reel Examples ({(values.format_b_reel_examples || []).length})</h4>
-            <p className="text-xs text-gray-400 mb-3">
-              Format B reels are <strong className="text-gray-600">story-based</strong> — each example has a title and a paragraph of text (not line-by-line like Format A). The AI learns your storytelling style from these examples.
-            </p>
-            {(values.format_b_reel_examples || []).length === 0 ? (
-              <div className="text-center py-6 border border-dashed border-gray-300 rounded-lg">
-                <p className="text-gray-500 text-sm mb-1">No Format B examples yet</p>
-                <p className="text-gray-400 text-xs mb-3">Add examples to teach the AI your story-based reel style.</p>
-                <button
-                  type="button"
-                  onClick={() => update('format_b_reel_examples', [...(values.format_b_reel_examples || []), { title: '', post: '' }])}
-                  className="text-sm text-primary-600 hover:text-primary-700 flex items-center gap-1 mx-auto"
-                >
-                  <Plus className="w-4 h-4" /> Add Format B Example
-                </button>
-              </div>
-            ) : (
-              <>
-                <div className="space-y-2">
-                  {(values.format_b_reel_examples || []).map((ex: FormatBReelExample, i: number) => (
-                    <FormatBExampleCard
-                      key={i}
-                      example={ex}
-                      index={i}
-                      onChange={(updated) => {
-                        const examples = [...(values.format_b_reel_examples || [])]
-                        examples[i] = updated
-                        update('format_b_reel_examples', examples)
-                      }}
-                      onDelete={() => {
-                        update('format_b_reel_examples', (values.format_b_reel_examples || []).filter((_: FormatBReelExample, j: number) => j !== i))
-                      }}
-                    />
-                  ))}
+          {/* ── FORMAT A SUB-TAB ── */}
+          {reelsSubTab === 'format_a' && (
+            <div>
+              <h4 className="text-sm font-medium text-gray-700 mb-1">Reel Examples ({formatACount}/10 minimum)</h4>
+              <p className="text-xs text-gray-400 mb-3">
+                Format A reels are <strong className="text-gray-600">line-based</strong> — each has a title + punchy content lines. You need at least <strong className="text-gray-600">10 examples</strong>. More = better.
+              </p>
+              {formatACount < 10 && formatACount > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
+                  <p className="text-xs text-amber-700">
+                    <strong>{10 - formatACount} more</strong> example{10 - formatACount === 1 ? '' : 's'} needed. Use "Generate 10 reels with AI" for a quick start.
+                  </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => update('format_b_reel_examples', [...(values.format_b_reel_examples || []), { title: '', post: '' }])}
-                  disabled={(values.format_b_reel_examples || []).length >= 50}
-                  className="mt-2 text-sm text-primary-600 hover:text-primary-700 flex items-center gap-1 disabled:opacity-50"
-                >
-                  <Plus className="w-4 h-4" /> Add Format B Example
-                </button>
-              </>
-            )}
-          </div>
+              )}
+              <ContentExamplesSection
+                reelExamples={values.reel_examples}
+                postExamples={values.post_examples}
+                onReelExamplesChange={(v) => update('reel_examples', v)}
+                onPostExamplesChange={(v) => update('post_examples', v)}
+                showOnly="reels"
+                generalFilled={generalFilled}
+                nicheName={values.niche_name}
+                contentBrief={values.content_brief}
+                onBeforeGenerate={flushSave}
+                onGeneratingChange={onGeneratingChange}
+              />
+            </div>
+          )}
 
-          {/* Reel CTAs */}
-          <div className="border-t border-gray-100 pt-5">
-            <h4 className="text-sm font-medium text-gray-700 mb-1">💬 Reel CTAs & Captions</h4>
-            <p className="text-xs text-gray-400 mb-4">
-              These CTAs are used for <strong>reels only</strong>. The AI randomly picks one based on the weights you assign. Carousel post CTAs are configured separately in the Carousel Posts section.
-              Placeholders like <code className="text-xs bg-gray-100 px-1 rounded">{'{cta_topic}'}</code> are auto-resolved on save based on your niche/topic keywords.
-            </p>
-            <div className="space-y-4">
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="block text-sm font-medium text-gray-700">CTA Options ({values.cta_options.length}/10)</label>
-                  <div className="flex gap-2">
-                    {values.cta_options.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const equalWeight = Math.floor(100 / values.cta_options.length)
-                          const remainder = 100 - equalWeight * values.cta_options.length
-                          update('cta_options', values.cta_options.map((opt, i) => ({
-                            ...opt,
-                            weight: equalWeight + (i === 0 ? remainder : 0),
-                          })))
-                        }}
-                        className="text-xs text-indigo-600 hover:text-indigo-700 font-medium"
-                      >
-                        Auto-distribute
-                      </button>
-                    )}
+          {/* ── FORMAT B SUB-TAB ── */}
+          {reelsSubTab === 'format_b' && (
+            <div>
+              <h4 className="text-sm font-medium text-gray-700 mb-1">Format B Reel Examples ({formatBCount})</h4>
+              <p className="text-xs text-gray-400 mb-3">
+                Format B reels are <strong className="text-gray-600">story-based</strong> — each has a title and a paragraph narration (3-6 sentences). The AI learns your storytelling style from these. Aim for <strong className="text-gray-600">50 examples</strong> for best results.
+              </p>
+              {formatBCount < 10 && formatBCount > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
+                  <p className="text-xs text-amber-700">
+                    Add more examples for better results. Use "Generate 10 with AI" for a quick start.
+                  </p>
+                </div>
+              )}
+
+              {formatBGenerating && (
+                <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-xl p-6 text-center mb-4">
+                  <div className="flex items-center justify-center gap-3 mb-3">
+                    <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
+                  </div>
+                  <p className="text-sm font-semibold text-indigo-700 mb-1">AI is generating Format B examples</p>
+                  <p className="text-xs text-indigo-500">Creating story-based reel content adapted to your niche...</p>
+                  <p className="text-[10px] text-indigo-400 mt-3">This usually takes 30-60 seconds. Do not navigate away.</p>
+                </div>
+              )}
+
+              {formatBCount === 0 && !formatBGenerating ? (
+                <div className="text-center py-8 border border-dashed border-gray-300 rounded-lg">
+                  <p className="text-gray-500 text-sm mb-1">No Format B examples yet</p>
+                  <p className="text-gray-400 text-xs mb-4">Add examples manually or generate with AI to teach Toby your storytelling style.</p>
+                  <div className="flex gap-3 justify-center">
                     <button
                       type="button"
-                      onClick={() => {
-                        if (values.cta_options.length >= 10) return
-                        update('cta_options', [...values.cta_options, { text: '', weight: 0 }])
-                      }}
-                      disabled={values.cta_options.length >= 10}
-                      className="flex items-center gap-1 text-xs text-primary-600 hover:text-primary-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                      onClick={() => update('format_b_reel_examples', [{ title: '', post: '' }])}
+                      className="text-sm text-primary-600 hover:text-primary-700 flex items-center gap-1"
                     >
-                      <Plus className="w-3 h-3" />
-                      Add CTA
+                      <Plus className="w-4 h-4" /> Add manually
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleGenerateFormatB(10)}
+                      disabled={formatBGenerating || !generalFilled}
+                      className="text-sm text-indigo-600 hover:text-indigo-700 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      Generate 10 with AI
                     </button>
                   </div>
                 </div>
-
-                {values.cta_options.length === 0 && (
-                  <div className="text-xs text-gray-400 italic py-3 text-center border border-dashed border-gray-200 rounded-lg">
-                    No CTAs configured. Add CTA variants that will be randomly selected for your content.
-                  </div>
-                )}
-
-                <div className="space-y-2">
-                  {values.cta_options.map((opt, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <input
-                        value={opt.text}
-                        onChange={(e) => {
-                          const updated = [...values.cta_options]
-                          updated[i] = { ...updated[i], text: e.target.value }
-                          update('cta_options', updated)
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    {(values.format_b_reel_examples || []).map((ex: FormatBReelExample, i: number) => (
+                      <FormatBExampleCard
+                        key={i}
+                        example={ex}
+                        index={i}
+                        onChange={(updated) => {
+                          const examples = [...(values.format_b_reel_examples || [])]
+                          examples[i] = updated
+                          update('format_b_reel_examples', examples)
                         }}
-                        placeholder="e.g. If you want to improve your health, follow our page"
-                        className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        onDelete={() => {
+                          update('format_b_reel_examples', (values.format_b_reel_examples || []).filter((_: FormatBReelExample, j: number) => j !== i))
+                        }}
                       />
-                      <div className="flex items-center gap-1 shrink-0">
-                        <input
-                          type="number"
-                          min={0}
-                          max={100}
-                          value={opt.weight}
-                          onChange={(e) => {
-                            const updated = [...values.cta_options]
-                            updated[i] = { ...updated[i], weight: Math.max(0, Math.min(100, parseInt(e.target.value) || 0)) }
-                            update('cta_options', updated)
+                    ))}
+                  </div>
+                  <div className="mt-3 flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => update('format_b_reel_examples', [...(values.format_b_reel_examples || []), { title: '', post: '' }])}
+                      disabled={formatBCount >= 60}
+                      className="text-sm text-primary-600 hover:text-primary-700 flex items-center gap-1 disabled:opacity-50"
+                    >
+                      <Plus className="w-4 h-4" /> Add manually
+                    </button>
+                    {formatBCount < 50 && (
+                      <button
+                        type="button"
+                        onClick={() => handleGenerateFormatB(10)}
+                        disabled={formatBGenerating || !generalFilled}
+                        className="text-sm text-indigo-600 hover:text-indigo-700 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {formatBGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                        {formatBGenerating ? 'Generating...' : 'Generate 10 more with AI'}
+                      </button>
+                    )}
+                    {formatBCount >= 40 && (
+                      <span className="text-xs text-green-600 font-medium">Great coverage!</span>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ── CTAs SUB-TAB ── */}
+          {reelsSubTab === 'ctas' && (
+            <div>
+              <h4 className="text-sm font-medium text-gray-700 mb-1">Reel CTAs & Captions</h4>
+              <p className="text-xs text-gray-400 mb-4">
+                These CTAs are used for <strong>reels only</strong>. The AI randomly picks one based on the weights you assign. Carousel post CTAs are configured separately in the Carousel Posts section.
+                Placeholders like <code className="text-xs bg-gray-100 px-1 rounded">{'{cta_topic}'}</code> are auto-resolved on save based on your niche/topic keywords.
+              </p>
+              <div className="space-y-4">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-700">CTA Options ({values.cta_options.length}/10)</label>
+                    <div className="flex gap-2">
+                      {values.cta_options.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const equalWeight = Math.floor(100 / values.cta_options.length)
+                            const remainder = 100 - equalWeight * values.cta_options.length
+                            update('cta_options', values.cta_options.map((opt, i) => ({
+                              ...opt,
+                              weight: equalWeight + (i === 0 ? remainder : 0),
+                            })))
                           }}
-                          className="w-16 px-2 py-2 border border-gray-200 rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-primary-500"
-                        />
-                        <span className="text-xs text-gray-400">%</span>
-                      </div>
+                          className="text-xs text-indigo-600 hover:text-indigo-700 font-medium"
+                        >
+                          Auto-distribute
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => {
-                          update('cta_options', values.cta_options.filter((_, j) => j !== i))
+                          if (values.cta_options.length >= 10) return
+                          update('cta_options', [...values.cta_options, { text: '', weight: 0 }])
                         }}
-                        className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"
+                        disabled={values.cta_options.length >= 10}
+                        className="flex items-center gap-1 text-xs text-primary-600 hover:text-primary-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Plus className="w-3 h-3" />
+                        Add CTA
                       </button>
                     </div>
-                  ))}
-                </div>
+                  </div>
 
-                {values.cta_options.length > 0 && (() => {
-                  const totalWeight = values.cta_options.reduce((sum, opt) => sum + opt.weight, 0)
-                  return totalWeight !== 100 ? (
-                    <p className="text-xs text-amber-600 mt-1">
-                      ⚠ Weights sum to {totalWeight}% — should be 100%
-                    </p>
-                  ) : (
-                    <p className="text-xs text-green-600 mt-1">✓ Weights sum to 100%</p>
-                  )
-                })()}
+                  {values.cta_options.length === 0 && (
+                    <div className="text-xs text-gray-400 italic py-3 text-center border border-dashed border-gray-200 rounded-lg">
+                      No CTAs configured. Add CTA variants that will be randomly selected for your content.
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    {values.cta_options.map((opt, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <input
+                          value={opt.text}
+                          onChange={(e) => {
+                            const updated = [...values.cta_options]
+                            updated[i] = { ...updated[i], text: e.target.value }
+                            update('cta_options', updated)
+                          }}
+                          placeholder="e.g. If you want to improve your health, follow our page"
+                          className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        />
+                        <div className="flex items-center gap-1 shrink-0">
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={opt.weight}
+                            onChange={(e) => {
+                              const updated = [...values.cta_options]
+                              updated[i] = { ...updated[i], weight: Math.max(0, Math.min(100, parseInt(e.target.value) || 0)) }
+                              update('cta_options', updated)
+                            }}
+                            className="w-16 px-2 py-2 border border-gray-200 rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-primary-500"
+                          />
+                          <span className="text-xs text-gray-400">%</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            update('cta_options', values.cta_options.filter((_, j) => j !== i))
+                          }}
+                          className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  {values.cta_options.length > 0 && (() => {
+                    const totalWeight = values.cta_options.reduce((sum, opt) => sum + opt.weight, 0)
+                    return totalWeight !== 100 ? (
+                      <p className="text-xs text-amber-600 mt-1">
+                        Weights sum to {totalWeight}% — should be 100%
+                      </p>
+                    ) : (
+                      <p className="text-xs text-green-600 mt-1">Weights sum to 100%</p>
+                    )
+                  })()}
+                </div>
               </div>
             </div>
-          </div>
-
-          {/* YouTube Title Style — hidden during onboarding when YT not connected */}
-          {!(section === 'reels' && ytConnected === false) && (
-          <div className="border-t border-gray-100 pt-5">
-            <div className="flex items-center justify-between mb-1">
-              <h4 className="text-sm font-medium text-gray-700">🎬 YouTube Title Style</h4>
-              {!skipYt && (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await flushSave()
-                    ytSuggestMutation.mutate(undefined, {
-                      onSuccess: (data) => {
-                        if (data.good_titles?.length) {
-                          update('yt_title_examples', data.good_titles)
-                        }
-                        if (data.bad_titles?.length) {
-                          update('yt_title_bad_examples', data.bad_titles)
-                        }
-                        toast.success('AI suggestions applied — review and edit as needed')
-                      },
-                      onError: () => toast.error('Failed to generate suggestions'),
-                    })
-                  }}
-                  disabled={ytSuggestMutation.isPending || !generalFilled}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {ytSuggestMutation.isPending ? (
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                  ) : (
-                    <Sparkles className="w-3 h-3" />
-                  )}
-                  {ytSuggestMutation.isPending ? 'Suggesting...' : 'Suggest with AI'}
-                </button>
-              )}
-            </div>
-
-            {/* Skip YT checkbox — only shown during onboarding (section mode) */}
-            {section === 'reels' && (
-              <label className="flex items-center gap-2 mb-3 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={skipYt}
-                  onChange={(e) => setSkipYt(e.target.checked)}
-                  className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                />
-                <span className="text-sm text-gray-500">I don't want YouTube for now</span>
-              </label>
-            )}
-
-            {!skipYt && (
-              <>
-                <p className="text-xs text-gray-400 mb-4">
-                  Provide example titles to teach the AI your preferred YouTube title patterns. Use "Suggest with AI" to get recommendations based on your Content DNA.
-                </p>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Good Title Examples</label>
-                    <textarea
-                      value={(values.yt_title_examples || []).join('\n')}
-                      onChange={(e) => update('yt_title_examples', e.target.value.split('\n').filter(Boolean))}
-                      placeholder={"One title per line, e.g.:\nThe Sleep Trick That Changed Everything\nWhat Really Happens When You Fast 16 Hours"}
-                      rows={4}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-y font-mono"
-                    />
-                    <p className="text-xs text-gray-400 mt-1">Titles the AI should emulate. One per line.</p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Bad Title Examples (avoid these)</label>
-                    <textarea
-                      value={(values.yt_title_bad_examples || []).join('\n')}
-                      onChange={(e) => update('yt_title_bad_examples', e.target.value.split('\n').filter(Boolean))}
-                      placeholder={"One title per line, e.g.:\nYOU WON'T BELIEVE THIS HACK!!!\n10 FOODS YOU MUST EAT NOW"}
-                      rows={3}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-y font-mono"
-                    />
-                    <p className="text-xs text-gray-400 mt-1">Anti-patterns the AI should avoid. One per line.</p>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
           )}
         </div>
       </div>}
@@ -958,7 +838,7 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
           )}
           {/* Post Examples */}
           <div>
-            <h4 className="text-sm font-medium text-gray-700 mb-1">📝 Post Examples</h4>
+            <h4 className="text-sm font-medium text-gray-700 mb-1">Post Examples</h4>
             <p className="text-xs text-gray-400 mb-3">
               The AI learns directly from your examples. Providing 10+ examples dramatically improves content relevance and quality.
             </p>
@@ -976,7 +856,7 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
 
           {/* Citation Style */}
           <div className="border-t border-gray-100 pt-5">
-            <h4 className="text-sm font-medium text-gray-700 mb-3">📚 Citation Style</h4>
+            <h4 className="text-sm font-medium text-gray-700 mb-3">Citation Style</h4>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Citation Style</label>
               <select
@@ -993,9 +873,9 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
             </div>
           </div>
 
-          {/* Carousel CTA */}
+          {/* Dark Overlay Opacity */}
           <div className="border-t border-gray-100 pt-5">
-            <h4 className="text-sm font-medium text-gray-700 mb-3">🌑 Dark Overlay Opacity</h4>
+            <h4 className="text-sm font-medium text-gray-700 mb-3">Dark Overlay Opacity</h4>
             <p className="text-xs text-gray-400 mb-4">
               Controls the dark overlay strength on carousel slides (dark mode only). Higher values = darker background, better text readability.
             </p>
@@ -1035,7 +915,7 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
 
           {/* Carousel CTA */}
           <div className="border-t border-gray-100 pt-5">
-            <h4 className="text-sm font-medium text-gray-700 mb-1">💬 Carousel CTA</h4>
+            <h4 className="text-sm font-medium text-gray-700 mb-1">Carousel CTA</h4>
             <p className="text-xs text-gray-400 mb-4">
               These CTAs appear on the <strong>last slide</strong> of carousel posts. The AI randomly picks one based on weights. <code className="text-xs bg-gray-100 px-1 rounded">{'{cta_topic}'}</code> is auto-filled from your niche/keywords. <code className="text-xs bg-gray-100 px-1 rounded">@{'{brandhandle}'}</code> uses your brand's Instagram handle.
             </p>
@@ -1075,8 +955,6 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
                   </button>
                 </div>
               </div>
-
-
 
               <div className="space-y-2">
                 {values.carousel_cta_options.map((opt, i) => (
@@ -1123,221 +1001,15 @@ export const NicheConfigForm = forwardRef<NicheConfigFormHandle, NicheConfigForm
                 const totalWeight = values.carousel_cta_options.reduce((sum, opt) => sum + opt.weight, 0)
                 return totalWeight !== 100 ? (
                   <p className="text-xs text-amber-600 mt-1">
-                    ⚠ Weights sum to {totalWeight}% — should be 100%
+                    Weights sum to {totalWeight}% — should be 100%
                   </p>
                 ) : (
-                  <p className="text-xs text-green-600 mt-1">✓ Weights sum to 100%</p>
+                  <p className="text-xs text-green-600 mt-1">Weights sum to 100%</p>
                 )
               })()}
             </div>
           </div>
         </div>
-      </div>}
-
-      {/* ═══════════════════════════════════════════════════════════════════
-          BLOCK 4: AI UNDERSTANDING — only in full mode
-         ═══════════════════════════════════════════════════════════════════ */}
-      {showAll && <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <button type="button" onClick={() => toggleSection('ai')} className={`w-full px-6 py-4 border-b border-gray-200 cursor-pointer transition-colors ${aiComplete ? 'bg-gradient-to-r from-emerald-50 to-green-50 hover:from-emerald-100 hover:to-green-100' : 'bg-gradient-to-r from-indigo-50 to-purple-50 hover:from-indigo-100 hover:to-purple-100'}`}>
-          <div className="flex items-center justify-between">
-            <div className="text-left">
-              <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-                <Sparkles className={`w-4 h-4 ${aiComplete ? 'text-emerald-500' : 'text-indigo-500'}`} />
-                AI Understanding of Your Brand
-                {aiComplete && <Check className="w-3.5 h-3.5 text-emerald-500" />}
-              </h3>
-              <p className="text-xs text-gray-500 mt-0.5">
-                Ask the AI to describe how it interprets your Content DNA configuration
-              </p>
-            </div>
-            <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${collapsed.ai ? '-rotate-90' : ''}`} />
-          </div>
-        </button>
-
-        {!collapsed.ai && <>
-        <div className="px-6 py-3 flex items-center justify-end gap-2 border-b border-gray-100">
-          {aiResult && (
-            <button
-              onClick={handleRegenerate}
-              disabled={aiMutation.isPending || reelPreviewMutation.isPending || !generalFilled}
-              className="flex items-center gap-2 px-3 py-2 text-sm text-indigo-600 bg-white border border-indigo-200 rounded-lg hover:bg-indigo-50 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              Regenerate
-            </button>
-          )}
-          <button
-            onClick={handleAiUnderstanding}
-            disabled={aiMutation.isPending || reelPreviewMutation.isPending || !generalFilled}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-          >
-            {(aiMutation.isPending || reelPreviewMutation.isPending) ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Sparkles className="w-4 h-4" />
-            )}
-            {aiMutation.isPending ? 'Analyzing brand...' : reelPreviewMutation.isPending ? 'Rendering images...' : 'Generate'}
-          </button>
-        </div>
-
-        {aiResult && (
-          <div className="px-6 py-4 space-y-4 min-w-0">
-            <div className="bg-gray-50 rounded-lg p-4">
-              <p className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">{aiResult.understanding}</p>
-            </div>
-
-            {(aiResult.example_reel || aiResult.example_post) && (
-              <div className="space-y-6">
-                {/* Reel Preview */}
-                {aiResult.example_reel && (
-                  <div className="border border-indigo-100 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-1.5 text-xs font-medium text-indigo-600">
-                        <Film className="w-3.5 h-3.5" />
-                        Example Reel Preview
-                      </div>
-                      <span className="text-[10px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
-                        {reelImages ? 'Real render (light mode)' : reelPreviewMutation.isPending ? 'Rendering...' : 'Waiting'}
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 min-w-0">
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <p className="text-xs text-gray-500 mb-1 text-center">IG/FB Thumbnail</p>
-                          {reelImages ? (
-                            <div className="aspect-[9/16] bg-gray-100 rounded-lg overflow-hidden">
-                              <img
-                                src={`data:image/png;base64,${reelImages.thumbnail_base64}`}
-                                alt="Reel thumbnail"
-                                className="w-full h-full object-cover object-top"
-                              />
-                            </div>
-                          ) : reelPreviewMutation.isPending ? (
-                            <div className="aspect-[9/16] bg-gray-100 rounded-lg flex items-center justify-center">
-                              <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
-                            </div>
-                          ) : (
-                            <div className="aspect-[9/16] bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 text-xs">No preview</div>
-                          )}
-                        </div>
-
-                        <div>
-                          <p className="text-xs text-gray-500 mb-1 text-center">Content Slide</p>
-                          {reelImages ? (
-                            <div className="aspect-[9/16] bg-gray-100 rounded-lg overflow-hidden">
-                              <img
-                                src={`data:image/png;base64,${reelImages.content_base64}`}
-                                alt="Reel content"
-                                className="w-full h-full object-cover object-top"
-                              />
-                            </div>
-                          ) : reelPreviewMutation.isPending ? (
-                            <div className="aspect-[9/16] bg-gray-100 rounded-lg flex items-center justify-center">
-                              <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
-                            </div>
-                          ) : (
-                            <div className="aspect-[9/16] bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 text-xs">No preview</div>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="bg-gray-50 rounded-lg p-4">
-                        <p className="text-sm font-semibold text-gray-900 mb-2">{aiResult.example_reel.title}</p>
-                        <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1.5">Script Lines</p>
-                        <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                          {aiResult.example_reel.content_lines.map((line, i) => (
-                            <div key={i} className="text-sm text-gray-700 py-1.5 px-2 bg-white rounded border-l-2 border-gray-300">
-                              <span className="font-medium text-gray-500 mr-2">{i + 1}.</span>
-                              {line}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Carousel Post Preview */}
-                {aiResult.example_post && fontsReady && (
-                  <div className="border border-purple-100 rounded-lg p-4 min-w-0 overflow-hidden">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-1.5 text-xs font-medium text-purple-600">
-                        <LayoutGrid className="w-3.5 h-3.5" />
-                        Example Carousel Post Preview
-                      </div>
-                      <span className="text-[10px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
-                        Konva render · {getBrandConfig(effectiveBrand).name || effectiveBrand}
-                      </span>
-                    </div>
-                    <div className="flex gap-3 overflow-x-auto pb-2">
-                      <div className="shrink-0 rounded-lg overflow-hidden shadow-md">
-                        <PostCanvas
-                          key={`cover-${effectiveBrand}-${fontsReady}`}
-                          brand={effectiveBrand}
-                          title={aiResult.example_post.title}
-                          backgroundImage={null}
-                          settings={DEFAULT_GENERAL_SETTINGS}
-                          scale={0.2}
-                          logoUrl={brandLogoUrl}
-                        />
-                      </div>
-                      {aiResult.example_post.slides.map((slide, i) => {
-                        let cleanSlide = slide.replace(/^Slide\s*\d+\s*:\s*/i, '')
-                        if (i === aiResult.example_post!.slides.length - 1) {
-                          cleanSlide = cleanSlide.replace(
-                            /([.!?])\s*((?:For more|Follow @|If you care|Want more)\S*.*)/i,
-                            (_m, punct, cta) => `${punct}\n\n${cta}`
-                          )
-                        }
-                        return (
-                          <div key={i} className="shrink-0 rounded-lg overflow-hidden shadow-md">
-                            <CarouselTextSlide
-                              key={`slide-${i}-${effectiveBrand}-${fontsReady}`}
-                              brand={effectiveBrand}
-                              text={cleanSlide}
-                              allSlideTexts={aiResult.example_post!.slides.map(s => s.replace(/^Slide\s*\d+\s*:\s*/i, ''))}
-                              isLastSlide={i === aiResult.example_post!.slides.length - 1}
-                              scale={0.2}
-                              logoUrl={brandLogoUrl}
-                              brandHandle={effectiveBrandData?.instagram_handle}
-                              brandDisplayName={effectiveBrandData?.display_name}
-                              brandColor={effectiveBrandData?.colors?.primary}
-                            />
-                          </div>
-                        )
-                      })}
-                    </div>
-                    {aiResult.example_post.study_ref && (
-                      <p className="text-[10px] text-gray-500 mt-2 font-mono">
-                        Study: {aiResult.example_post.study_ref}
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {(aiMutation.isPending || (reelPreviewMutation.isPending && !aiResult)) && (
-          <div className="px-6 py-10 flex flex-col items-center gap-4">
-            <Loader2 className="w-10 h-10 animate-spin text-indigo-400" />
-            <div className="text-center">
-              <p className="text-sm font-medium text-gray-800">
-                {aiMutation.isPending ? 'Analyzing your brand configuration...' : 'Rendering reel images...'}
-              </p>
-              <p className="text-xs text-gray-400 mt-1">This may take 20–40 seconds</p>
-            </div>
-          </div>
-        )}
-
-        {!aiResult && !aiMutation.isPending && !reelPreviewMutation.isPending && (
-          <div className="px-6 py-6 text-center text-sm text-gray-400">
-            Click "Generate" to see how the AI interprets your brand configuration
-          </div>
-        )}
-        </>}
       </div>}
     </div>
   )
