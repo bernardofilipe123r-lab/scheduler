@@ -21,6 +21,48 @@ from app.models.brands import Brand
 SLOT_FUZZY_MINUTES = 15
 
 
+# ── Content-type-aware category mapping (module-level for reuse) ────────
+# These map variant/content_type strings to a slot "category" (reel/post/threads)
+# used for matching pipeline items against buffer slots.
+
+def variant_to_category(variant: str) -> str:
+    """Map a ScheduledReel variant to its slot category."""
+    if variant in ("light", "dark", "format_b"):
+        return "reel"
+    if variant == "post":
+        return "post"
+    if variant == "threads":
+        return "threads"
+    return "reel"  # fallback
+
+
+def content_type_to_category(content_type: str) -> str:
+    """Map a buffer slot content_type to its slot category."""
+    if content_type in ("reel", "format_b_reel"):
+        return "reel"
+    if content_type == "post":
+        return "post"
+    if content_type == "threads_post":
+        return "threads"
+    return content_type
+
+
+def _brand_can_publish_type(brand: Brand, content_type: str) -> bool:
+    """Check if a brand has the platform credentials to publish this content type.
+
+    Reels and posts require Instagram/Meta credentials.
+    Threads require threads_access_token + threads_user_id (already handled inline).
+    """
+    if content_type in ("reel", "format_b_reel", "post"):
+        return bool(
+            (brand.meta_access_token or getattr(brand, 'instagram_access_token', None))
+            and brand.instagram_business_account_id
+        )
+    if content_type == "threads_post":
+        return bool(brand.threads_access_token and brand.threads_user_id)
+    return True
+
+
 def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
     """
     Calculate current buffer health.
@@ -72,38 +114,21 @@ def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
     )
 
     # ── Content-type-aware slot matching ──────────────────────
-    # Map variant (stored in extra_data) → category for matching.
+    # Uses module-level variant_to_category / content_type_to_category helpers.
     # This prevents cross-masking: a thread at 4 AM must NOT mark
     # a reel slot at 4 AM as filled (or vice versa).
-    def _variant_to_category(variant: str) -> str:
-        if variant in ("light", "dark", "format_b"):
-            return "reel"
-        if variant == "post":
-            return "post"
-        if variant == "threads":
-            return "threads"
-        return "reel"  # fallback
-
-    def _content_type_to_category(content_type: str) -> str:
-        if content_type in ("reel", "format_b_reel"):
-            return "reel"
-        if content_type == "post":
-            return "post"
-        if content_type == "threads_post":
-            return "threads"
-        return content_type
 
     # Build slot map: B4 fuzzy matching ±15 minutes (content-type aware)
     filled_set = set()
     for s in scheduled:
         ed = s.extra_data or {}
         brand_id = ed.get("brand", "")
-        cat = _variant_to_category(ed.get("variant", "light"))
+        cat = variant_to_category(ed.get("variant", "light"))
         filled_set.add((brand_id, s.scheduled_time.strftime("%Y-%m-%d %H:%M"), cat))
 
     def _slot_is_filled(brand_id: str, slot_time: datetime, content_type: str) -> bool:
         """B4: Check if a slot is filled using fuzzy ±15min matching (content-type aware)."""
-        cat = _content_type_to_category(content_type)
+        cat = content_type_to_category(content_type)
         key = (brand_id, slot_time.strftime("%Y-%m-%d %H:%M"), cat)
         if key in filled_set:
             return True
@@ -113,7 +138,7 @@ def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
             s_brand = ed.get("brand", "")
             if s_brand != brand_id:
                 continue
-            s_cat = _variant_to_category(ed.get("variant", "light"))
+            s_cat = variant_to_category(ed.get("variant", "light"))
             if s_cat != cat:
                 continue
             diff = abs((s.scheduled_time - slot_time).total_seconds())
@@ -167,6 +192,12 @@ def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
         has_threads = bool(brand.threads_access_token and brand.threads_user_id)
         if not has_threads:
             brand_thread_slots = 0
+
+        # Only generate reel/post slots for brands with Instagram/Meta connected
+        has_instagram = _brand_can_publish_type(brand, "reel")
+        if not has_instagram:
+            brand_reel_slots = 0
+            brand_post_slots = 0
 
         # Generate expected slot times for this brand
         for day_offset in range(state.buffer_days or 2):
@@ -229,21 +260,11 @@ def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
         .all()
     )
 
-    def _job_to_category(variant: str, content_format: str) -> str:
-        """Map a GenerationJob's variant+format to a slot category."""
-        if variant == "post":
-            return "post"
-        # Threads bypass pipeline, but handle defensively
-        if variant == "threads":
-            return "threads"
-        # Reels (light/dark) — format_a or format_b both count as "reel"
-        return "reel"
-
     # Build per-(brand, category) pipeline count
     pipeline_per_brand_cat: dict[tuple[str, str], int] = {}
     pipeline_per_brand: dict[str, int] = {}  # total per brand (for backward compat)
     for (job_brands, job_variant, job_format) in pipeline_jobs:
-        cat = _job_to_category(job_variant or "light", job_format or "format_a")
+        cat = variant_to_category(job_variant or "light")
         if isinstance(job_brands, list):
             for bid in job_brands:
                 key = (bid, cat)
@@ -263,7 +284,7 @@ def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
         # Sum pipeline items only for categories that have empty slots for this brand
         brand_pipeline = 0
         for cat in ("reel", "post", "threads"):
-            cat_slots = [s for s in brand_slots if _content_type_to_category(s["content_type"]) == cat]
+            cat_slots = [s for s in brand_slots if content_type_to_category(s["content_type"]) == cat]
             cat_filled = sum(1 for s in cat_slots if s["filled"])
             cat_pipeline = pipeline_per_brand_cat.get((brand.id, cat), 0)
             cat_total = len(cat_slots)
@@ -283,7 +304,7 @@ def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
             brand_filled_count = sum(1 for s in brand_slots if s["filled"])
             brand_pipeline = 0
             for cat in ("reel", "post", "threads"):
-                cat_slots = [s for s in brand_slots if _content_type_to_category(s["content_type"]) == cat]
+                cat_slots = [s for s in brand_slots if content_type_to_category(s["content_type"]) == cat]
                 cat_filled = sum(1 for s in cat_slots if s["filled"])
                 cat_pipeline = pipeline_per_brand_cat.get((brand.id, cat), 0)
                 cat_total = len(cat_slots)
@@ -347,6 +368,10 @@ def get_empty_slots(db: Session, user_id: str, state: TobyState) -> list[dict]:
     from trying to fill a 10-day buffer all at once — instead it fills
     the first 5 days, and as time passes the window slides forward to
     cover the remaining days.
+
+    Pipeline-aware: slots that are already covered by pending/approved
+    pipeline items are excluded. Without this, Toby would keep generating
+    content for brands that already have enough pending items.
     """
     status = get_buffer_status(db, user_id, state)
     empty = [s for s in status["slots"] if not s["filled"]]
@@ -360,4 +385,39 @@ def get_empty_slots(db: Session, user_id: str, state: TobyState) -> list[dict]:
             if datetime.fromisoformat(s["time"]) <= gen_horizon
         ]
 
-    return empty
+    # ── Pipeline-aware filtering (2026-03-15 fix) ────────────────────────
+    # Subtract slots already covered by pending/approved pipeline items.
+    # Without this, get_empty_slots returns all physically-empty slots even
+    # when the pipeline already has enough content for that brand+category,
+    # causing Toby to over-generate (e.g. 66 posts when only 28 are needed).
+    from app.models.jobs import GenerationJob
+    pipeline_jobs = (
+        db.query(GenerationJob.brands, GenerationJob.variant)
+        .filter(
+            GenerationJob.user_id == user_id,
+            GenerationJob.pipeline_status.in_(["pending", "approved"]),
+        )
+        .all()
+    )
+
+    # Count pipeline items per (brand_id, category)
+    pipeline_counts: dict[tuple[str, str], int] = {}
+    for (job_brands, job_variant) in pipeline_jobs:
+        cat = variant_to_category(job_variant or "light")
+        if isinstance(job_brands, list):
+            for bid in job_brands:
+                key = (bid, cat)
+                pipeline_counts[key] = pipeline_counts.get(key, 0) + 1
+
+    # For each brand+category, subtract pipeline-covered slots
+    remaining_pipeline = dict(pipeline_counts)  # mutable copy
+    truly_empty = []
+    for slot in empty:
+        cat = content_type_to_category(slot["content_type"])
+        key = (slot["brand_id"], cat)
+        if remaining_pipeline.get(key, 0) > 0:
+            remaining_pipeline[key] -= 1  # This slot is covered by a pipeline item
+        else:
+            truly_empty.append(slot)
+
+    return truly_empty

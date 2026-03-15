@@ -1059,11 +1059,14 @@ def _execute_plans_sequential(db: Session, plans: list, user_id: str, state: Tob
     for plan in plans:
         try:
             result = _execute_content_plan(db, plan, batch_id=batch_id)
+            if result is None:
+                # Plan was skipped (e.g. no connected platforms) — don't count
+                print(f"[TOBY] Plan skipped for {plan.brand_id} ({plan.content_type}) — no result", flush=True)
+                continue
             generated += 1
             _record_generation(user_id, plan.brand_id)
             _increment_budget(state)
-            if result:
-                job_details.append(result)
+            job_details.append(result)
         except Exception as e:
             print(f"[TOBY] Content generation failed for {plan.brand_id}: {e}", flush=True)
             clean = _sanitize_error(str(e)[:300])
