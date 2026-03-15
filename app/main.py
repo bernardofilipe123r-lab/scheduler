@@ -496,6 +496,58 @@ async def startup_event():
     except Exception as e:
         print(f"⚠️ Could not check stuck posts: {e}", flush=True)
 
+    # Recover approved-but-unscheduled jobs (e.g. server crashed during background scheduling)
+    print("🔄 Checking for approved-but-unscheduled jobs...", flush=True)
+    try:
+        from app.services.publishing.scheduler import DatabaseSchedulerService as _DSS
+        db_recover = SessionLocal()
+        try:
+            orphans = (
+                db_recover.query(GenerationJob)
+                .filter(
+                    GenerationJob.pipeline_status == "approved",
+                    GenerationJob.status == "completed",
+                )
+                .all()
+            )
+            unscheduled = []
+            for job in orphans:
+                outputs = job.brand_outputs or {}
+                brands = job.brands or []
+                # Check if any brand still has no scheduled_reel_id
+                for b in brands:
+                    bo = outputs.get(b, {})
+                    if isinstance(bo, dict) and bo.get("status") == "completed" and not bo.get("scheduled_reel_id"):
+                        unscheduled.append(job)
+                        break
+            if unscheduled:
+                print(f"   ⚠️ Found {len(unscheduled)} approved job(s) with unscheduled brands — recovering", flush=True)
+                import threading
+                # Group by user_id since _bulk_schedule_background filters by user
+                from collections import defaultdict
+                by_user: dict[str, list[str]] = defaultdict(list)
+                for j in unscheduled:
+                    by_user[j.user_id].append(j.job_id)
+
+                def _recover_scheduling(user_jobs: dict):
+                    import time
+                    time.sleep(8)
+                    from app.api.pipeline.routes import _bulk_schedule_background
+                    for uid, jids in user_jobs.items():
+                        try:
+                            _bulk_schedule_background(jids, {"id": uid})
+                            print(f"   ✅ Recovered {len(jids)} job(s) for user {uid[:8]}…", flush=True)
+                        except Exception as ex:
+                            print(f"   ❌ Recovery failed for user {uid[:8]}…: {ex}", flush=True)
+                t = threading.Thread(target=_recover_scheduling, args=(dict(by_user),), daemon=True)
+                t.start()
+            else:
+                print("   No orphaned approved jobs", flush=True)
+        finally:
+            db_recover.close()
+    except Exception as e:
+        print(f"⚠️ Could not check approved-but-unscheduled jobs: {e}", flush=True)
+
     # Re-compose carousel images for scheduled posts that are missing them
     print("🔄 Checking for posts with missing carousel images...", flush=True)
     try:
