@@ -69,7 +69,7 @@ function Calendar() {
   const calendarFrom = format(startOfWeek(startOfMonth(currentMonth), { weekStartsOn: 0 }), 'yyyy-MM-dd')
   const calendarTo = format(addDays(endOfWeek(endOfMonth(currentMonth), { weekStartsOn: 0 }), 1), 'yyyy-MM-dd')
 
-  const { data: ownScheduledPosts = [], isLoading: ownPostsLoading, isPlaceholderData: ownIsPlaceholder } = useScheduledPosts(
+  const { data: ownScheduledPosts = [], isLoading: ownPostsLoading, isFetching: ownIsFetching } = useScheduledPosts(
     undefined,
     { from_date: calendarFrom, to_date: calendarTo, compact: true },
   )
@@ -101,11 +101,15 @@ function Calendar() {
     staleTime: 120_000,
   })
 
-  // isMonthTransition: keepPreviousData is serving stale data for a *different* month range.
-  // Use empty array for the grid so old-month posts don't bleed into the new month's cells.
-  const isMonthTransition = !isAdminView && ownIsPlaceholder
-  const scheduledPosts = isMonthTransition ? [] : (isAdminView ? adminScheduledPosts : ownScheduledPosts)
+  const scheduledPosts = isAdminView ? adminScheduledPosts : ownScheduledPosts
   const postsLoading = isAdminView ? adminPostsLoading : ownPostsLoading
+
+  // Track whether we've ever loaded data — show skeleton only on first load
+  const hasLoadedOnce = useRef(false)
+  if (!postsLoading) hasLoadedOnce.current = true
+  const showInitialSkeleton = postsLoading && !hasLoadedOnce.current
+  // Show inline spinner when fetching a different month (not the initial skeleton)
+  const isFetchingMonth = !isAdminView && ownIsFetching && hasLoadedOnce.current
 
   const [view, setView] = useState<'month' | 'week'>('month')
   const [showUploadModal, setShowUploadModal] = useState(false)
@@ -412,7 +416,7 @@ function Calendar() {
     })
   }, [uploadedFile, checkMediaDimensions])
 
-  if (postsLoading) {
+  if (showInitialSkeleton) {
     return (
       <div className="min-h-screen bg-gray-50">
         {/* Header skeleton */}
@@ -543,7 +547,7 @@ function Calendar() {
               </button>
               <h2 className="text-lg font-semibold text-gray-900 px-4 flex items-center gap-2">
                 {format(currentMonth, 'MMMM yyyy')}
-                {isMonthTransition && <Loader2 className="h-4 w-4 text-gray-400 animate-spin" />}
+                {isFetchingMonth && <Loader2 className="h-4 w-4 text-gray-400 animate-spin" />}
               </h2>
               <button
                 onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
