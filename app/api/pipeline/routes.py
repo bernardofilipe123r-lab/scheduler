@@ -239,7 +239,7 @@ def _approve_single_job(
     user: dict,
     caption_override: Optional[str] = None,
 ) -> dict:
-    """Approve a single pipeline item and auto-schedule it.
+    """Approve a single pipeline item and auto-schedule it to the next available slot.
 
     Returns dict with approval results.
     """

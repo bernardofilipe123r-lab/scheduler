@@ -245,9 +245,13 @@ def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
     total = len(all_slots)
     filled = sum(1 for s in all_slots if s["filled"])
 
-    # Pipeline: count pending/approved GenerationJobs as "virtually filling" slots.
+    # Pipeline: count PENDING GenerationJobs as "virtually filling" slots.
     # These items haven't been scheduled yet but DO represent content that will fill
     # slots once approved. Without this, Toby would keep generating duplicates.
+    # CRITICAL: Only count 'pending' — NOT 'approved'. Approved items already have
+    # a ScheduledReel entry that marks their slot as filled. Counting approved items
+    # too causes double-counting, inflating effective_filled and making Toby think
+    # the buffer is healthy when it actually has uncovered slots.
     # CRITICAL: Count per (brand, content-type category) to avoid cross-type masking
     # (2026-03-14 fix: reel pipeline items must not mask thread/post empty slots).
     from app.models.jobs import GenerationJob
@@ -255,7 +259,7 @@ def get_buffer_status(db: Session, user_id: str, state: TobyState) -> dict:
         db.query(GenerationJob.brands, GenerationJob.variant, GenerationJob.content_format)
         .filter(
             GenerationJob.user_id == user_id,
-            GenerationJob.pipeline_status.in_(["pending", "approved"]),
+            GenerationJob.pipeline_status == "pending",
         )
         .all()
     )
@@ -386,16 +390,16 @@ def get_empty_slots(db: Session, user_id: str, state: TobyState) -> list[dict]:
         ]
 
     # ── Pipeline-aware filtering (2026-03-15 fix) ────────────────────────
-    # Subtract slots already covered by pending/approved pipeline items.
-    # Without this, get_empty_slots returns all physically-empty slots even
-    # when the pipeline already has enough content for that brand+category,
-    # causing Toby to over-generate (e.g. 66 posts when only 28 are needed).
+    # Subtract slots already covered by PENDING pipeline items.
+    # Approved items are NOT counted here because approval schedules them
+    # into a ScheduledReel, which already marks their slot as filled above.
+    # Only pending items represent unscheduled content waiting for user review.
     from app.models.jobs import GenerationJob
     pipeline_jobs = (
         db.query(GenerationJob.brands, GenerationJob.variant)
         .filter(
             GenerationJob.user_id == user_id,
-            GenerationJob.pipeline_status.in_(["pending", "approved"]),
+            GenerationJob.pipeline_status == "pending",
         )
         .all()
     )

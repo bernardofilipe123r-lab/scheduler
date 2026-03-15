@@ -1593,7 +1593,8 @@ class DatabaseSchedulerService:
         reference_date: Optional[datetime] = None,
         user_id: str | None = None,
         slot_variant_label: str | None = None,
-    ) -> datetime:
+        max_days_ahead: int | None = None,
+    ) -> datetime | None:
         """
         Get the next available scheduling slot for a brand+variant combo.
 
@@ -1694,8 +1695,9 @@ class DatabaseSchedulerService:
         # Find next available slot starting from base_date
         current_day = base_date.replace(hour=0, minute=0, second=0, microsecond=0)
 
-        # Search up to 365 days ahead
-        for day_offset in range(365):
+        # Search up to max_days_ahead days (default 365)
+        search_range = max_days_ahead if max_days_ahead is not None else 365
+        for day_offset in range(search_range):
             check_date = current_day + timedelta(days=day_offset)
 
             for hour in matching_slots:
@@ -1710,6 +1712,12 @@ class DatabaseSchedulerService:
                     label = slot_variant_label or variant
                     print(f"📅 Found next slot for {brand}/{label}: {candidate.isoformat()}")
                     return candidate
+
+        # If max_days_ahead was set, return None (no slot within window)
+        if max_days_ahead is not None:
+            label = slot_variant_label or variant
+            print(f"📅 No slot available for {brand}/{label} within {max_days_ahead} days")
+            return None
 
         # Fallback: just return tomorrow at first matching slot
         tomorrow = now + timedelta(days=1)
@@ -1795,7 +1803,8 @@ class DatabaseSchedulerService:
         brand: str,
         reference_date: Optional[datetime] = None,
         user_id: str | None = None,
-    ) -> datetime:
+        max_days_ahead: int | None = None,
+    ) -> datetime | None:
         """
         Get the next available scheduling slot for a POST (image/carousel) for a brand.
 
@@ -1862,7 +1871,8 @@ class DatabaseSchedulerService:
         # Find next available slot
         current_day = base_date.replace(hour=0, minute=0, second=0, microsecond=0)
 
-        for day_offset in range(365):
+        search_range = max_days_ahead if max_days_ahead is not None else 365
+        for day_offset in range(search_range):
             check_date = current_day + timedelta(days=day_offset)
 
             for hour in brand_post_slots:
@@ -1874,6 +1884,11 @@ class DatabaseSchedulerService:
                 if candidate.timestamp() not in occupied_slots:
                     print(f"📅 Found next POST slot for {brand}: {candidate.isoformat()}")
                     return candidate
+
+        # If max_days_ahead was set, return None (no slot within window)
+        if max_days_ahead is not None:
+            print(f"📅 No POST slot available for {brand} within {max_days_ahead} days")
+            return None
 
         # Fallback
         tomorrow = now + timedelta(days=1)
