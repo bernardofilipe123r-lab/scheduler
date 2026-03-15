@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, Response
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -106,15 +107,37 @@ app.add_middleware(
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    # Read-only API paths that benefit from short browser/CDN caching
+    _CACHEABLE_PREFIXES = (
+        "/api/pipeline/stats",
+        "/api/brands/connections",
+        "/api/brands/list",
+        "/api/schedule/scheduled",
+        "/api/analytics/",
+        "/api/toby/status",
+        "/api/toby/buffer",
+        "/api/toby/config",
+    )
+
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
+
+        # Add Cache-Control for read-only GET endpoints (private = browser only, not shared CDN)
+        path = request.url.path
+        if request.method == "GET" and any(path.startswith(p) for p in self._CACHEABLE_PREFIXES):
+            response.headers.setdefault("Cache-Control", "private, max-age=30, stale-while-revalidate=60")
+
         return response
 
 
 app.add_middleware(SecurityHeadersMiddleware)
+
+# GZip compression — reduces JSON/text responses by 70-80%, huge egress savings
+# minimum_size=500 avoids compressing tiny health-check responses
+app.add_middleware(GZipMiddleware, minimum_size=500)
 
 # Add request logging middleware (captures ALL HTTP requests/responses with full detail)
 app.add_middleware(RequestLoggingMiddleware)

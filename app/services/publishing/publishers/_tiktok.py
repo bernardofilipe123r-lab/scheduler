@@ -196,7 +196,7 @@ class TikTokMixin:
                              caption: str, video_size: int,
                              privacy_level: str) -> dict:
         """Initialize a TikTok video publish with FILE_UPLOAD. Returns the JSON response.
-        
+
         NOTE: Does NOT raise on HTTP errors — returns the JSON body so the
         caller can inspect TikTok-specific error codes (e.g. unaudited_client)
         and decide whether to retry with a different privacy_level.
