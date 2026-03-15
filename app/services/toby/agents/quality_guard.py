@@ -114,7 +114,8 @@ def quality_guard_sweep(db: Session, user_id: str) -> dict:
         Summary dict: {fallbacks, title_dupes, slot_dupes, caption_dupes, total}
     """
     now = datetime.now(timezone.utc)
-    horizon = now + timedelta(days=5)
+    dedup_horizon = now + timedelta(days=5)     # Layers A, B, D (dedup — tight window)
+    repair_horizon = now + timedelta(days=90)   # Layers C, E (slot repair — wide window)
 
     summary = {
         "fallbacks_cancelled": 0,
@@ -126,20 +127,33 @@ def quality_guard_sweep(db: Session, user_id: str) -> dict:
         "total_repositioned": 0,
     }
 
-    # Get all future scheduled posts for this user
+    # Dedup candidates: 5-day window (Layers A, B, D)
     scheduled = (
         db.query(ScheduledReel)
         .filter(
             ScheduledReel.user_id == user_id,
             ScheduledReel.status == "scheduled",
             ScheduledReel.scheduled_time > now,
-            ScheduledReel.scheduled_time <= horizon,
+            ScheduledReel.scheduled_time <= dedup_horizon,
         )
         .order_by(ScheduledReel.created_at.asc())
         .all()
     )
 
-    if not scheduled:
+    # Repair candidates: 90-day window (Layers C, E — wrong-slot + collision)
+    repair_candidates = (
+        db.query(ScheduledReel)
+        .filter(
+            ScheduledReel.user_id == user_id,
+            ScheduledReel.status == "scheduled",
+            ScheduledReel.scheduled_time > now,
+            ScheduledReel.scheduled_time <= repair_horizon,
+        )
+        .order_by(ScheduledReel.created_at.asc())
+        .all()
+    )
+
+    if not scheduled and not repair_candidates:
         return summary
 
     # Load brand offsets for slot validation (Layer E + Layer C repositioning)
@@ -204,13 +218,11 @@ def quality_guard_sweep(db: Session, user_id: str) -> dict:
         else:
             seen_titles[key] = reel
 
-    # Re-fetch active list
-    active = [r for r in scheduled if r.status == "scheduled"]
-
     # ── Layer E: Wrong-slot repair (item at non-valid hour for its brand) ────
-    # Detects items scheduled at hours that don't match the brand's slot pattern
-    # (BASE hours + schedule_offset). Repositions to next valid available slot.
-    for reel in active:
+    # Uses repair_candidates (90-day window) — wrong-slot items must be fixed
+    # regardless of distance. Repositions to next valid available slot.
+    repair_active = [r for r in repair_candidates if r.status == "scheduled"]
+    for reel in repair_active:
         ed = reel.extra_data or {}
         brand = ed.get("brand", "")
         variant = ed.get("variant", "")
@@ -229,7 +241,7 @@ def quality_guard_sweep(db: Session, user_id: str) -> dict:
         occupied[old_key] = max(0, occupied.get(old_key, 0) - 1)
 
         new_slot = _find_next_valid_slot(
-            valid_hours, occupied, brand, type_group, now
+            valid_hours, occupied, brand, type_group, now, max_days=90
         )
         if new_slot:
             _reposition_reel(
@@ -244,21 +256,17 @@ def quality_guard_sweep(db: Session, user_id: str) -> dict:
         else:
             _cancel_reel(
                 db, reel,
-                reason=f"Quality Guard: wrong slot hour {current_hour:02d}, no valid slot available within 10 days",
+                reason=f"Quality Guard: wrong slot hour {current_hour:02d}, no valid slot available within 90 days",
                 layer="E"
             )
             summary["fallbacks_cancelled"] += 1
 
-    # Re-fetch active list
-    active = [r for r in scheduled if r.status == "scheduled"]
-
     # ── Layer C: Time-slot collisions (same brand + same content type + same hour) ─
-    # Keeps the first item (earliest created_at), CANCELS later ones.
-    # Repositioning collisions instead of cancelling cascades slots forward —
-    # the quality guard keeps moving displaced items onto the nearest future slots,
-    # which creates a pile-up effect that grows on every tick.
+    # Uses repair_candidates (90-day window). Keeps the first item (earliest
+    # created_at), CANCELS later ones.
+    repair_active = [r for r in repair_candidates if r.status == "scheduled"]
     seen_slots: dict[tuple, ScheduledReel] = {}  # (brand, type_group, hour_key) -> first reel
-    for reel in active:
+    for reel in repair_active:
         ed = reel.extra_data or {}
         brand = ed.get("brand", "")
         variant = ed.get("variant", "")
@@ -280,7 +288,7 @@ def quality_guard_sweep(db: Session, user_id: str) -> dict:
         else:
             seen_slots[key] = reel
 
-    # Re-fetch active list
+    # Re-fetch active list (from dedup 5-day window for Layer D)
     active = [r for r in scheduled if r.status == "scheduled"]
 
     # ── Layer D: Caption near-duplicates (same brand, first 100 chars) ───────
