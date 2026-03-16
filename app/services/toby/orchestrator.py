@@ -761,7 +761,7 @@ def _execute_threads_plan(db: Session, plan):
     from app.services.content.threads_generator import ThreadsGenerator
     from app.services.content.content_dna_service import get_content_dna_service
     from app.services.toby.content_planner import record_content_tag
-    from app.models.scheduling import ScheduledReel
+    from app.services.publishing.scheduler import DatabaseSchedulerService
 
     dna_svc = get_content_dna_service()
     if plan.content_dna_id:
@@ -787,9 +787,7 @@ def _execute_threads_plan(db: Session, plan):
 
     text = result["text"]
     format_type = result.get("format_type", "unknown")
-    schedule_id = str(_uuid.uuid4())
     reel_id = f"threads_{plan.brand_id}_{str(_uuid.uuid4())[:8]}"
-    now = datetime.now(timezone.utc)
 
     extra_data = {
         "brand": plan.brand_id,
@@ -800,22 +798,26 @@ def _execute_threads_plan(db: Session, plan):
         "is_chain": False,
     }
 
-    entry = ScheduledReel(
-        schedule_id=schedule_id,
+    # Use scheduler's schedule_reel() which has 3-layer dedup
+    scheduler = DatabaseSchedulerService()
+    sched_result = scheduler.schedule_reel(
         user_id=plan.user_id,
-        user_name="Toby",
         reel_id=reel_id,
-        caption=text,
         scheduled_time=datetime.fromisoformat(plan.scheduled_time),
-        created_at=now,
-        status="scheduled",
+        caption=text,
+        brand=plan.brand_id,
+        variant="threads",
+        platforms=["threads"],
+        metadata=extra_data,
         created_by="toby",
-        extra_data=extra_data,
+        user_name="Toby",
     )
 
-    db.add(entry)
-    db.flush()
+    if sched_result and sched_result.get("deduplicated"):
+        print(f"[TOBY] Threads dedup: slot already filled for {plan.brand_id} at {plan.scheduled_time}", flush=True)
+        return {"job_id": None, "brand_id": plan.brand_id, "content_type": plan.content_type, "variant": "threads", "deduplicated": True}
 
+    schedule_id = sched_result.get("schedule_id", "") if sched_result else ""
     record_content_tag(db, plan.user_id, schedule_id, plan)
 
     print(f"[TOBY] Scheduled threads post ({format_type}) for {plan.brand_id} at {plan.scheduled_time}", flush=True)

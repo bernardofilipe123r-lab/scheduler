@@ -212,11 +212,12 @@ class DatabaseSchedulerService:
                     for ex in existing:
                         ex_brand = (ex.extra_data or {}).get("brand", "")
                         ex_variant = (ex.extra_data or {}).get("variant", "")
-                        # Same brand + same variant type (reel vs post)
+                        # Same brand + same variant type (reel vs post vs threads)
                         is_same_type = (
                             (variant in ("light", "dark") and ex_variant in ("light", "dark"))
                             or (variant == "post" and ex_variant == "post")
                             or (variant == "format_b" and ex_variant == "format_b")
+                            or (variant == "threads" and ex_variant == "threads")
                         )
                         if ex_brand == brand and is_same_type:
                             print(f"   ⚠️ DEDUP-L1: Slot already filled for {brand} "
